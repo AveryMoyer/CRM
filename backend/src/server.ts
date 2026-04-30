@@ -8,103 +8,104 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-type Contact = {
+type Customer = {
   id: number;
-  name: string;
-  company: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
-  status: "Lead" | "Customer" | "Prospect";
+  status: "Lead" | "Appointment" | "Finance" | "Sold";
+  interestedVehicle: string;
 };
 
-type Deal = {
+type FinanceApplication = {
   id: number;
-  title: string;
-  company: string;
-  value: number;
-  stage: "Qualified" | "Proposal" | "Negotiation" | "Won";
+  customerId: number;
+  employmentStatus: string;
+  monthlyIncome: number;
+  creditRange: string;
+  downPayment: number;
+  status: "New" | "Submitted" | "Approved" | "Needs Review";
 };
 
-type Task = {
+type TradeIn = {
   id: number;
-  title: string;
-  owner: string;
-  dueDate: string;
-  complete: boolean;
+  customerId: number;
+  year: string;
+  make: string;
+  model: string;
+  mileage: number;
+  payoff: number;
+  estimatedValue: number;
 };
 
-let contacts: Contact[] = [
+type VehicleSale = {
+  id: number;
+  customerId: number;
+  stockNumber: string;
+  year: string;
+  make: string;
+  model: string;
+  salePrice: number;
+  stage: "Working" | "Finance" | "Delivered";
+};
+
+let customers: Customer[] = [
   {
     id: 1,
-    name: "Jordan Lee",
-    company: "Northstar Labs",
-    email: "jordan@northstar.test",
+    firstName: "Jordan",
+    lastName: "Lee",
+    email: "jordan@example.com",
     phone: "(555) 123-0148",
-    status: "Lead",
+    status: "Appointment",
+    interestedVehicle: "2024 Toyota Camry",
   },
   {
     id: 2,
-    name: "Taylor Smith",
-    company: "BrightPath Co.",
-    email: "taylor@brightpath.test",
+    firstName: "Taylor",
+    lastName: "Smith",
+    email: "taylor@example.com",
     phone: "(555) 981-4432",
-    status: "Customer",
-  },
-  {
-    id: 3,
-    name: "Morgan Chen",
-    company: "Summit Retail",
-    email: "morgan@summit.test",
-    phone: "(555) 451-2210",
-    status: "Prospect",
+    status: "Finance",
+    interestedVehicle: "2023 Ford F-150",
   },
 ];
 
-let deals: Deal[] = [
+let financeApplications: FinanceApplication[] = [
   {
     id: 1,
-    title: "CRM onboarding",
-    company: "Northstar Labs",
-    value: 12000,
-    stage: "Proposal",
-  },
-  {
-    id: 2,
-    title: "Annual support plan",
-    company: "BrightPath Co.",
-    value: 8400,
-    stage: "Won",
-  },
-  {
-    id: 3,
-    title: "Sales automation setup",
-    company: "Summit Retail",
-    value: 15600,
-    stage: "Negotiation",
+    customerId: 2,
+    employmentStatus: "Full-time",
+    monthlyIncome: 6200,
+    creditRange: "680-719",
+    downPayment: 3500,
+    status: "Submitted",
   },
 ];
 
-let tasks: Task[] = [
+let tradeIns: TradeIn[] = [
   {
     id: 1,
-    title: "Follow up with Jordan",
-    owner: "Avery",
-    dueDate: "Today",
-    complete: false,
+    customerId: 2,
+    year: "2018",
+    make: "Honda",
+    model: "Accord",
+    mileage: 82000,
+    payoff: 4200,
+    estimatedValue: 12800,
   },
+];
+
+let vehicleSales: VehicleSale[] = [
   {
-    id: 2,
-    title: "Send proposal revision",
-    owner: "Avery",
-    dueDate: "Tomorrow",
-    complete: false,
-  },
-  {
-    id: 3,
-    title: "Schedule onboarding call",
-    owner: "Avery",
-    dueDate: "Friday",
-    complete: true,
+    id: 1,
+    customerId: 2,
+    stockNumber: "A1024",
+    year: "2023",
+    make: "Ford",
+    model: "F-150",
+    salePrice: 38995,
+    stage: "Finance",
   },
 ];
 
@@ -113,70 +114,133 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "crm-api" });
+  res.json({ status: "ok", service: "auto-retail-crm-api" });
 });
 
-app.get("/api/summary", (_req, res) => {
-  const pipelineValue = deals.reduce((total, deal) => total + deal.value, 0);
-  const openTasks = tasks.filter((task) => !task.complete).length;
+app.post("/api/login", (req, res) => {
+  const email = String(req.body.email || "");
+  const password = String(req.body.password || "");
+
+  if (!email || !password) {
+    res.status(400).json({ message: "Email and password are required" });
+    return;
+  }
 
   res.json({
-    contacts: contacts.length,
-    deals: deals.length,
-    pipelineValue,
-    openTasks,
+    token: "demo-token",
+    user: { name: "Avery Moyer", role: "Sales Manager", email },
   });
 });
 
-app.get("/api/contacts", (_req, res) => {
-  res.json(contacts);
+app.get("/api/summary", (_req, res) => {
+  const pipelineValue = vehicleSales.reduce((total, sale) => total + sale.salePrice, 0);
+  const financePending = financeApplications.filter((application) => application.status !== "Approved").length;
+
+  res.json({
+    customers: customers.length,
+    financeApplications: financeApplications.length,
+    tradeIns: tradeIns.length,
+    vehicleSales: vehicleSales.length,
+    pipelineValue,
+    financePending,
+  });
 });
 
-app.post("/api/contacts", (req, res) => {
-  const contact: Contact = {
+app.get("/api/customers", (_req, res) => {
+  res.json(customers);
+});
+
+app.post("/api/customers", (req, res) => {
+  const customer: Customer = {
     id: Date.now(),
-    name: req.body.name,
-    company: req.body.company,
+    firstName: req.body.firstName,
+    lastName: req.body.lastName,
     email: req.body.email,
     phone: req.body.phone,
     status: req.body.status || "Lead",
+    interestedVehicle: req.body.interestedVehicle || "",
   };
 
-  contacts = [contact, ...contacts];
-  res.status(201).json(contact);
+  customers = [customer, ...customers];
+  res.status(201).json(customer);
 });
 
-app.get("/api/deals", (_req, res) => {
-  res.json(deals);
-});
-
-app.post("/api/deals", (req, res) => {
-  const deal: Deal = {
-    id: Date.now(),
-    title: req.body.title,
-    company: req.body.company,
-    value: Number(req.body.value || 0),
-    stage: req.body.stage || "Qualified",
-  };
-
-  deals = [deal, ...deals];
-  res.status(201).json(deal);
-});
-
-app.get("/api/tasks", (_req, res) => {
-  res.json(tasks);
-});
-
-app.patch("/api/tasks/:id/toggle", (req, res) => {
-  const taskId = Number(req.params.id);
-
-  tasks = tasks.map((task) =>
-    task.id === taskId ? { ...task, complete: !task.complete } : task,
+app.put("/api/customers/:id", (req, res) => {
+  const customerId = Number(req.params.id);
+  customers = customers.map((customer) =>
+    customer.id === customerId ? { ...customer, ...req.body, id: customerId } : customer,
   );
+  res.json(customers.find((customer) => customer.id === customerId));
+});
 
-  res.json(tasks.find((task) => task.id === taskId));
+app.delete("/api/customers/:id", (req, res) => {
+  const customerId = Number(req.params.id);
+  customers = customers.filter((customer) => customer.id !== customerId);
+  financeApplications = financeApplications.filter((application) => application.customerId !== customerId);
+  tradeIns = tradeIns.filter((tradeIn) => tradeIn.customerId !== customerId);
+  vehicleSales = vehicleSales.filter((sale) => sale.customerId !== customerId);
+  res.status(204).send();
+});
+
+app.get("/api/finance-applications", (_req, res) => {
+  res.json(financeApplications);
+});
+
+app.post("/api/finance-applications", (req, res) => {
+  const application: FinanceApplication = {
+    id: Date.now(),
+    customerId: Number(req.body.customerId),
+    employmentStatus: req.body.employmentStatus,
+    monthlyIncome: Number(req.body.monthlyIncome || 0),
+    creditRange: req.body.creditRange,
+    downPayment: Number(req.body.downPayment || 0),
+    status: req.body.status || "New",
+  };
+
+  financeApplications = [application, ...financeApplications];
+  res.status(201).json(application);
+});
+
+app.get("/api/trade-ins", (_req, res) => {
+  res.json(tradeIns);
+});
+
+app.post("/api/trade-ins", (req, res) => {
+  const tradeIn: TradeIn = {
+    id: Date.now(),
+    customerId: Number(req.body.customerId),
+    year: req.body.year,
+    make: req.body.make,
+    model: req.body.model,
+    mileage: Number(req.body.mileage || 0),
+    payoff: Number(req.body.payoff || 0),
+    estimatedValue: Number(req.body.estimatedValue || 0),
+  };
+
+  tradeIns = [tradeIn, ...tradeIns];
+  res.status(201).json(tradeIn);
+});
+
+app.get("/api/vehicle-sales", (_req, res) => {
+  res.json(vehicleSales);
+});
+
+app.post("/api/vehicle-sales", (req, res) => {
+  const sale: VehicleSale = {
+    id: Date.now(),
+    customerId: Number(req.body.customerId),
+    stockNumber: req.body.stockNumber,
+    year: req.body.year,
+    make: req.body.make,
+    model: req.body.model,
+    salePrice: Number(req.body.salePrice || 0),
+    stage: req.body.stage || "Working",
+  };
+
+  vehicleSales = [sale, ...vehicleSales];
+  res.status(201).json(sale);
 });
 
 app.listen(port, () => {
-  console.log(`CRM API running on port ${port}`);
+  console.log(`Auto Retail CRM API running on port ${port}`);
 });
