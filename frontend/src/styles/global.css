@@ -326,6 +326,21 @@ h2 {
   font-weight: 800;
 }
 
+.login-card .auth-switch {
+  background: transparent;
+  color: #2563eb;
+  box-shadow: none;
+}
+
+.auth-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .stack-form {
   display: grid;
   gap: 10px;

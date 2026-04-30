@@ -104,12 +104,22 @@ const initialVehicleSales: VehicleSale[] = [
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [customers, setCustomers] = useState(initialCustomers);
-  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
-  const [financeApplications, setFinanceApplications] = useState(initialFinanceApplications);
+  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(
+    null,
+  );
+  const [financeApplications, setFinanceApplications] = useState(
+    initialFinanceApplications,
+  );
   const [tradeIns, setTradeIns] = useState(initialTradeIns);
   const [vehicleSales, setVehicleSales] = useState(initialVehicleSales);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [authError, setAuthError] = useState("");
   const [customerForm, setCustomerForm] = useState({
     firstName: "",
     lastName: "",
@@ -150,17 +160,46 @@ function App() {
     [vehicleSales],
   );
 
-  const pendingFinance = financeApplications.filter((application) => application.status !== "Approved").length;
+  const pendingFinance = financeApplications.filter(
+    (application) => application.status !== "Approved",
+  ).length;
 
   function getCustomerName(customerId: number) {
     const customer = customers.find((item) => item.id === customerId);
-    return customer ? `${customer.firstName} ${customer.lastName}` : "Unknown customer";
+    return customer
+      ? `${customer.firstName} ${customer.lastName}`
+      : "Unknown customer";
   }
 
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loginForm.email && loginForm.password) {
+    setAuthError("");
+
+    const endpoint = authMode === "signup" ? "/api/signup" : "/api/login";
+    const payload =
+      authMode === "signup"
+        ? loginForm
+        : { email: loginForm.email, password: loginForm.password };
+
+    try {
+      const response = await fetch(`http://localhost:4000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setAuthError(data.message || "Unable to authenticate");
+        return;
+      }
+
       setIsLoggedIn(true);
+    } catch {
+      setAuthError(
+        "Could not connect to the backend. Make sure it is running.",
+      );
     }
   }
 
@@ -178,14 +217,20 @@ function App() {
 
   function saveCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!customerForm.firstName || !customerForm.lastName || !customerForm.phone) {
+    if (
+      !customerForm.firstName ||
+      !customerForm.lastName ||
+      !customerForm.phone
+    ) {
       return;
     }
 
     if (editingCustomerId) {
       setCustomers(
         customers.map((customer) =>
-          customer.id === editingCustomerId ? { ...customer, ...customerForm } : customer,
+          customer.id === editingCustomerId
+            ? { ...customer, ...customerForm }
+            : customer,
         ),
       );
       resetCustomerForm();
@@ -211,9 +256,17 @@ function App() {
 
   function deleteCustomer(customerId: number) {
     setCustomers(customers.filter((customer) => customer.id !== customerId));
-    setFinanceApplications(financeApplications.filter((application) => application.customerId !== customerId));
-    setTradeIns(tradeIns.filter((tradeIn) => tradeIn.customerId !== customerId));
-    setVehicleSales(vehicleSales.filter((sale) => sale.customerId !== customerId));
+    setFinanceApplications(
+      financeApplications.filter(
+        (application) => application.customerId !== customerId,
+      ),
+    );
+    setTradeIns(
+      tradeIns.filter((tradeIn) => tradeIn.customerId !== customerId),
+    );
+    setVehicleSales(
+      vehicleSales.filter((sale) => sale.customerId !== customerId),
+    );
   }
 
   function addFinanceApplication(event: FormEvent<HTMLFormElement>) {
@@ -269,24 +322,53 @@ function App() {
   if (!isLoggedIn) {
     return (
       <main className="login-page">
-        <form className="login-card" onSubmit={handleLogin}>
+        <form className="login-card" onSubmit={handleAuth}>
           <div className="brand-mark">AP</div>
           <p className="eyebrow">Auto Retail CRM</p>
-          <h1>Sales login</h1>
+          <h1>{authMode === "signup" ? "Create account" : "Sales login"}</h1>
+          {authMode === "signup" && (
+            <input
+              aria-label="Name"
+              placeholder="Full name"
+              value={loginForm.name}
+              onChange={(event) =>
+                setLoginForm({ ...loginForm, name: event.target.value })
+              }
+            />
+          )}
           <input
             aria-label="Email"
             placeholder="Email"
             value={loginForm.email}
-            onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })}
+            onChange={(event) =>
+              setLoginForm({ ...loginForm, email: event.target.value })
+            }
           />
           <input
             aria-label="Password"
             placeholder="Password"
             type="password"
             value={loginForm.password}
-            onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+            onChange={(event) =>
+              setLoginForm({ ...loginForm, password: event.target.value })
+            }
           />
-          <button type="submit">Log In</button>
+          {authError && <p className="auth-error">{authError}</p>}
+          <button type="submit">
+            {authMode === "signup" ? "Sign Up" : "Log In"}
+          </button>
+          <button
+            className="auth-switch"
+            type="button"
+            onClick={() => {
+              setAuthError("");
+              setAuthMode(authMode === "signup" ? "login" : "signup");
+            }}
+          >
+            {authMode === "signup"
+              ? "Already have an account? Log in"
+              : "Need an account? Sign up"}
+          </button>
         </form>
       </main>
     );
@@ -297,7 +379,9 @@ function App() {
       <aside className="sidebar">
         <div className="brand-mark">AP</div>
         <nav>
-          <a className="active" href="#dashboard">Dashboard</a>
+          <a className="active" href="#dashboard">
+            Dashboard
+          </a>
           <a href="#customers">Customers</a>
           <a href="#finance">Finance</a>
           <a href="#trades">Trades</a>
@@ -311,14 +395,28 @@ function App() {
             <p className="eyebrow">Avery Projects CRM</p>
             <h1>Auto sales command center</h1>
           </div>
-          <button type="button" onClick={() => setIsLoggedIn(false)}>Log Out</button>
+          <button type="button" onClick={() => setIsLoggedIn(false)}>
+            Log Out
+          </button>
         </header>
 
         <section id="dashboard" className="metric-grid">
-          <article className="metric-card"><span>Customers</span><strong>{customers.length}</strong></article>
-          <article className="metric-card"><span>Finance Pending</span><strong>{pendingFinance}</strong></article>
-          <article className="metric-card"><span>Trade-Ins</span><strong>{tradeIns.length}</strong></article>
-          <article className="metric-card"><span>Vehicle Pipeline</span><strong>${pipelineValue.toLocaleString()}</strong></article>
+          <article className="metric-card">
+            <span>Customers</span>
+            <strong>{customers.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Finance Pending</span>
+            <strong>{pendingFinance}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Trade-Ins</span>
+            <strong>{tradeIns.length}</strong>
+          </article>
+          <article className="metric-card">
+            <span>Vehicle Pipeline</span>
+            <strong>${pipelineValue.toLocaleString()}</strong>
+          </article>
         </section>
 
         <section className="content-grid">
@@ -330,30 +428,109 @@ function App() {
               </div>
             </div>
             <form className="contact-form" onSubmit={saveCustomer}>
-              <input placeholder="First name" value={customerForm.firstName} onChange={(event) => setCustomerForm({ ...customerForm, firstName: event.target.value })} />
-              <input placeholder="Last name" value={customerForm.lastName} onChange={(event) => setCustomerForm({ ...customerForm, lastName: event.target.value })} />
-              <input placeholder="Phone" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} />
-              <input placeholder="Email" value={customerForm.email} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} />
-              <input placeholder="Vehicle wanted" value={customerForm.interestedVehicle} onChange={(event) => setCustomerForm({ ...customerForm, interestedVehicle: event.target.value })} />
-              <select value={customerForm.status} onChange={(event) => setCustomerForm({ ...customerForm, status: event.target.value as Customer["status"] })}>
+              <input
+                placeholder="First name"
+                value={customerForm.firstName}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    firstName: event.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Last name"
+                value={customerForm.lastName}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    lastName: event.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Phone"
+                value={customerForm.phone}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    phone: event.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Email"
+                value={customerForm.email}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    email: event.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Vehicle wanted"
+                value={customerForm.interestedVehicle}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    interestedVehicle: event.target.value,
+                  })
+                }
+              />
+              <select
+                value={customerForm.status}
+                onChange={(event) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    status: event.target.value as Customer["status"],
+                  })
+                }
+              >
                 <option>Lead</option>
                 <option>Appointment</option>
                 <option>Finance</option>
                 <option>Sold</option>
               </select>
-              <button type="submit">{editingCustomerId ? "Save Customer" : "Add Customer"}</button>
-              {editingCustomerId && <button type="button" className="ghost-button" onClick={resetCustomerForm}>Cancel</button>}
+              <button type="submit">
+                {editingCustomerId ? "Save Customer" : "Add Customer"}
+              </button>
+              {editingCustomerId && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={resetCustomerForm}
+                >
+                  Cancel
+                </button>
+              )}
             </form>
             <div className="table">
               {customers.map((customer) => (
                 <div className="table-row customer-row" key={customer.id}>
-                  <div><strong>{customer.firstName} {customer.lastName}</strong><span>{customer.interestedVehicle}</span></div>
+                  <div>
+                    <strong>
+                      {customer.firstName} {customer.lastName}
+                    </strong>
+                    <span>{customer.interestedVehicle}</span>
+                  </div>
                   <span>{customer.phone}</span>
                   <span>{customer.email || "No email"}</span>
                   <b>{customer.status}</b>
                   <div className="row-actions">
-                    <button type="button" onClick={() => editCustomer(customer)}>Edit</button>
-                    <button type="button" className="danger" onClick={() => deleteCustomer(customer.id)}>Delete</button>
+                    <button
+                      type="button"
+                      onClick={() => editCustomer(customer)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => deleteCustomer(customer.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -364,43 +541,217 @@ function App() {
             <p className="eyebrow">Finance Applications</p>
             <h2>Credit and approval tracking</h2>
             <form className="stack-form" onSubmit={addFinanceApplication}>
-              <select value={financeForm.customerId} onChange={(event) => setFinanceForm({ ...financeForm, customerId: event.target.value })}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.firstName} {customer.lastName}</option>)}</select>
-              <input placeholder="Monthly income" value={financeForm.monthlyIncome} onChange={(event) => setFinanceForm({ ...financeForm, monthlyIncome: event.target.value })} />
-              <input placeholder="Down payment" value={financeForm.downPayment} onChange={(event) => setFinanceForm({ ...financeForm, downPayment: event.target.value })} />
-              <select value={financeForm.status} onChange={(event) => setFinanceForm({ ...financeForm, status: event.target.value as FinanceApplication["status"] })}><option>New</option><option>Submitted</option><option>Approved</option><option>Needs Review</option></select>
+              <select
+                value={financeForm.customerId}
+                onChange={(event) =>
+                  setFinanceForm({
+                    ...financeForm,
+                    customerId: event.target.value,
+                  })
+                }
+              >
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.firstName} {customer.lastName}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Monthly income"
+                value={financeForm.monthlyIncome}
+                onChange={(event) =>
+                  setFinanceForm({
+                    ...financeForm,
+                    monthlyIncome: event.target.value,
+                  })
+                }
+              />
+              <input
+                placeholder="Down payment"
+                value={financeForm.downPayment}
+                onChange={(event) =>
+                  setFinanceForm({
+                    ...financeForm,
+                    downPayment: event.target.value,
+                  })
+                }
+              />
+              <select
+                value={financeForm.status}
+                onChange={(event) =>
+                  setFinanceForm({
+                    ...financeForm,
+                    status: event.target.value as FinanceApplication["status"],
+                  })
+                }
+              >
+                <option>New</option>
+                <option>Submitted</option>
+                <option>Approved</option>
+                <option>Needs Review</option>
+              </select>
               <button type="submit">Add Finance App</button>
             </form>
-            <div className="deal-list">{financeApplications.map((application) => <div className="deal-card" key={application.id}><strong>{getCustomerName(application.customerId)}</strong><span>${application.monthlyIncome.toLocaleString()} income</span><b>${application.downPayment.toLocaleString()} down</b><small>{application.status}</small></div>)}</div>
+            <div className="deal-list">
+              {financeApplications.map((application) => (
+                <div className="deal-card" key={application.id}>
+                  <strong>{getCustomerName(application.customerId)}</strong>
+                  <span>
+                    ${application.monthlyIncome.toLocaleString()} income
+                  </span>
+                  <b>${application.downPayment.toLocaleString()} down</b>
+                  <small>{application.status}</small>
+                </div>
+              ))}
+            </div>
           </article>
 
           <article id="trades" className="panel">
             <p className="eyebrow">Trade-Ins</p>
             <h2>Vehicle appraisal info</h2>
             <form className="stack-form" onSubmit={addTradeIn}>
-              <select value={tradeForm.customerId} onChange={(event) => setTradeForm({ ...tradeForm, customerId: event.target.value })}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.firstName} {customer.lastName}</option>)}</select>
-              <input placeholder="Year" value={tradeForm.year} onChange={(event) => setTradeForm({ ...tradeForm, year: event.target.value })} />
-              <input placeholder="Make" value={tradeForm.make} onChange={(event) => setTradeForm({ ...tradeForm, make: event.target.value })} />
-              <input placeholder="Model" value={tradeForm.model} onChange={(event) => setTradeForm({ ...tradeForm, model: event.target.value })} />
-              <input placeholder="Estimated value" value={tradeForm.estimatedValue} onChange={(event) => setTradeForm({ ...tradeForm, estimatedValue: event.target.value })} />
+              <select
+                value={tradeForm.customerId}
+                onChange={(event) =>
+                  setTradeForm({ ...tradeForm, customerId: event.target.value })
+                }
+              >
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.firstName} {customer.lastName}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Year"
+                value={tradeForm.year}
+                onChange={(event) =>
+                  setTradeForm({ ...tradeForm, year: event.target.value })
+                }
+              />
+              <input
+                placeholder="Make"
+                value={tradeForm.make}
+                onChange={(event) =>
+                  setTradeForm({ ...tradeForm, make: event.target.value })
+                }
+              />
+              <input
+                placeholder="Model"
+                value={tradeForm.model}
+                onChange={(event) =>
+                  setTradeForm({ ...tradeForm, model: event.target.value })
+                }
+              />
+              <input
+                placeholder="Estimated value"
+                value={tradeForm.estimatedValue}
+                onChange={(event) =>
+                  setTradeForm({
+                    ...tradeForm,
+                    estimatedValue: event.target.value,
+                  })
+                }
+              />
               <button type="submit">Add Trade</button>
             </form>
-            <div className="deal-list">{tradeIns.map((tradeIn) => <div className="deal-card" key={tradeIn.id}><strong>{tradeIn.year} {tradeIn.make} {tradeIn.model}</strong><span>{getCustomerName(tradeIn.customerId)}</span><b>${tradeIn.estimatedValue.toLocaleString()}</b><small>{tradeIn.mileage.toLocaleString()} miles</small></div>)}</div>
+            <div className="deal-list">
+              {tradeIns.map((tradeIn) => (
+                <div className="deal-card" key={tradeIn.id}>
+                  <strong>
+                    {tradeIn.year} {tradeIn.make} {tradeIn.model}
+                  </strong>
+                  <span>{getCustomerName(tradeIn.customerId)}</span>
+                  <b>${tradeIn.estimatedValue.toLocaleString()}</b>
+                  <small>{tradeIn.mileage.toLocaleString()} miles</small>
+                </div>
+              ))}
+            </div>
           </article>
 
           <article id="sales" className="panel wide">
             <p className="eyebrow">Vehicle Being Sold</p>
             <h2>Working deals and deliveries</h2>
             <form className="contact-form" onSubmit={addVehicleSale}>
-              <select value={saleForm.customerId} onChange={(event) => setSaleForm({ ...saleForm, customerId: event.target.value })}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.firstName} {customer.lastName}</option>)}</select>
-              <input placeholder="Stock #" value={saleForm.stockNumber} onChange={(event) => setSaleForm({ ...saleForm, stockNumber: event.target.value })} />
-              <input placeholder="Year" value={saleForm.year} onChange={(event) => setSaleForm({ ...saleForm, year: event.target.value })} />
-              <input placeholder="Make" value={saleForm.make} onChange={(event) => setSaleForm({ ...saleForm, make: event.target.value })} />
-              <input placeholder="Model" value={saleForm.model} onChange={(event) => setSaleForm({ ...saleForm, model: event.target.value })} />
-              <input placeholder="Sale price" value={saleForm.salePrice} onChange={(event) => setSaleForm({ ...saleForm, salePrice: event.target.value })} />
-              <select value={saleForm.stage} onChange={(event) => setSaleForm({ ...saleForm, stage: event.target.value as VehicleSale["stage"] })}><option>Working</option><option>Finance</option><option>Delivered</option></select>
+              <select
+                value={saleForm.customerId}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, customerId: event.target.value })
+                }
+              >
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.firstName} {customer.lastName}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Stock #"
+                value={saleForm.stockNumber}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, stockNumber: event.target.value })
+                }
+              />
+              <input
+                placeholder="Year"
+                value={saleForm.year}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, year: event.target.value })
+                }
+              />
+              <input
+                placeholder="Make"
+                value={saleForm.make}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, make: event.target.value })
+                }
+              />
+              <input
+                placeholder="Model"
+                value={saleForm.model}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, model: event.target.value })
+                }
+              />
+              <input
+                placeholder="Sale price"
+                value={saleForm.salePrice}
+                onChange={(event) =>
+                  setSaleForm({ ...saleForm, salePrice: event.target.value })
+                }
+              />
+              <select
+                value={saleForm.stage}
+                onChange={(event) =>
+                  setSaleForm({
+                    ...saleForm,
+                    stage: event.target.value as VehicleSale["stage"],
+                  })
+                }
+              >
+                <option>Working</option>
+                <option>Finance</option>
+                <option>Delivered</option>
+              </select>
               <button type="submit">Add Vehicle Sale</button>
             </form>
-            <div className="table">{vehicleSales.map((sale) => <div className="table-row" key={sale.id}><div><strong>{sale.year} {sale.make} {sale.model}</strong><span>Stock #{sale.stockNumber} for {getCustomerName(sale.customerId)}</span></div><span>${sale.salePrice.toLocaleString()}</span><b>{sale.stage}</b></div>)}</div>
+            <div className="table">
+              {vehicleSales.map((sale) => (
+                <div className="table-row" key={sale.id}>
+                  <div>
+                    <strong>
+                      {sale.year} {sale.make} {sale.model}
+                    </strong>
+                    <span>
+                      Stock #{sale.stockNumber} for{" "}
+                      {getCustomerName(sale.customerId)}
+                    </span>
+                  </div>
+                  <span>${sale.salePrice.toLocaleString()}</span>
+                  <b>{sale.stage}</b>
+                </div>
+              ))}
+            </div>
           </article>
         </section>
       </section>

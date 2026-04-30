@@ -50,6 +50,24 @@ type VehicleSale = {
   stage: "Working" | "Finance" | "Delivered";
 };
 
+type User = {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+};
+
+let users: User[] = [
+  {
+    id: 1,
+    name: "Avery Moyer",
+    email: "avery@example.com",
+    password: "password",
+    role: "Sales Manager",
+  },
+];
+
 let customers: Customer[] = [
   {
     id: 1,
@@ -117,8 +135,45 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "auto-retail-crm-api" });
 });
 
+app.post("/api/signup", (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
+  const password = String(req.body.password || "");
+
+  if (!name || !email || !password) {
+    res.status(400).json({ message: "Name, email, and password are required" });
+    return;
+  }
+
+  if (users.some((user) => user.email === email)) {
+    res
+      .status(409)
+      .json({ message: "An account with this email already exists" });
+    return;
+  }
+
+  const user: User = {
+    id: Date.now(),
+    name,
+    email,
+    password,
+    role: "Sales Consultant",
+  };
+
+  users = [user, ...users];
+
+  res.status(201).json({
+    token: `demo-token-${user.id}`,
+    user: { id: user.id, name: user.name, role: user.role, email: user.email },
+  });
+});
+
 app.post("/api/login", (req, res) => {
-  const email = String(req.body.email || "");
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
   const password = String(req.body.password || "");
 
   if (!email || !password) {
@@ -126,15 +181,29 @@ app.post("/api/login", (req, res) => {
     return;
   }
 
+  const user = users.find(
+    (item) => item.email === email && item.password === password,
+  );
+
+  if (!user) {
+    res.status(401).json({ message: "Invalid email or password" });
+    return;
+  }
+
   res.json({
-    token: "demo-token",
-    user: { name: "Avery Moyer", role: "Sales Manager", email },
+    token: `demo-token-${user.id}`,
+    user: { id: user.id, name: user.name, role: user.role, email: user.email },
   });
 });
 
 app.get("/api/summary", (_req, res) => {
-  const pipelineValue = vehicleSales.reduce((total, sale) => total + sale.salePrice, 0);
-  const financePending = financeApplications.filter((application) => application.status !== "Approved").length;
+  const pipelineValue = vehicleSales.reduce(
+    (total, sale) => total + sale.salePrice,
+    0,
+  );
+  const financePending = financeApplications.filter(
+    (application) => application.status !== "Approved",
+  ).length;
 
   res.json({
     customers: customers.length,
@@ -168,7 +237,9 @@ app.post("/api/customers", (req, res) => {
 app.put("/api/customers/:id", (req, res) => {
   const customerId = Number(req.params.id);
   customers = customers.map((customer) =>
-    customer.id === customerId ? { ...customer, ...req.body, id: customerId } : customer,
+    customer.id === customerId
+      ? { ...customer, ...req.body, id: customerId }
+      : customer,
   );
   res.json(customers.find((customer) => customer.id === customerId));
 });
@@ -176,7 +247,9 @@ app.put("/api/customers/:id", (req, res) => {
 app.delete("/api/customers/:id", (req, res) => {
   const customerId = Number(req.params.id);
   customers = customers.filter((customer) => customer.id !== customerId);
-  financeApplications = financeApplications.filter((application) => application.customerId !== customerId);
+  financeApplications = financeApplications.filter(
+    (application) => application.customerId !== customerId,
+  );
   tradeIns = tradeIns.filter((tradeIn) => tradeIn.customerId !== customerId);
   vehicleSales = vehicleSales.filter((sale) => sale.customerId !== customerId);
   res.status(204).send();
