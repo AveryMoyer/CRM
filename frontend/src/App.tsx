@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import "./styles/global.css";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 type Customer = {
   id: number;
   firstName: string;
@@ -119,722 +121,397 @@ type BootstrapData = {
 };
 
 type ProfileTab = "overview" | "finance" | "credit" | "deals" | "activity";
+type AppPage =
+  | "dashboard"
+  | "leads"
+  | "customers"
+  | "finance"
+  | "pipeline"
+  | "trades"
+  | "vin"
+  | "activities";
 
 const API_BASE = "http://localhost:4000";
 
+// ── Seed data ─────────────────────────────────────────────────────────────────
+
 const initialCustomers: Customer[] = [
-  {
-    id: 1,
-    firstName: "Jordan",
-    lastName: "Lee",
-    email: "jordan@example.com",
-    phone: "(555) 123-0148",
-    status: "Appointment",
-    interestedVehicle: "2024 Toyota Camry",
-  },
-  {
-    id: 2,
-    firstName: "Taylor",
-    lastName: "Smith",
-    email: "taylor@example.com",
-    phone: "(555) 981-4432",
-    status: "Finance",
-    interestedVehicle: "2023 Ford F-150",
-  },
+  { id: 1, firstName: "Jordan", lastName: "Lee", email: "jordan@example.com", phone: "(555) 123-0148", status: "Appointment", interestedVehicle: "2024 Toyota Camry", source: "Cars.com", assignedTo: "Avery", nextFollowUp: "Today" },
+  { id: 2, firstName: "Taylor", lastName: "Smith", email: "taylor@example.com", phone: "(555) 981-4432", status: "Finance", interestedVehicle: "2023 Ford F-150", source: "Walk-in", assignedTo: "Avery", nextFollowUp: "Tomorrow" },
+  { id: 3, firstName: "Morgan", lastName: "Davis", email: "morgan@example.com", phone: "(555) 234-5678", status: "Lead", interestedVehicle: "2024 Honda CR-V", source: "Website Lead", assignedTo: "", nextFollowUp: "" },
+  { id: 4, firstName: "Casey", lastName: "Johnson", email: "casey@example.com", phone: "(555) 345-6789", status: "Lead", interestedVehicle: "2023 Chevy Silverado", source: "AutoTrader", assignedTo: "", nextFollowUp: "" },
+  { id: 5, firstName: "Riley", lastName: "Wilson", email: "riley@example.com", phone: "(555) 456-7890", status: "Sold", interestedVehicle: "2022 Nissan Altima", source: "Referral", assignedTo: "Mike", nextFollowUp: "" },
+  { id: 6, firstName: "Alex", lastName: "Brown", email: "alex@example.com", phone: "(555) 567-8901", status: "Lead", interestedVehicle: "2024 Jeep Wrangler", source: "Cars.com", assignedTo: "", nextFollowUp: "" },
 ];
 
 const initialFinanceApplications: FinanceApplication[] = [
-  {
-    id: 1,
-    customerId: 2,
-    employmentStatus: "Full-time",
-    monthlyIncome: 6200,
-    creditRange: "680-719",
-    downPayment: 3500,
-    status: "Submitted",
-  },
+  { id: 1, customerId: 2, applicantName: "Taylor Smith", employmentStatus: "Full-time", monthlyIncome: 6200, creditRange: "680-719", downPayment: 3500, status: "Submitted", requestedVehicle: "2023 Ford F-150" },
 ];
 
 const initialTradeIns: TradeIn[] = [
-  {
-    id: 1,
-    customerId: 2,
-    year: "2018",
-    make: "Honda",
-    model: "Accord",
-    mileage: 82000,
-    payoff: 4200,
-    estimatedValue: 12800,
-  },
+  { id: 1, customerId: 2, year: "2018", make: "Honda", model: "Accord", mileage: 82000, payoff: 4200, estimatedValue: 12800 },
 ];
 
 const initialVehicleSales: VehicleSale[] = [
-  {
-    id: 1,
-    customerId: 2,
-    stockNumber: "A1024",
-    year: "2023",
-    make: "Ford",
-    model: "F-150",
-    salePrice: 38995,
-    stage: "Finance",
-  },
+  { id: 1, customerId: 2, stockNumber: "A1024", year: "2023", make: "Ford", model: "F-150", salePrice: 38995, stage: "Finance" },
+  { id: 2, customerId: 5, stockNumber: "B2051", year: "2022", make: "Nissan", model: "Altima", salePrice: 22500, stage: "Delivered" },
 ];
 
+// ── App ───────────────────────────────────────────────────────────────────────
+
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    () => localStorage.getItem("crm-authenticated") === "true",
-  );
-  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">(
-    "login",
-  );
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem("crm-authenticated") === "true");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">("login");
   const [customers, setCustomers] = useState(initialCustomers);
-  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(
-    null,
-  );
-  const [financeApplications, setFinanceApplications] = useState(
-    initialFinanceApplications,
-  );
-  const [creditApplications, setCreditApplications] = useState<
-    CreditApplication[]
-  >([]);
+  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
+  const [financeApplications, setFinanceApplications] = useState(initialFinanceApplications);
+  const [creditApplications, setCreditApplications] = useState<CreditApplication[]>([]);
   const [tradeIns, setTradeIns] = useState(initialTradeIns);
   const [vehicleSales, setVehicleSales] = useState(initialVehicleSales);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    null,
-  );
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState<AppPage>("dashboard");
   const [profileTab, setProfileTab] = useState<ProfileTab>("overview");
-  const [loginForm, setLoginForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
+
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerStatusFilter, setCustomerStatusFilter] = useState("All");
+  const [customerSourceFilter, setCustomerSourceFilter] = useState("All");
+  const [quickActivityNote, setQuickActivityNote] = useState("");
+  const [quickActivityType, setQuickActivityType] = useState<Activity["type"]>("Note");
+
+  const [loginForm, setLoginForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [appMessage, setAppMessage] = useState("");
+
   const [customerForm, setCustomerForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
+    firstName: "", lastName: "", email: "", phone: "",
     status: "Lead" as Customer["status"],
-    interestedVehicle: "",
-    source: "",
-    assignedTo: "",
-    nextFollowUp: "",
+    interestedVehicle: "", source: "", assignedTo: "", nextFollowUp: "",
   });
   const [financeForm, setFinanceForm] = useState({
-    customerId: "1",
-    applicantName: "",
-    dateOfBirth: "",
-    ssnLast4: "",
-    address: "",
-    city: "",
-    state: "",
-    zip: "",
-    employerName: "",
-    jobTitle: "",
-    employmentStatus: "Full-time",
-    timeOnJob: "",
-    monthlyIncome: "",
-    otherIncome: "",
-    creditRange: "680-719",
-    downPayment: "",
-    requestedVehicle: "",
-    tradePayoff: "",
-    requestedAmount: "",
-    termMonths: "72",
-    lender: "",
-    decisionNotes: "",
-    consentToPullCredit: false,
-    status: "New" as FinanceApplication["status"],
+    customerId: "1", applicantName: "", dateOfBirth: "", ssnLast4: "",
+    address: "", city: "", state: "", zip: "",
+    employerName: "", jobTitle: "", employmentStatus: "Full-time", timeOnJob: "",
+    monthlyIncome: "", otherIncome: "", creditRange: "680-719",
+    downPayment: "", requestedVehicle: "", tradePayoff: "",
+    requestedAmount: "", termMonths: "72", lender: "", decisionNotes: "",
+    consentToPullCredit: false, status: "New" as FinanceApplication["status"],
   });
-  const [tradeForm, setTradeForm] = useState({
-    customerId: "1",
-    year: "",
-    make: "",
-    model: "",
-    mileage: "",
-    payoff: "",
-    estimatedValue: "",
+  const [creditForm, setCreditForm] = useState({
+    applicantName: "", dateOfBirth: "", ssnLast4: "",
+    address: "", city: "", state: "", zip: "",
+    residenceType: "Rent", timeAtAddress: "",
+    employerName: "", jobTitle: "", employmentStatus: "Full-time", timeOnJob: "",
+    monthlyIncome: "", otherIncome: "", bankName: "", downPayment: "",
+    requestedVehicle: "", consentToPullCredit: false,
+    status: "Draft" as CreditApplication["status"],
   });
-  const [saleForm, setSaleForm] = useState({
-    customerId: "1",
-    stockNumber: "",
-    year: "",
-    make: "",
-    model: "",
-    salePrice: "",
-    stage: "Working" as VehicleSale["stage"],
-  });
+  const [tradeForm, setTradeForm] = useState({ customerId: "1", year: "", make: "", model: "", mileage: "", payoff: "", estimatedValue: "" });
+  const [saleForm, setSaleForm] = useState({ customerId: "1", stockNumber: "", year: "", make: "", model: "", salePrice: "", stage: "Working" as VehicleSale["stage"] });
+  const [activityForm, setActivityForm] = useState({ customerId: "1", type: "Note" as Activity["type"], note: "" });
   const [vin, setVin] = useState("");
   const [vinResult, setVinResult] = useState<VinDecodedVehicle | null>(null);
   const [vinError, setVinError] = useState("");
   const [vinLoading, setVinLoading] = useState(false);
-  const [activityForm, setActivityForm] = useState({
-    customerId: "1",
-    type: "Note" as Activity["type"],
-    note: "",
-  });
-  const [creditForm, setCreditForm] = useState({
-    applicantName: "",
-    dateOfBirth: "",
-    ssnLast4: "",
-    address: "",
-    city: "",
-    state: "",
-    zip: "",
-    residenceType: "Rent",
-    timeAtAddress: "",
-    employerName: "",
-    jobTitle: "",
-    employmentStatus: "Full-time",
-    timeOnJob: "",
-    monthlyIncome: "",
-    otherIncome: "",
-    bankName: "",
-    downPayment: "",
-    requestedVehicle: "",
-    consentToPullCredit: false,
-    status: "Draft" as CreditApplication["status"],
-  });
 
-  const pipelineValue = useMemo(
-    () => vehicleSales.reduce((total, sale) => total + sale.salePrice, 0),
-    [vehicleSales],
+  // ── Computed ──────────────────────────────────────────────────────────────
+
+  const pipelineValue = useMemo(() => vehicleSales.reduce((t, s) => t + s.salePrice, 0), [vehicleSales]);
+  const pendingFinance = financeApplications.filter(a => a.status !== "Approved").length;
+  const appointmentCount = customers.filter(c => c.status === "Appointment").length;
+  const soldCount = customers.filter(c => c.status === "Sold").length;
+  const totalLeads = customers.filter(c => c.status === "Lead").length;
+  const closingRatio = customers.length ? Math.round((soldCount / customers.length) * 100) : 0;
+
+  const urgentLeads = useMemo(
+    () => customers.filter(c => c.status === "Lead" && !activities.some(a => a.customerId === c.id)),
+    [customers, activities],
   );
 
-  const pendingFinance = financeApplications.filter(
-    (application) => application.status !== "Approved",
-  ).length;
-  const appointmentCount = customers.filter(
-    (customer) => customer.status === "Appointment",
-  ).length;
-  const deliveredValue = vehicleSales
-    .filter((sale) => sale.stage === "Delivered")
-    .reduce((total, sale) => total + sale.salePrice, 0);
-  const hotLeads = customers.filter((customer) =>
-    ["Lead", "Appointment"].includes(customer.status),
+  const internetLeads = useMemo(
+    () => customers.filter(c => {
+      const src = (c.source || "").toLowerCase();
+      return c.status === "Lead" ||
+        ["cars.com", "autotrader", "website", "web", "internet", "online", "email lead", "third-party"].some(s => src.includes(s));
+    }).sort((a, b) => b.id - a.id),
+    [customers],
   );
-  const pipelineStages = (["Working", "Finance", "Delivered"] as const).map(
-    (stage) => ({
-      stage,
-      sales: vehicleSales.filter((sale) => sale.stage === stage),
-    }),
-  );
-  const workQueue = [
-    {
-      label: "Lead response",
-      value: hotLeads.length,
-      detail: "Fresh leads and appointments needing action",
-    },
-    {
-      label: "F&I review",
-      value: pendingFinance,
-      detail: "Applications not approved yet",
-    },
-    {
-      label: "Deliveries",
-      value: vehicleSales.filter((sale) => sale.stage === "Delivered").length,
-      detail: `$${deliveredValue.toLocaleString()} delivered gross pipeline`,
-    },
-  ];
 
-  function getCustomerName(customerId: number) {
-    const customer = customers.find((item) => item.id === customerId);
-    return customer
-      ? `${customer.firstName} ${customer.lastName}`
-      : "Unknown customer";
-  }
+  const leadsBySource = useMemo(() => {
+    const map: Record<string, number> = {};
+    customers.forEach(c => { const src = c.source || "Unknown"; map[src] = (map[src] || 0) + 1; });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [customers]);
 
-  const selectedCustomer = selectedCustomerId
-    ? customers.find((customer) => customer.id === selectedCustomerId) || null
-    : null;
-  const profileFinance = selectedCustomer
-    ? financeApplications.filter(
-        (item) => item.customerId === selectedCustomer.id,
-      )
-    : [];
-  const profileCreditApplications = selectedCustomer
-    ? creditApplications.filter(
-        (item) => item.customerId === selectedCustomer.id,
-      )
-    : [];
-  const profileTrades = selectedCustomer
-    ? tradeIns.filter((item) => item.customerId === selectedCustomer.id)
-    : [];
-  const profileSales = selectedCustomer
-    ? vehicleSales.filter((item) => item.customerId === selectedCustomer.id)
-    : [];
+  const pipelineStages = (["Working", "Finance", "Delivered"] as const).map(stage => ({
+    stage,
+    sales: vehicleSales.filter(s => s.stage === stage),
+    value: vehicleSales.filter(s => s.stage === stage).reduce((t, s) => t + s.salePrice, 0),
+  }));
+
+  const filteredCustomers = useMemo(() => {
+    const q = customerSearch.toLowerCase();
+    return customers.filter(c => {
+      const name = `${c.firstName} ${c.lastName}`.toLowerCase();
+      const matchSearch = !q || name.includes(q) || c.phone.includes(q) || (c.email || "").toLowerCase().includes(q) || (c.interestedVehicle || "").toLowerCase().includes(q);
+      const matchStatus = customerStatusFilter === "All" || c.status === customerStatusFilter;
+      const matchSource = customerSourceFilter === "All" || (c.source || "").toLowerCase().includes(customerSourceFilter.toLowerCase());
+      return matchSearch && matchStatus && matchSource;
+    });
+  }, [customers, customerSearch, customerStatusFilter, customerSourceFilter]);
+
+  const selectedCustomer = selectedCustomerId ? (customers.find(c => c.id === selectedCustomerId) ?? null) : null;
+  const profileFinance = selectedCustomer ? financeApplications.filter(a => a.customerId === selectedCustomer.id) : [];
+  const profileCreditApps = selectedCustomer ? creditApplications.filter(a => a.customerId === selectedCustomer.id) : [];
+  const profileTrades = selectedCustomer ? tradeIns.filter(t => t.customerId === selectedCustomer.id) : [];
+  const profileSales = selectedCustomer ? vehicleSales.filter(s => s.customerId === selectedCustomer.id) : [];
   const profileActivities = selectedCustomer
-    ? activities.filter((item) => item.customerId === selectedCustomer.id)
+    ? activities.filter(a => a.customerId === selectedCustomer.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     : [];
+
+  // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    function syncCustomerRoute() {
-      const match = window.location.hash.match(/^#\/customers\/(\d+)/);
-      setSelectedCustomerId(match ? Number(match[1]) : null);
+    function syncRoute() {
+      const hash = window.location.hash;
+      const match = hash.match(/^#\/customers\/(\d+)/);
+      if (match) { setSelectedCustomerId(Number(match[1])); return; }
+      setSelectedCustomerId(null);
+      const page = hash.replace("#/", "") as AppPage;
+      const valid: AppPage[] = ["dashboard", "leads", "customers", "finance", "pipeline", "trades", "vin", "activities"];
+      setCurrentPage(valid.includes(page) ? page : "dashboard");
     }
-
-    syncCustomerRoute();
-    window.addEventListener("hashchange", syncCustomerRoute);
-    return () => window.removeEventListener("hashchange", syncCustomerRoute);
+    syncRoute();
+    window.addEventListener("hashchange", syncRoute);
+    return () => window.removeEventListener("hashchange", syncRoute);
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      return;
-    }
-
-    async function loadBootstrapData() {
-      try {
-        const bootstrapResponse = await fetch(`${API_BASE}/api/bootstrap`);
-        const bootstrapData = (await bootstrapResponse.json()) as BootstrapData;
-        setCustomers(bootstrapData.customers);
-        setFinanceApplications(bootstrapData.financeApplications);
-        setCreditApplications(bootstrapData.creditApplications || []);
-        setTradeIns(bootstrapData.tradeIns);
-        setVehicleSales(bootstrapData.vehicleSales);
-        setActivities(bootstrapData.activities);
-      } catch {
-        setAppMessage("Could not refresh CRM data from the backend.");
-      }
-    }
-
-    loadBootstrapData();
+    if (!isLoggedIn) return;
+    fetch(`${API_BASE}/api/bootstrap`)
+      .then(r => r.json())
+      .then((d: BootstrapData) => {
+        setCustomers(d.customers);
+        setFinanceApplications(d.financeApplications);
+        setCreditApplications(d.creditApplications || []);
+        setTradeIns(d.tradeIns);
+        setVehicleSales(d.vehicleSales);
+        setActivities(d.activities);
+      })
+      .catch(() => setAppMessage("Could not load data from backend."));
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (selectedCustomer) {
-      prepareCustomerProfile(selectedCustomer);
-      setFinanceForm((current) => ({
-        ...current,
-        customerId: String(selectedCustomer.id),
-        applicantName: `${selectedCustomer.firstName} ${selectedCustomer.lastName}`,
-        requestedVehicle: selectedCustomer.interestedVehicle,
-      }));
-    }
-  }, [selectedCustomerId, selectedCustomer?.id]);
+    if (!selectedCustomer) return;
+    setFinanceForm(f => ({ ...f, customerId: String(selectedCustomer.id), applicantName: `${selectedCustomer.firstName} ${selectedCustomer.lastName}`, requestedVehicle: selectedCustomer.interestedVehicle }));
+    setCreditForm(f => ({ ...f, applicantName: `${selectedCustomer.firstName} ${selectedCustomer.lastName}`, requestedVehicle: selectedCustomer.interestedVehicle }));
+    setProfileTab("overview");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomerId]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function navigate(page: AppPage) { window.location.hash = `#/${page}`; }
+  function openProfile(c: Customer) { window.location.hash = `#/customers/${c.id}`; }
+  function getCustomerName(id: number) {
+    const c = customers.find(c => c.id === id);
+    return c ? `${c.firstName} ${c.lastName}` : "Unknown";
+  }
+  function statusClass(s: string) {
+    return ({ Lead: "badge-lead", Appointment: "badge-appt", Finance: "badge-finance", Sold: "badge-sold" } as Record<string, string>)[s] ?? "";
+  }
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAuthError("");
-    setAuthMessage("");
-
-    const endpoint =
-      authMode === "signup"
-        ? "/api/signup"
-        : authMode === "forgot"
-          ? "/api/forgot-password"
-          : "/api/login";
-    const payload =
-      authMode === "signup"
-        ? loginForm
-        : { email: loginForm.email, password: loginForm.password };
-
+    setAuthError(""); setAuthMessage("");
+    const endpoint = authMode === "signup" ? "/api/signup" : authMode === "forgot" ? "/api/forgot-password" : "/api/login";
+    const payload = authMode === "signup" ? loginForm : { email: loginForm.email, password: loginForm.password };
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setAuthError(data.message || "Unable to authenticate");
-        return;
-      }
-
-      if (authMode === "forgot") {
-        setAuthMessage(data.message || "Password updated. You can log in now.");
-        setAuthMode("login");
-        return;
-      }
-
-      const bootstrapResponse = await fetch(`${API_BASE}/api/bootstrap`);
-      const bootstrapData = (await bootstrapResponse.json()) as BootstrapData;
-      setCustomers(bootstrapData.customers);
-      setFinanceApplications(bootstrapData.financeApplications);
-      setCreditApplications(bootstrapData.creditApplications || []);
-      setTradeIns(bootstrapData.tradeIns);
-      setVehicleSales(bootstrapData.vehicleSales);
-      setActivities(bootstrapData.activities);
+      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) { setAuthError(data.message || "Something went wrong."); return; }
+      if (authMode === "forgot") { setAuthMessage(data.message); setAuthMode("login"); return; }
+      if (authMode === "signup") { setAuthMessage("Account created. You can now log in."); setAuthMode("login"); return; }
+      const boot = await fetch(`${API_BASE}/api/bootstrap`);
+      const bd: BootstrapData = await boot.json();
+      setCustomers(bd.customers); setFinanceApplications(bd.financeApplications);
+      setCreditApplications(bd.creditApplications || []); setTradeIns(bd.tradeIns);
+      setVehicleSales(bd.vehicleSales); setActivities(bd.activities);
       localStorage.setItem("crm-authenticated", "true");
       setIsLoggedIn(true);
-    } catch {
-      setAuthError(
-        "Could not connect to the backend. Make sure it is running.",
-      );
-    }
+    } catch { setAuthError("Cannot connect to backend. Make sure it is running."); }
   }
+
+  // ── Customer CRUD ─────────────────────────────────────────────────────────
 
   function resetCustomerForm() {
     setEditingCustomerId(null);
-    setCustomerForm({
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      status: "Lead",
-      interestedVehicle: "",
-      source: "",
-      assignedTo: "",
-      nextFollowUp: "",
-    });
+    setCustomerForm({ firstName: "", lastName: "", email: "", phone: "", status: "Lead", interestedVehicle: "", source: "", assignedTo: "", nextFollowUp: "" });
+  }
+
+  function editCustomer(c: Customer) {
+    setEditingCustomerId(c.id);
+    setCustomerForm({ firstName: c.firstName, lastName: c.lastName, email: c.email, phone: c.phone, status: c.status, interestedVehicle: c.interestedVehicle, source: c.source || "", assignedTo: c.assignedTo || "", nextFollowUp: c.nextFollowUp || "" });
+    window.scrollTo(0, 0);
   }
 
   async function saveCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (
-      !customerForm.firstName ||
-      !customerForm.lastName ||
-      !customerForm.phone
-    ) {
-      return;
-    }
-
     if (editingCustomerId) {
-      const response = await fetch(
-        `${API_BASE}/api/customers/${editingCustomerId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(customerForm),
-        },
-      );
-      const updatedCustomer = await response.json();
-      setCustomers(
-        customers.map((customer) =>
-          customer.id === editingCustomerId ? updatedCustomer : customer,
-        ),
-      );
-      setAppMessage("Customer updated.");
-      resetCustomerForm();
-      return;
+      const res = await fetch(`${API_BASE}/api/customers/${editingCustomerId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(customerForm) });
+      const updated = await res.json();
+      setCustomers(customers.map(c => c.id === editingCustomerId ? updated : c));
+      resetCustomerForm(); setAppMessage("Customer updated.");
+    } else {
+      const res = await fetch(`${API_BASE}/api/customers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(customerForm) });
+      const created = await res.json();
+      setCustomers([created, ...customers]);
+      resetCustomerForm(); setAppMessage("Customer added.");
     }
-
-    const response = await fetch(`${API_BASE}/api/customers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(customerForm),
-    });
-    const customer = await response.json();
-    setCustomers([customer, ...customers]);
-    setAppMessage("Customer added.");
-    resetCustomerForm();
   }
 
-  function editCustomer(customer: Customer) {
-    setEditingCustomerId(customer.id);
-    setCustomerForm({
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email,
-      phone: customer.phone,
-      status: customer.status,
-      interestedVehicle: customer.interestedVehicle,
-      source: customer.source || "",
-      assignedTo: customer.assignedTo || "",
-      nextFollowUp: customer.nextFollowUp || "",
-    });
+  async function deleteCustomer(id: number) {
+    await fetch(`${API_BASE}/api/customers/${id}`, { method: "DELETE" });
+    setCustomers(customers.filter(c => c.id !== id));
+    setAppMessage("Customer removed.");
   }
 
-  async function deleteCustomer(customerId: number) {
-    await fetch(`${API_BASE}/api/customers/${customerId}`, {
-      method: "DELETE",
-    });
-    setCustomers(customers.filter((customer) => customer.id !== customerId));
-    setFinanceApplications(
-      financeApplications.filter(
-        (application) => application.customerId !== customerId,
-      ),
-    );
-    setTradeIns(
-      tradeIns.filter((tradeIn) => tradeIn.customerId !== customerId),
-    );
-    setVehicleSales(
-      vehicleSales.filter((sale) => sale.customerId !== customerId),
-    );
-    setActivities(
-      activities.filter((activity) => activity.customerId !== customerId),
-    );
-    setAppMessage("Customer deleted.");
+  async function assignLead(customer: Customer, assignedTo: string) {
+    const res = await fetch(`${API_BASE}/api/customers/${customer.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...customer, assignedTo, status: "Appointment" }) });
+    const updated = await res.json();
+    setCustomers(customers.map(c => c.id === customer.id ? updated : c));
+    setAppMessage(`Lead assigned to ${assignedTo}.`);
   }
+
+  // ── Finance ───────────────────────────────────────────────────────────────
 
   async function addFinanceApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const response = await fetch(`${API_BASE}/api/finance-applications`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(financeForm),
-    });
-    const application = await response.json();
-    setFinanceApplications([application, ...financeApplications]);
-    setAppMessage("Finance application added.");
-  }
-
-  async function addProfileFinanceApplication(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    await addFinanceApplication(event);
+    const res = await fetch(`${API_BASE}/api/finance-applications`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(financeForm) });
+    const app = await res.json();
+    setFinanceApplications([app, ...financeApplications]);
+    setAppMessage("Finance application submitted.");
     setProfileTab("deals");
   }
 
+  async function updateFinanceStatus(id: number, status: FinanceApplication["status"]) {
+    try {
+      const res = await fetch(`${API_BASE}/api/finance-applications/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      if (res.ok) {
+        const updated = await res.json();
+        setFinanceApplications(financeApplications.map(a => a.id === id ? updated : a));
+      } else {
+        setFinanceApplications(financeApplications.map(a => a.id === id ? { ...a, status } : a));
+      }
+    } catch {
+      setFinanceApplications(financeApplications.map(a => a.id === id ? { ...a, status } : a));
+    }
+  }
+
+  async function addCreditApplication(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCustomer) return;
+    const res = await fetch(`${API_BASE}/api/customers/${selectedCustomer.id}/credit-applications`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(creditForm) });
+    const app = await res.json();
+    setCreditApplications([app, ...creditApplications]);
+    setProfileTab("deals");
+    setAppMessage("Credit application saved.");
+  }
+
+  // ── Trade / Sales ─────────────────────────────────────────────────────────
+
   async function addTradeIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const response = await fetch(`${API_BASE}/api/trade-ins`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tradeForm),
-    });
-    const tradeIn = await response.json();
-    setTradeIns([tradeIn, ...tradeIns]);
+    const res = await fetch(`${API_BASE}/api/trade-ins`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tradeForm) });
+    const trade = await res.json();
+    setTradeIns([trade, ...tradeIns]);
     setAppMessage("Trade-in added.");
   }
 
   async function addVehicleSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const response = await fetch(`${API_BASE}/api/vehicle-sales`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(saleForm),
-    });
-    const sale = await response.json();
+    const res = await fetch(`${API_BASE}/api/vehicle-sales`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saleForm) });
+    const sale = await res.json();
     setVehicleSales([sale, ...vehicleSales]);
-    setAppMessage("Vehicle deal added.");
+    setAppMessage("Vehicle added to pipeline.");
   }
 
-  async function lookupVin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setVinError("");
-    setVinResult(null);
-    setVinLoading(true);
-
+  async function updateSaleStage(id: number, stage: VehicleSale["stage"]) {
     try {
-      const response = await fetch(
-        `${API_BASE}/api/vin/${encodeURIComponent(vin)}`,
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        setVinError(data.message || "Unable to pull VIN details");
-        return;
+      const res = await fetch(`${API_BASE}/api/vehicle-sales/${id}/stage`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage }) });
+      if (res.ok) {
+        const updated = await res.json();
+        setVehicleSales(vehicleSales.map(s => s.id === id ? updated : s));
+      } else {
+        setVehicleSales(vehicleSales.map(s => s.id === id ? { ...s, stage } : s));
       }
-
-      setVinResult(data);
-      setSaleForm({
-        ...saleForm,
-        year: data.year || saleForm.year,
-        make: data.make || saleForm.make,
-        model: data.model || saleForm.model,
-      });
-      setTradeForm({
-        ...tradeForm,
-        year: data.year || tradeForm.year,
-        make: data.make || tradeForm.make,
-        model: data.model || tradeForm.model,
-      });
     } catch {
-      setVinError("Could not connect to the backend VIN API.");
-    } finally {
-      setVinLoading(false);
+      setVehicleSales(vehicleSales.map(s => s.id === id ? { ...s, stage } : s));
     }
   }
 
-  async function updateFinanceStatus(
-    applicationId: number,
-    status: FinanceApplication["status"],
-  ) {
-    const response = await fetch(
-      `${API_BASE}/api/finance-applications/${applicationId}/status`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      },
-    );
-    const application = await response.json();
-    setFinanceApplications(
-      financeApplications.map((item) =>
-        item.id === applicationId ? application : item,
-      ),
-    );
-    setAppMessage("Finance status updated.");
-  }
-
-  async function updateSaleStage(saleId: number, stage: VehicleSale["stage"]) {
-    const response = await fetch(
-      `${API_BASE}/api/vehicle-sales/${saleId}/stage`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage }),
-      },
-    );
-    const sale = await response.json();
-    setVehicleSales(
-      vehicleSales.map((item) => (item.id === saleId ? sale : item)),
-    );
-    setAppMessage("Vehicle deal stage updated.");
-  }
+  // ── Activity ──────────────────────────────────────────────────────────────
 
   async function addActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activityForm.note) {
-      return;
-    }
-
-    const response = await fetch(`${API_BASE}/api/activities`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(activityForm),
-    });
-    const activity = await response.json();
-    setActivities([activity, ...activities]);
+    if (!activityForm.note) return;
+    const res = await fetch(`${API_BASE}/api/activities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(activityForm) });
+    const act = await res.json();
+    setActivities([act, ...activities]);
     setActivityForm({ ...activityForm, note: "" });
-    setAppMessage("Activity added.");
+    setAppMessage("Activity logged.");
   }
 
-  function openCustomerProfile(customer: Customer) {
-    const profileUrl = `${window.location.origin}${window.location.pathname}#/customers/${customer.id}`;
-    window.open(profileUrl, "_blank", "noopener,noreferrer");
+  async function addQuickActivity() {
+    if (!selectedCustomer || !quickActivityNote) return;
+    const payload = { customerId: String(selectedCustomer.id), type: quickActivityType, note: quickActivityNote };
+    const res = await fetch(`${API_BASE}/api/activities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const act = await res.json();
+    setActivities([act, ...activities]);
+    setQuickActivityNote("");
+    setAppMessage("Activity logged.");
   }
 
-  function prepareCustomerProfile(customer: Customer) {
-    setCreditForm({
-      applicantName: `${customer.firstName} ${customer.lastName}`,
-      dateOfBirth: "",
-      ssnLast4: "",
-      address: "",
-      city: "",
-      state: "",
-      zip: "",
-      residenceType: "Rent",
-      timeAtAddress: "",
-      employerName: "",
-      jobTitle: "",
-      employmentStatus: "Full-time",
-      timeOnJob: "",
-      monthlyIncome: "",
-      otherIncome: "",
-      bankName: "",
-      downPayment: "",
-      requestedVehicle: customer.interestedVehicle,
-      consentToPullCredit: false,
-      status: "Draft",
-    });
-  }
+  // ── VIN ───────────────────────────────────────────────────────────────────
 
-  async function addCreditApplication(event: FormEvent<HTMLFormElement>) {
+  async function lookupVin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedCustomer) {
-      return;
-    }
-
-    const response = await fetch(
-      `${API_BASE}/api/customers/${selectedCustomer.id}/credit-applications`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(creditForm),
-      },
-    );
-    const application = await response.json();
-    setCreditApplications([application, ...creditApplications]);
-    setFinanceApplications([
-      {
-        id: Date.now(),
-        customerId: selectedCustomer.id,
-        employmentStatus: application.employmentStatus,
-        monthlyIncome: application.monthlyIncome,
-        creditRange: "Pending bureau",
-        downPayment: application.downPayment,
-        status: application.status === "Submitted" ? "Submitted" : "New",
-      },
-      ...financeApplications,
-    ]);
-    setProfileTab("deals");
-    setAppMessage("Credit application saved to customer profile.");
+    if (!vin) return;
+    setVinLoading(true); setVinError(""); setVinResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/vin/${vin}`);
+      if (!res.ok) { setVinError("VIN not found or invalid."); return; }
+      setVinResult(await res.json());
+    } catch { setVinError("Could not reach VIN lookup service."); }
+    finally { setVinLoading(false); }
   }
+
+  // ── Login Page ────────────────────────────────────────────────────────────
 
   if (!isLoggedIn) {
     return (
       <main className="login-page">
         <form className="login-card" onSubmit={handleAuth}>
-          <div className="brand-mark">AP</div>
-          <p className="eyebrow">Auto Retail CRM</p>
-          <h1>
-            {authMode === "signup"
-              ? "Create account"
-              : authMode === "forgot"
-                ? "Reset password"
-                : "Sales login"}
-          </h1>
+          <div className="brand-mark">AS</div>
+          <p className="eyebrow">AutoSuite CRM</p>
+          <h1>{authMode === "signup" ? "Create account" : authMode === "forgot" ? "Reset password" : "Sign in"}</h1>
           {authMode === "signup" && (
-            <input
-              aria-label="Name"
-              placeholder="Full name"
-              value={loginForm.name}
-              onChange={(event) =>
-                setLoginForm({ ...loginForm, name: event.target.value })
-              }
-            />
+            <input aria-label="Name" placeholder="Full name" value={loginForm.name} onChange={e => setLoginForm({ ...loginForm, name: e.target.value })} />
           )}
-          <input
-            aria-label="Email"
-            placeholder="Email"
-            value={loginForm.email}
-            onChange={(event) =>
-              setLoginForm({ ...loginForm, email: event.target.value })
-            }
-          />
-          <input
-            aria-label="Password"
-            placeholder="Password"
-            type="password"
-            value={loginForm.password}
-            onChange={(event) =>
-              setLoginForm({ ...loginForm, password: event.target.value })
-            }
-          />
-          <small>
-            {authMode === "forgot"
-              ? "Enter your email and a new password to reset your login."
-              : "Demo login: avery@example.com / password"}
-          </small>
+          <input aria-label="Email" placeholder="Work email" type="email" value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} />
+          <input aria-label="Password" placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} />
+          {authMode === "login" && <small className="login-hint">Demo: avery@example.com / password</small>}
+          {authMode === "forgot" && <small className="login-hint">Enter your email and a new password.</small>}
           {authError && <p className="auth-error">{authError}</p>}
           {authMessage && <p className="auth-success">{authMessage}</p>}
-          <button type="submit">
-            {authMode === "signup"
-              ? "Sign Up"
-              : authMode === "forgot"
-                ? "Update Password"
-                : "Log In"}
+          <button type="submit">{authMode === "signup" ? "Create Account" : authMode === "forgot" ? "Update Password" : "Log In"}</button>
+          <button className="auth-switch" type="button" onClick={() => { setAuthError(""); setAuthMessage(""); setAuthMode(authMode === "signup" ? "login" : "signup"); }}>
+            {authMode === "signup" ? "Already have an account? Log in" : "Create an account"}
           </button>
-          <button
-            className="auth-switch"
-            type="button"
-            onClick={() => {
-              setAuthError("");
-              setAuthMessage("");
-              setAuthMode(authMode === "signup" ? "login" : "signup");
-            }}
-          >
-            {authMode === "signup"
-              ? "Already have an account? Log in"
-              : "Need an account? Sign up"}
-          </button>
-          <button
-            className="auth-switch"
-            type="button"
-            onClick={() => {
-              setAuthError("");
-              setAuthMessage("");
-              setAuthMode(authMode === "forgot" ? "login" : "forgot");
-            }}
-          >
+          <button className="auth-switch" type="button" onClick={() => { setAuthError(""); setAuthMessage(""); setAuthMode(authMode === "forgot" ? "login" : "forgot"); }}>
             {authMode === "forgot" ? "Back to login" : "Forgot password?"}
           </button>
         </form>
@@ -842,379 +519,253 @@ function App() {
     );
   }
 
+  // ── Customer Profile / Deal Jacket ────────────────────────────────────────
+
   if (selectedCustomerId) {
     return (
       <main className="app-shell">
         <aside className="sidebar">
-          <div className="brand-mark">AP</div>
+          <div className="brand-mark">AS</div>
           <nav>
-            <a href="#dashboard">Dashboard</a>
-            <a className="active" href={`#/customers/${selectedCustomerId}`}>
-              Customer Profile
-            </a>
+            <a href="#/dashboard">Dashboard</a>
+            <a href="#/leads">Leads</a>
+            <a href="#/customers">Customers</a>
+            <a className="active" href={`#/customers/${selectedCustomerId}`}>Deal Jacket</a>
           </nav>
+          <div className="sidebar-footer">
+            <button type="button" onClick={() => { localStorage.removeItem("crm-authenticated"); setIsLoggedIn(false); }}>Log Out</button>
+          </div>
         </aside>
+
         <section className="workspace">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">Customer Profile</p>
-              <h1>
-                {selectedCustomer
-                  ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-                  : "Customer not found"}
-              </h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.hash = "dashboard";
-              }}
-            >
-              Back to CRM
-            </button>
-          </header>
-          {appMessage && <p className="app-message">{appMessage}</p>}
-          {!selectedCustomer && (
-            <article className="panel">
-              <h2>This customer profile could not be found.</h2>
-            </article>
+          {appMessage && (
+            <p className="app-message" onClick={() => setAppMessage("")}>{appMessage} ×</p>
           )}
-          {selectedCustomer && (
-            <article className="panel wide profile-panel">
+          <header className="page-header">
+            <div>
+              <p className="eyebrow">Deal Jacket</p>
+              <h1>{selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : "Customer not found"}</h1>
+              {selectedCustomer && (
+                <div className="profile-meta">
+                  <span>{selectedCustomer.phone}</span>
+                  <span>{selectedCustomer.email || "No email"}</span>
+                  <span className={`status-badge ${statusClass(selectedCustomer.status)}`}>{selectedCustomer.status}</span>
+                  {selectedCustomer.assignedTo && <span className="meta-tag">Rep: {selectedCustomer.assignedTo}</span>}
+                  {selectedCustomer.source && <span className="meta-tag source-tag">{selectedCustomer.source}</span>}
+                </div>
+              )}
+            </div>
+            <button type="button" className="ghost-button" onClick={() => { window.location.hash = "#/customers"; }}>← All Customers</button>
+          </header>
+
+          {!selectedCustomer ? (
+            <article className="panel"><h2>Customer not found.</h2></article>
+          ) : (
+            <article className="panel profile-panel">
               <div className="profile-tabs">
-                {(
-                  [
-                    "overview",
-                    "finance",
-                    "credit",
-                    "deals",
-                    "activity",
-                  ] as ProfileTab[]
-                ).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={profileTab === tab ? "active" : ""}
-                    onClick={() => setProfileTab(tab)}
-                  >
-                    {tab}
+                {(["overview", "finance", "credit", "deals", "activity"] as ProfileTab[]).map(tab => (
+                  <button key={tab} type="button" className={profileTab === tab ? "active" : ""} onClick={() => setProfileTab(tab)}>
+                    {tab === "overview" && "Overview"}
+                    {tab === "finance" && `Finance App${profileFinance.length ? ` (${profileFinance.length})` : ""}`}
+                    {tab === "credit" && `Credit${profileCreditApps.length ? ` (${profileCreditApps.length})` : ""}`}
+                    {tab === "deals" && "Deals"}
+                    {tab === "activity" && `Activity${profileActivities.length ? ` (${profileActivities.length})` : ""}`}
                   </button>
                 ))}
               </div>
+
               {profileTab === "overview" && (
-                <div className="profile-grid">
-                  <div className="profile-card">
-                    <strong>Contact</strong>
-                    <span>{selectedCustomer.phone}</span>
-                    <span>{selectedCustomer.email || "No email"}</span>
+                <div className="overview-layout">
+                  <div className="profile-grid">
+                    <div className="profile-card"><p className="card-label">Vehicle of Interest</p><strong>{selectedCustomer.interestedVehicle || "Not specified"}</strong></div>
+                    <div className="profile-card"><p className="card-label">Lead Source</p><strong>{selectedCustomer.source || "Walk-in"}</strong></div>
+                    <div className="profile-card"><p className="card-label">Assigned Rep</p><strong>{selectedCustomer.assignedTo || "Unassigned"}</strong></div>
+                    <div className="profile-card"><p className="card-label">Next Follow-Up</p><strong>{selectedCustomer.nextFollowUp || "Not scheduled"}</strong></div>
+                    <div className="profile-card"><p className="card-label">Finance Apps</p><strong>{profileFinance.length}</strong></div>
+                    <div className="profile-card"><p className="card-label">Trade-Ins</p><strong>{profileTrades.length}</strong></div>
                   </div>
-                  <div className="profile-card">
-                    <strong>Deal Ownership</strong>
-                    <span>{selectedCustomer.assignedTo || "Unassigned"}</span>
-                    <span>{selectedCustomer.source || "Manual Entry"}</span>
-                  </div>
-                  <div className="profile-card">
-                    <strong>Next Step</strong>
-                    <span>{selectedCustomer.status}</span>
-                    <span>
-                      {selectedCustomer.nextFollowUp || "Not scheduled"}
-                    </span>
+                  <div className="quick-activity-box">
+                    <p className="card-label">Log Activity</p>
+                    <div className="quick-act-row">
+                      <select value={quickActivityType} onChange={e => setQuickActivityType(e.target.value as Activity["type"])}>
+                        <option>Call</option><option>Text</option><option>Email</option><option>Appointment</option><option>Note</option>
+                      </select>
+                      <input placeholder="What happened or was discussed?" value={quickActivityNote} onChange={e => setQuickActivityNote(e.target.value)} />
+                      <button type="button" onClick={addQuickActivity}>Log</button>
+                    </div>
+                    <div className="activity-timeline">
+                      {profileActivities.slice(0, 6).map(act => (
+                        <div className="timeline-item" key={act.id}>
+                          <span className={`timeline-dot dot-${act.type.toLowerCase()}`} />
+                          <div>
+                            <strong>{act.type}</strong>
+                            <span>{act.note}</span>
+                            <small>{new Date(act.createdAt).toLocaleString()}</small>
+                          </div>
+                        </div>
+                      ))}
+                      {profileActivities.length === 0 && <p className="empty-state">No activity yet on this deal jacket.</p>}
+                    </div>
                   </div>
                 </div>
               )}
+
               {profileTab === "finance" && (
-                <>
-                  <form
-                    className="credit-form"
-                    onSubmit={addProfileFinanceApplication}
-                  >
-                    <input
-                      placeholder="Applicant name"
-                      value={financeForm.applicantName}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          applicantName: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Date of birth"
-                      value={financeForm.dateOfBirth}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          dateOfBirth: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="SSN last 4"
-                      value={financeForm.ssnLast4}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          ssnLast4: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Address"
-                      value={financeForm.address}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          address: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="City"
-                      value={financeForm.city}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          city: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="State"
-                      value={financeForm.state}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          state: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="ZIP"
-                      value={financeForm.zip}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          zip: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Employer"
-                      value={financeForm.employerName}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          employerName: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Job title"
-                      value={financeForm.jobTitle}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          jobTitle: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Time on job"
-                      value={financeForm.timeOnJob}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          timeOnJob: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Monthly income"
-                      value={financeForm.monthlyIncome}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          monthlyIncome: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Other income"
-                      value={financeForm.otherIncome}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          otherIncome: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Credit range"
-                      value={financeForm.creditRange}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          creditRange: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Down payment"
-                      value={financeForm.downPayment}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          downPayment: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Requested vehicle"
-                      value={financeForm.requestedVehicle}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          requestedVehicle: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Trade payoff"
-                      value={financeForm.tradePayoff}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          tradePayoff: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Requested amount"
-                      value={financeForm.requestedAmount}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          requestedAmount: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Term months"
-                      value={financeForm.termMonths}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          termMonths: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Preferred lender"
-                      value={financeForm.lender}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          lender: event.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Decision notes"
-                      value={financeForm.decisionNotes}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          decisionNotes: event.target.value,
-                        })
-                      }
-                    />
-                    <select
-                      value={financeForm.status}
-                      onChange={(event) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          status: event.target
-                            .value as FinanceApplication["status"],
-                        })
-                      }
-                    >
-                      <option>New</option>
-                      <option>Submitted</option>
-                      <option>Approved</option>
-                      <option>Needs Review</option>
+                <form className="credit-form" onSubmit={addFinanceApplication}>
+                  <h3 className="form-section-title">Buyer Information</h3>
+                  <input placeholder="Applicant name" value={financeForm.applicantName} onChange={e => setFinanceForm({ ...financeForm, applicantName: e.target.value })} />
+                  <input placeholder="Date of birth (MM/DD/YYYY)" value={financeForm.dateOfBirth} onChange={e => setFinanceForm({ ...financeForm, dateOfBirth: e.target.value })} />
+                  <input placeholder="SSN last 4 digits" value={financeForm.ssnLast4} onChange={e => setFinanceForm({ ...financeForm, ssnLast4: e.target.value })} />
+                  <h3 className="form-section-title">Address</h3>
+                  <input placeholder="Street address" value={financeForm.address} onChange={e => setFinanceForm({ ...financeForm, address: e.target.value })} />
+                  <input placeholder="City" value={financeForm.city} onChange={e => setFinanceForm({ ...financeForm, city: e.target.value })} />
+                  <input placeholder="State" value={financeForm.state} onChange={e => setFinanceForm({ ...financeForm, state: e.target.value })} />
+                  <input placeholder="ZIP code" value={financeForm.zip} onChange={e => setFinanceForm({ ...financeForm, zip: e.target.value })} />
+                  <h3 className="form-section-title">Employment</h3>
+                  <input placeholder="Employer name" value={financeForm.employerName} onChange={e => setFinanceForm({ ...financeForm, employerName: e.target.value })} />
+                  <input placeholder="Job title" value={financeForm.jobTitle} onChange={e => setFinanceForm({ ...financeForm, jobTitle: e.target.value })} />
+                  <select value={financeForm.employmentStatus} onChange={e => setFinanceForm({ ...financeForm, employmentStatus: e.target.value })}>
+                    <option>Full-time</option><option>Part-time</option><option>Self-employed</option><option>Retired</option><option>Other</option>
+                  </select>
+                  <input placeholder="Time on job (e.g. 3 years)" value={financeForm.timeOnJob} onChange={e => setFinanceForm({ ...financeForm, timeOnJob: e.target.value })} />
+                  <h3 className="form-section-title">Income</h3>
+                  <input placeholder="Monthly gross income ($)" value={financeForm.monthlyIncome} onChange={e => setFinanceForm({ ...financeForm, monthlyIncome: e.target.value })} />
+                  <input placeholder="Other monthly income ($)" value={financeForm.otherIncome} onChange={e => setFinanceForm({ ...financeForm, otherIncome: e.target.value })} />
+                  <h3 className="form-section-title">Deal Structure</h3>
+                  <input placeholder="Requested vehicle" value={financeForm.requestedVehicle} onChange={e => setFinanceForm({ ...financeForm, requestedVehicle: e.target.value })} />
+                  <input placeholder="Down payment ($)" value={financeForm.downPayment} onChange={e => setFinanceForm({ ...financeForm, downPayment: e.target.value })} />
+                  <input placeholder="Trade-in payoff ($)" value={financeForm.tradePayoff} onChange={e => setFinanceForm({ ...financeForm, tradePayoff: e.target.value })} />
+                  <input placeholder="Amount requested ($)" value={financeForm.requestedAmount} onChange={e => setFinanceForm({ ...financeForm, requestedAmount: e.target.value })} />
+                  <input placeholder="Term in months (e.g. 72)" value={financeForm.termMonths} onChange={e => setFinanceForm({ ...financeForm, termMonths: e.target.value })} />
+                  <input placeholder="Credit range (e.g. 680-719)" value={financeForm.creditRange} onChange={e => setFinanceForm({ ...financeForm, creditRange: e.target.value })} />
+                  <input placeholder="Preferred lender" value={financeForm.lender} onChange={e => setFinanceForm({ ...financeForm, lender: e.target.value })} />
+                  <input placeholder="Decision notes" value={financeForm.decisionNotes} onChange={e => setFinanceForm({ ...financeForm, decisionNotes: e.target.value })} />
+                  <select value={financeForm.status} onChange={e => setFinanceForm({ ...financeForm, status: e.target.value as FinanceApplication["status"] })}>
+                    <option>New</option><option>Submitted</option><option>Approved</option><option>Needs Review</option>
+                  </select>
+                  <label className="checkbox-field">
+                    <input type="checkbox" checked={financeForm.consentToPullCredit} onChange={e => setFinanceForm({ ...financeForm, consentToPullCredit: e.target.checked })} />
+                    Customer authorizes credit bureau pull
+                  </label>
+                  <button type="submit" className="submit-btn">Submit Finance Application</button>
+                </form>
+              )}
+
+              {profileTab === "credit" && (
+                <div>
+                  <form className="credit-form" onSubmit={addCreditApplication} style={{ marginBottom: 24 }}>
+                    <h3 className="form-section-title">Credit Application</h3>
+                    <input placeholder="Applicant name" value={creditForm.applicantName} onChange={e => setCreditForm({ ...creditForm, applicantName: e.target.value })} />
+                    <input placeholder="Date of birth" value={creditForm.dateOfBirth} onChange={e => setCreditForm({ ...creditForm, dateOfBirth: e.target.value })} />
+                    <input placeholder="SSN last 4" value={creditForm.ssnLast4} onChange={e => setCreditForm({ ...creditForm, ssnLast4: e.target.value })} />
+                    <input placeholder="Address" value={creditForm.address} onChange={e => setCreditForm({ ...creditForm, address: e.target.value })} />
+                    <input placeholder="City" value={creditForm.city} onChange={e => setCreditForm({ ...creditForm, city: e.target.value })} />
+                    <input placeholder="State" value={creditForm.state} onChange={e => setCreditForm({ ...creditForm, state: e.target.value })} />
+                    <input placeholder="ZIP" value={creditForm.zip} onChange={e => setCreditForm({ ...creditForm, zip: e.target.value })} />
+                    <select value={creditForm.residenceType} onChange={e => setCreditForm({ ...creditForm, residenceType: e.target.value })}>
+                      <option>Rent</option><option>Own</option><option>Family</option><option>Other</option>
+                    </select>
+                    <input placeholder="Time at address" value={creditForm.timeAtAddress} onChange={e => setCreditForm({ ...creditForm, timeAtAddress: e.target.value })} />
+                    <input placeholder="Employer" value={creditForm.employerName} onChange={e => setCreditForm({ ...creditForm, employerName: e.target.value })} />
+                    <input placeholder="Job title" value={creditForm.jobTitle} onChange={e => setCreditForm({ ...creditForm, jobTitle: e.target.value })} />
+                    <input placeholder="Monthly income" value={creditForm.monthlyIncome} onChange={e => setCreditForm({ ...creditForm, monthlyIncome: e.target.value })} />
+                    <input placeholder="Other income" value={creditForm.otherIncome} onChange={e => setCreditForm({ ...creditForm, otherIncome: e.target.value })} />
+                    <input placeholder="Bank name" value={creditForm.bankName} onChange={e => setCreditForm({ ...creditForm, bankName: e.target.value })} />
+                    <input placeholder="Down payment" value={creditForm.downPayment} onChange={e => setCreditForm({ ...creditForm, downPayment: e.target.value })} />
+                    <input placeholder="Requested vehicle" value={creditForm.requestedVehicle} onChange={e => setCreditForm({ ...creditForm, requestedVehicle: e.target.value })} />
+                    <select value={creditForm.status} onChange={e => setCreditForm({ ...creditForm, status: e.target.value as CreditApplication["status"] })}>
+                      <option>Draft</option><option>Submitted</option><option>Manager Review</option><option>Approved</option><option>Declined</option>
                     </select>
                     <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={financeForm.consentToPullCredit}
-                        onChange={(event) =>
-                          setFinanceForm({
-                            ...financeForm,
-                            consentToPullCredit: event.target.checked,
-                          })
-                        }
-                      />
+                      <input type="checkbox" checked={creditForm.consentToPullCredit} onChange={e => setCreditForm({ ...creditForm, consentToPullCredit: e.target.checked })} />
                       Customer authorized credit review
                     </label>
-                    <button type="submit">Submit Finance Application</button>
+                    <button type="submit">Save Credit Application</button>
                   </form>
-                </>
-              )}
-              {profileTab === "credit" && (
-                <div className="deal-list">
-                  {profileCreditApplications.map((application) => (
-                    <div className="deal-card" key={application.id}>
-                      <strong>{application.applicantName}</strong>
-                      <span>
-                        {application.employerName || "No employer listed"}
-                      </span>
-                      <b>
-                        ${application.monthlyIncome.toLocaleString()} monthly
-                      </b>
-                      <small>{application.status}</small>
-                    </div>
-                  ))}
+                  <div className="deal-list">
+                    {profileCreditApps.length === 0 && <p className="empty-state">No credit applications on file.</p>}
+                    {profileCreditApps.map(app => (
+                      <div className="deal-card" key={app.id}>
+                        <strong>{app.applicantName}</strong>
+                        <span>{app.employerName || "No employer"} — ${app.monthlyIncome.toLocaleString()}/mo</span>
+                        <div className="card-row">
+                          <span className={`status-badge ${app.status === "Approved" ? "badge-sold" : app.status === "Declined" ? "badge-danger" : "badge-finance"}`}>{app.status}</span>
+                          <small>{new Date(app.submittedAt).toLocaleDateString()}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
               {profileTab === "deals" && (
-                <div className="deal-list">
-                  {profileFinance.map((application) => (
-                    <div className="deal-card" key={application.id}>
-                      <strong>
-                        {application.applicantName ||
-                          getCustomerName(application.customerId)}
-                      </strong>
-                      <span>
-                        {application.requestedVehicle ||
-                          selectedCustomer.interestedVehicle}
-                      </span>
-                      <b>${application.downPayment.toLocaleString()} down</b>
-                      <small>{application.status}</small>
+                <div className="deals-layout">
+                  <div>
+                    <p className="card-label">Finance Applications</p>
+                    <div className="deal-list">
+                      {profileFinance.length === 0 && <p className="empty-state">No finance applications yet.</p>}
+                      {profileFinance.map(app => (
+                        <div className="deal-card" key={app.id}>
+                          <strong>{app.requestedVehicle || selectedCustomer.interestedVehicle}</strong>
+                          <span>${app.downPayment.toLocaleString()} down · {app.creditRange}</span>
+                          <select value={app.status} onChange={e => updateFinanceStatus(app.id, e.target.value as FinanceApplication["status"])}>
+                            <option>New</option><option>Submitted</option><option>Approved</option><option>Needs Review</option>
+                          </select>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  <div className="profile-grid">
-                    <div className="profile-card">
-                      <strong>Trades</strong>
-                      <span>{profileTrades.length}</span>
+                  </div>
+                  <div>
+                    <p className="card-label">Vehicle Sales</p>
+                    <div className="deal-list">
+                      {profileSales.length === 0 && <p className="empty-state">No vehicle sales on this deal.</p>}
+                      {profileSales.map(sale => (
+                        <div className="deal-card" key={sale.id}>
+                          <strong>{sale.year} {sale.make} {sale.model}</strong>
+                          <span>Stock #{sale.stockNumber} · ${sale.salePrice.toLocaleString()}</span>
+                          <span className={`status-badge ${sale.stage === "Delivered" ? "badge-sold" : "badge-finance"}`}>{sale.stage}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="profile-card">
-                      <strong>Sales</strong>
-                      <span>{profileSales.length}</span>
+                  </div>
+                  <div>
+                    <p className="card-label">Trade-Ins</p>
+                    <div className="deal-list">
+                      {profileTrades.length === 0 && <p className="empty-state">No trade-ins on this deal.</p>}
+                      {profileTrades.map(trade => (
+                        <div className="deal-card" key={trade.id}>
+                          <strong>{trade.year} {trade.make} {trade.model}</strong>
+                          <span>{trade.mileage.toLocaleString()} miles · ACV ${trade.estimatedValue.toLocaleString()}</span>
+                          <span>Payoff: ${trade.payoff.toLocaleString()}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
+
               {profileTab === "activity" && (
-                <div className="deal-list">
-                  {profileActivities.map((activity) => (
-                    <div className="deal-card" key={activity.id}>
-                      <strong>{activity.type}</strong>
-                      <span>{activity.note}</span>
-                      <small>
-                        {new Date(activity.createdAt).toLocaleString()}
-                      </small>
-                    </div>
-                  ))}
+                <div>
+                  <div className="quick-act-row" style={{ marginBottom: 18 }}>
+                    <select value={quickActivityType} onChange={e => setQuickActivityType(e.target.value as Activity["type"])}>
+                      <option>Call</option><option>Text</option><option>Email</option><option>Appointment</option><option>Note</option>
+                    </select>
+                    <input placeholder="Log activity..." value={quickActivityNote} onChange={e => setQuickActivityNote(e.target.value)} />
+                    <button type="button" onClick={addQuickActivity}>Log</button>
+                  </div>
+                  <div className="activity-timeline">
+                    {profileActivities.length === 0 && <p className="empty-state">No activities yet.</p>}
+                    {profileActivities.map(act => (
+                      <div className="timeline-item" key={act.id}>
+                        <span className={`timeline-dot dot-${act.type.toLowerCase()}`} />
+                        <div>
+                          <strong>{act.type}</strong>
+                          <span>{act.note}</span>
+                          <small>{new Date(act.createdAt).toLocaleString()}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </article>
@@ -1224,936 +775,450 @@ function App() {
     );
   }
 
+  // ── Main CRM Shell ────────────────────────────────────────────────────────
+
+  const navItems: { page: AppPage; label: string; badge?: number }[] = [
+    { page: "dashboard", label: "Dashboard" },
+    { page: "leads", label: "Leads", badge: urgentLeads.length || undefined },
+    { page: "customers", label: "Customers" },
+    { page: "finance", label: "Finance", badge: pendingFinance || undefined },
+    { page: "pipeline", label: "Pipeline" },
+    { page: "trades", label: "Trades" },
+    { page: "vin", label: "VIN Lookup" },
+    { page: "activities", label: "Activities" },
+  ];
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-mark">AP</div>
+        <div className="brand-mark">AS</div>
         <nav>
-          <a className="active" href="#dashboard">
-            Dashboard
-          </a>
-          <a href="#customers">Customers</a>
-          <a href="#finance">Finance</a>
-          <a href="#trades">Trades</a>
-          <a href="#sales">Sales</a>
-          <a href="#vin">VIN Lookup</a>
-          <a href="#activities">Activities</a>
-          <a href="#customer-profile">Profiles</a>
+          {navItems.map(item => (
+            <a key={item.page} className={currentPage === item.page ? "active" : ""} href={`#/${item.page}`}>
+              {item.label}
+              {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+            </a>
+          ))}
         </nav>
+        <div className="sidebar-footer">
+          <button type="button" onClick={() => { localStorage.removeItem("crm-authenticated"); setIsLoggedIn(false); }}>Log Out</button>
+        </div>
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">AutoSuite CRM</p>
-            <h1>Dealership revenue command center</h1>
-            <p className="topbar-copy">
-              Route leads, manage showroom activity, desk deals, submit F&I,
-              decode VINs, and keep every customer deal jacket in one place.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.removeItem("crm-authenticated");
-              setIsLoggedIn(false);
-            }}
-          >
-            Log Out
-          </button>
-        </header>
-        {appMessage && <p className="app-message">{appMessage}</p>}
+        {appMessage && (
+          <p className="app-message" onClick={() => setAppMessage("")}>{appMessage} ×</p>
+        )}
 
-        <section className="hero-panel">
-          <div>
-            <p className="eyebrow">Company Operating System</p>
-            <h2>
-              Built for sales, finance, and managers to work the same customer
-              file.
-            </h2>
-            <p>
-              Automotive CRMs win when they combine lead response, follow-up,
-              desking, trade, VIN, and finance workflows. This dashboard now
-              mirrors that day-to-day dealership flow.
-            </p>
-          </div>
-          <div className="hero-actions">
-            <a href="#customers">Work Leads</a>
-            <a href="#finance">Review F&I</a>
-            <a href="#vin">Decode VIN</a>
-          </div>
-        </section>
-
-        <section id="dashboard" className="metric-grid">
-          <article className="metric-card">
-            <span>Customers</span>
-            <strong>{customers.length}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Finance Pending</span>
-            <strong>{pendingFinance}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Appointments</span>
-            <strong>{appointmentCount}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Trade-Ins</span>
-            <strong>{tradeIns.length}</strong>
-          </article>
-          <article className="metric-card">
-            <span>Vehicle Pipeline</span>
-            <strong>${pipelineValue.toLocaleString()}</strong>
-          </article>
-        </section>
-
-        <section className="ops-grid">
-          <article className="panel">
-            <p className="eyebrow">Manager Work Queue</p>
-            <h2>Store priorities</h2>
-            <div className="queue-list">
-              {workQueue.map((item) => (
-                <div className="queue-item" key={item.label}>
-                  <strong>{item.value}</strong>
-                  <div>
-                    <b>{item.label}</b>
-                    <span>{item.detail}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-          <article className="panel">
-            <p className="eyebrow">Deal Pipeline</p>
-            <h2>Desking to delivery</h2>
-            <div className="pipeline-board">
-              {pipelineStages.map((column) => (
-                <div className="pipeline-column" key={column.stage}>
-                  <strong>{column.stage}</strong>
-                  {column.sales.map((sale) => (
-                    <button
-                      type="button"
-                      key={sale.id}
-                      onClick={() => {
-                        const customer = customers.find(
-                          (item) => item.id === sale.customerId,
-                        );
-                        if (customer) openCustomerProfile(customer);
-                      }}
-                    >
-                      <span>
-                        {sale.year} {sale.make} {sale.model}
-                      </span>
-                      <small>{getCustomerName(sale.customerId)}</small>
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </article>
-        </section>
-
-        <section className="content-grid">
-          <article id="customers" className="panel wide">
-            <div className="panel-header">
+        {/* ── DASHBOARD ──────────────────────────────────────── */}
+        {currentPage === "dashboard" && (
+          <>
+            <header className="page-header">
               <div>
-                <p className="eyebrow">Customers</p>
-                <h2>Add, edit, or delete buyers</h2>
+                <p className="eyebrow">AutoSuite CRM</p>
+                <h1>Today's Overview</h1>
               </div>
-            </div>
-            <form className="contact-form" onSubmit={saveCustomer}>
-              <input
-                placeholder="First name"
-                value={customerForm.firstName}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    firstName: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Last name"
-                value={customerForm.lastName}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    lastName: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Phone"
-                value={customerForm.phone}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    phone: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Email"
-                value={customerForm.email}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    email: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Vehicle wanted"
-                value={customerForm.interestedVehicle}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    interestedVehicle: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Lead source"
-                value={customerForm.source}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    source: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Assigned to"
-                value={customerForm.assignedTo}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    assignedTo: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Next follow-up"
-                value={customerForm.nextFollowUp}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    nextFollowUp: event.target.value,
-                  })
-                }
-              />
-              <select
-                value={customerForm.status}
-                onChange={(event) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    status: event.target.value as Customer["status"],
-                  })
-                }
-              >
-                <option>Lead</option>
-                <option>Appointment</option>
-                <option>Finance</option>
-                <option>Sold</option>
-              </select>
-              <button type="submit">
-                {editingCustomerId ? "Save Customer" : "Add Customer"}
-              </button>
-              {editingCustomerId && (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={resetCustomerForm}
-                >
-                  Cancel
-                </button>
-              )}
-            </form>
-            <div className="table">
-              {customers.map((customer) => (
-                <div className="table-row customer-row" key={customer.id}>
-                  <div>
-                    <strong>
-                      {customer.firstName} {customer.lastName}
-                    </strong>
-                    <span>{customer.interestedVehicle}</span>
-                    <small>
-                      {customer.source || "Manual Entry"} - Follow-up:{" "}
-                      {customer.nextFollowUp || "Not scheduled"}
-                    </small>
-                  </div>
-                  <span>{customer.phone}</span>
-                  <span>{customer.email || "No email"}</span>
-                  <b>{customer.status}</b>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      onClick={() => editCustomer(customer)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openCustomerProfile(customer)}
-                    >
-                      Open Profile
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => deleteCustomer(customer.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
+              <div className="header-actions">
+                <button type="button" onClick={() => navigate("leads")}>+ New Lead</button>
+              </div>
+            </header>
 
-          <article id="customer-profile" className="panel wide profile-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Customer Profile</p>
-                <h2>
-                  {selectedCustomer
-                    ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-                    : "Open a customer profile"}
-                </h2>
-              </div>
+            <div className="kpi-grid">
+              <div className="kpi-card kpi-blue"><span>Open Leads</span><strong>{totalLeads}</strong><small>{urgentLeads.length} uncontacted</small></div>
+              <div className="kpi-card kpi-yellow"><span>Appointments</span><strong>{appointmentCount}</strong><small>Active</small></div>
+              <div className="kpi-card kpi-green"><span>Finance Queue</span><strong>{pendingFinance}</strong><small>Pending approval</small></div>
+              <div className="kpi-card kpi-purple"><span>Units Sold</span><strong>{soldCount}</strong><small>Closing ratio {closingRatio}%</small></div>
+              <div className="kpi-card kpi-dark"><span>Pipeline Value</span><strong>${pipelineValue.toLocaleString()}</strong><small>All active deals</small></div>
             </div>
-            {!selectedCustomer && (
-              <p>
-                Select Open Profile from the customer list to view a full deal
-                jacket.
-              </p>
-            )}
-            {selectedCustomer && (
-              <>
-                <div className="profile-tabs">
-                  {(
-                    ["overview", "credit", "deals", "activity"] as ProfileTab[]
-                  ).map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      className={profileTab === tab ? "active" : ""}
-                      onClick={() => setProfileTab(tab)}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-                {profileTab === "overview" && (
-                  <div className="profile-grid">
-                    <div className="profile-card">
-                      <strong>Contact</strong>
-                      <span>{selectedCustomer.phone}</span>
-                      <span>{selectedCustomer.email || "No email"}</span>
-                    </div>
-                    <div className="profile-card">
-                      <strong>Deal Ownership</strong>
-                      <span>{selectedCustomer.assignedTo || "Unassigned"}</span>
-                      <span>{selectedCustomer.source || "Manual Entry"}</span>
-                    </div>
-                    <div className="profile-card">
-                      <strong>Next Step</strong>
-                      <span>{selectedCustomer.status}</span>
-                      <span>
-                        {selectedCustomer.nextFollowUp || "Not scheduled"}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {profileTab === "credit" && (
-                  <>
-                    <form
-                      className="credit-form"
-                      onSubmit={addCreditApplication}
-                    >
-                      <input
-                        placeholder="Applicant name"
-                        value={creditForm.applicantName}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            applicantName: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Date of birth"
-                        value={creditForm.dateOfBirth}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            dateOfBirth: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="SSN last 4"
-                        value={creditForm.ssnLast4}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            ssnLast4: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Address"
-                        value={creditForm.address}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            address: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="City"
-                        value={creditForm.city}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            city: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="State"
-                        value={creditForm.state}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            state: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="ZIP"
-                        value={creditForm.zip}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            zip: event.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        value={creditForm.residenceType}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            residenceType: event.target.value,
-                          })
-                        }
-                      >
-                        <option>Rent</option>
-                        <option>Own</option>
-                        <option>Family</option>
-                        <option>Other</option>
-                      </select>
-                      <input
-                        placeholder="Time at address"
-                        value={creditForm.timeAtAddress}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            timeAtAddress: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Employer"
-                        value={creditForm.employerName}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            employerName: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Job title"
-                        value={creditForm.jobTitle}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            jobTitle: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Time on job"
-                        value={creditForm.timeOnJob}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            timeOnJob: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Monthly income"
-                        value={creditForm.monthlyIncome}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            monthlyIncome: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Other income"
-                        value={creditForm.otherIncome}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            otherIncome: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Bank name"
-                        value={creditForm.bankName}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            bankName: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Down payment"
-                        value={creditForm.downPayment}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            downPayment: event.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Requested vehicle"
-                        value={creditForm.requestedVehicle}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            requestedVehicle: event.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        value={creditForm.status}
-                        onChange={(event) =>
-                          setCreditForm({
-                            ...creditForm,
-                            status: event.target
-                              .value as CreditApplication["status"],
-                          })
-                        }
-                      >
-                        <option>Draft</option>
-                        <option>Submitted</option>
-                        <option>Manager Review</option>
-                        <option>Approved</option>
-                        <option>Declined</option>
-                      </select>
-                      <label className="checkbox-field">
-                        <input
-                          type="checkbox"
-                          checked={creditForm.consentToPullCredit}
-                          onChange={(event) =>
-                            setCreditForm({
-                              ...creditForm,
-                              consentToPullCredit: event.target.checked,
-                            })
-                          }
-                        />
-                        Customer authorized credit review
-                      </label>
-                      <button type="submit">Save Credit Application</button>
-                    </form>
-                    <div className="deal-list">
-                      {profileCreditApplications.map((application) => (
-                        <div className="deal-card" key={application.id}>
-                          <strong>{application.applicantName}</strong>
-                          <span>
-                            {application.employerName || "No employer listed"}
-                          </span>
-                          <b>
-                            ${application.monthlyIncome.toLocaleString()}{" "}
-                            monthly
-                          </b>
-                          <small>{application.status}</small>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                {profileTab === "deals" && (
-                  <div className="profile-grid">
-                    <div className="profile-card">
-                      <strong>Finance Apps</strong>
-                      <span>{profileFinance.length}</span>
-                    </div>
-                    <div className="profile-card">
-                      <strong>Trades</strong>
-                      <span>{profileTrades.length}</span>
-                    </div>
-                    <div className="profile-card">
-                      <strong>Sales</strong>
-                      <span>{profileSales.length}</span>
-                    </div>
-                  </div>
-                )}
-                {profileTab === "activity" && (
-                  <div className="deal-list">
-                    {profileActivities.map((activity) => (
-                      <div className="deal-card" key={activity.id}>
-                        <strong>{activity.type}</strong>
-                        <span>{activity.note}</span>
-                        <small>
-                          {new Date(activity.createdAt).toLocaleString()}
-                        </small>
+
+            <div className="dash-grid">
+              <article className="panel">
+                <p className="eyebrow">Leads by Source</p>
+                <h2>Where buyers come from</h2>
+                <div className="report-table">
+                  {leadsBySource.map(([src, count]) => (
+                    <div className="report-row" key={src}>
+                      <span>{src}</span>
+                      <div className="report-bar-wrap">
+                        <div className="report-bar" style={{ width: `${Math.round((count / customers.length) * 100)}%` }} />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </article>
-
-          <article id="finance" className="panel">
-            <p className="eyebrow">Finance Applications</p>
-            <h2>Credit and approval tracking</h2>
-            <form className="stack-form" onSubmit={addFinanceApplication}>
-              <select
-                value={financeForm.customerId}
-                onChange={(event) =>
-                  setFinanceForm({
-                    ...financeForm,
-                    customerId: event.target.value,
-                  })
-                }
-              >
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.firstName} {customer.lastName}
-                  </option>
-                ))}
-              </select>
-              <input
-                placeholder="Monthly income"
-                value={financeForm.monthlyIncome}
-                onChange={(event) =>
-                  setFinanceForm({
-                    ...financeForm,
-                    monthlyIncome: event.target.value,
-                  })
-                }
-              />
-              <input
-                placeholder="Down payment"
-                value={financeForm.downPayment}
-                onChange={(event) =>
-                  setFinanceForm({
-                    ...financeForm,
-                    downPayment: event.target.value,
-                  })
-                }
-              />
-              <select
-                value={financeForm.status}
-                onChange={(event) =>
-                  setFinanceForm({
-                    ...financeForm,
-                    status: event.target.value as FinanceApplication["status"],
-                  })
-                }
-              >
-                <option>New</option>
-                <option>Submitted</option>
-                <option>Approved</option>
-                <option>Needs Review</option>
-              </select>
-              <button type="submit">Add Finance App</button>
-            </form>
-            <div className="deal-list">
-              {financeApplications.map((application) => (
-                <div className="deal-card" key={application.id}>
-                  <strong>{getCustomerName(application.customerId)}</strong>
-                  <span>
-                    ${application.monthlyIncome.toLocaleString()} income
-                  </span>
-                  <b>${application.downPayment.toLocaleString()} down</b>
-                  <select
-                    value={application.status}
-                    onChange={(event) =>
-                      updateFinanceStatus(
-                        application.id,
-                        event.target.value as FinanceApplication["status"],
-                      )
-                    }
-                  >
-                    <option>New</option>
-                    <option>Submitted</option>
-                    <option>Approved</option>
-                    <option>Needs Review</option>
-                  </select>
+                      <strong>{count}</strong>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </article>
+              </article>
 
-          <article id="trades" className="panel">
-            <p className="eyebrow">Trade-Ins</p>
-            <h2>Vehicle appraisal info</h2>
-            <form className="stack-form" onSubmit={addTradeIn}>
-              <select
-                value={tradeForm.customerId}
-                onChange={(event) =>
-                  setTradeForm({ ...tradeForm, customerId: event.target.value })
-                }
-              >
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.firstName} {customer.lastName}
-                  </option>
-                ))}
-              </select>
-              <input
-                placeholder="Year"
-                value={tradeForm.year}
-                onChange={(event) =>
-                  setTradeForm({ ...tradeForm, year: event.target.value })
-                }
-              />
-              <input
-                placeholder="Make"
-                value={tradeForm.make}
-                onChange={(event) =>
-                  setTradeForm({ ...tradeForm, make: event.target.value })
-                }
-              />
-              <input
-                placeholder="Model"
-                value={tradeForm.model}
-                onChange={(event) =>
-                  setTradeForm({ ...tradeForm, model: event.target.value })
-                }
-              />
-              <input
-                placeholder="Estimated value"
-                value={tradeForm.estimatedValue}
-                onChange={(event) =>
-                  setTradeForm({
-                    ...tradeForm,
-                    estimatedValue: event.target.value,
-                  })
-                }
-              />
-              <button type="submit">Add Trade</button>
-            </form>
-            <div className="deal-list">
-              {tradeIns.map((tradeIn) => (
-                <div className="deal-card" key={tradeIn.id}>
-                  <strong>
-                    {tradeIn.year} {tradeIn.make} {tradeIn.model}
-                  </strong>
-                  <span>{getCustomerName(tradeIn.customerId)}</span>
-                  <b>${tradeIn.estimatedValue.toLocaleString()}</b>
-                  <small>{tradeIn.mileage.toLocaleString()} miles</small>
+              <article className="panel">
+                <p className="eyebrow">Deal Pipeline</p>
+                <h2>Working → Delivered</h2>
+                <div className="pipeline-board">
+                  {pipelineStages.map(col => (
+                    <div className="pipeline-column" key={col.stage}>
+                      <div className="pipeline-col-header">
+                        <strong>{col.stage}</strong>
+                        <small>${col.value.toLocaleString()}</small>
+                      </div>
+                      {col.sales.map(sale => (
+                        <button type="button" key={sale.id} className="pipeline-card" onClick={() => { const c = customers.find(x => x.id === sale.customerId); if (c) openProfile(c); }}>
+                          <span>{sale.year} {sale.make} {sale.model}</span>
+                          <small>{getCustomerName(sale.customerId)}</small>
+                        </button>
+                      ))}
+                      {col.sales.length === 0 && <small className="empty-col">No deals</small>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </article>
+              </article>
 
-          <article id="sales" className="panel wide">
-            <p className="eyebrow">Vehicle Being Sold</p>
-            <h2>Working deals and deliveries</h2>
-            <form className="contact-form" onSubmit={addVehicleSale}>
-              <select
-                value={saleForm.customerId}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, customerId: event.target.value })
-                }
-              >
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.firstName} {customer.lastName}
-                  </option>
-                ))}
-              </select>
-              <input
-                placeholder="Stock #"
-                value={saleForm.stockNumber}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, stockNumber: event.target.value })
-                }
-              />
-              <input
-                placeholder="Year"
-                value={saleForm.year}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, year: event.target.value })
-                }
-              />
-              <input
-                placeholder="Make"
-                value={saleForm.make}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, make: event.target.value })
-                }
-              />
-              <input
-                placeholder="Model"
-                value={saleForm.model}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, model: event.target.value })
-                }
-              />
-              <input
-                placeholder="Sale price"
-                value={saleForm.salePrice}
-                onChange={(event) =>
-                  setSaleForm({ ...saleForm, salePrice: event.target.value })
-                }
-              />
-              <select
-                value={saleForm.stage}
-                onChange={(event) =>
-                  setSaleForm({
-                    ...saleForm,
-                    stage: event.target.value as VehicleSale["stage"],
-                  })
-                }
-              >
-                <option>Working</option>
-                <option>Finance</option>
-                <option>Delivered</option>
-              </select>
-              <button type="submit">Add Vehicle Sale</button>
-            </form>
-            <div className="table">
-              {vehicleSales.map((sale) => (
-                <div className="table-row" key={sale.id}>
-                  <div>
-                    <strong>
-                      {sale.year} {sale.make} {sale.model}
-                    </strong>
-                    <span>
-                      Stock #{sale.stockNumber} for{" "}
-                      {getCustomerName(sale.customerId)}
-                    </span>
-                  </div>
-                  <span>${sale.salePrice.toLocaleString()}</span>
-                  <select
-                    value={sale.stage}
-                    onChange={(event) =>
-                      updateSaleStage(
-                        sale.id,
-                        event.target.value as VehicleSale["stage"],
-                      )
-                    }
-                  >
-                    <option>Working</option>
-                    <option>Finance</option>
-                    <option>Delivered</option>
-                  </select>
+              <article className="panel">
+                <p className="eyebrow">Uncontacted Leads</p>
+                <h2>Need immediate response</h2>
+                <div className="lead-list">
+                  {urgentLeads.length === 0 && <p className="empty-state">All leads have been contacted. ✓</p>}
+                  {urgentLeads.slice(0, 5).map(c => (
+                    <div className="lead-card urgent-card" key={c.id}>
+                      <div>
+                        <strong>{c.firstName} {c.lastName}</strong>
+                        <span>{c.interestedVehicle}</span>
+                        <span className="source-tag">{c.source || "Unknown source"}</span>
+                      </div>
+                      <button type="button" onClick={() => openProfile(c)}>Open</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </article>
+              </article>
 
-          <article id="vin" className="panel">
-            <p className="eyebrow">VIN Decoder</p>
-            <h2>Pull vehicle details by VIN</h2>
-            <form className="stack-form" onSubmit={lookupVin}>
-              <input
-                placeholder="Enter VIN"
-                value={vin}
-                onChange={(event) => setVin(event.target.value.toUpperCase())}
-              />
-              <button type="submit" disabled={vinLoading}>
-                {vinLoading ? "Looking Up..." : "Lookup VIN"}
-              </button>
-            </form>
-            {vinError && <p className="auth-error">{vinError}</p>}
-            {vinResult && (
-              <div className="vin-card">
-                <strong>
-                  {vinResult.year} {vinResult.make} {vinResult.model}
-                </strong>
-                <span>VIN: {vinResult.vin}</span>
-                <span>Trim: {vinResult.trim || "Not listed"}</span>
-                <span>Body: {vinResult.bodyClass || "Not listed"}</span>
-                <span>Engine: {vinResult.engine || "Not listed"}</span>
-                <span>
-                  Manufacturer: {vinResult.manufacturer || "Not listed"}
-                </span>
+              <article className="panel">
+                <p className="eyebrow">Active Appointments</p>
+                <h2>Scheduled visits</h2>
+                <div className="lead-list">
+                  {customers.filter(c => c.status === "Appointment").length === 0 && <p className="empty-state">No appointments scheduled.</p>}
+                  {customers.filter(c => c.status === "Appointment").map(c => (
+                    <div className="lead-card" key={c.id}>
+                      <div>
+                        <strong>{c.firstName} {c.lastName}</strong>
+                        <span>{c.interestedVehicle}</span>
+                        <small>Rep: {c.assignedTo || "Unassigned"} · {c.nextFollowUp || "No time set"}</small>
+                      </div>
+                      <button type="button" onClick={() => openProfile(c)}>View</button>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </>
+        )}
+
+        {/* ── LEADS INBOX ──────────────────────────────────────── */}
+        {currentPage === "leads" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Lead Inbox</p>
+                <h1>Internet & Phone Leads</h1>
+                <p className="page-subtitle">New leads from web forms, third-party providers, phone calls, and walk-ins. Assign and work each lead before they go cold.</p>
               </div>
-            )}
-          </article>
-
-          <article id="activities" className="panel">
-            <p className="eyebrow">Activity Log</p>
-            <h2>Calls, texts, appointments, and notes</h2>
-            <form className="stack-form" onSubmit={addActivity}>
-              <select
-                value={activityForm.customerId}
-                onChange={(event) =>
-                  setActivityForm({
-                    ...activityForm,
-                    customerId: event.target.value,
-                  })
-                }
-              >
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.firstName} {customer.lastName}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={activityForm.type}
-                onChange={(event) =>
-                  setActivityForm({
-                    ...activityForm,
-                    type: event.target.value as Activity["type"],
-                  })
-                }
-              >
-                <option>Call</option>
-                <option>Text</option>
-                <option>Email</option>
-                <option>Appointment</option>
-                <option>Note</option>
-              </select>
-              <input
-                placeholder="What happened?"
-                value={activityForm.note}
-                onChange={(event) =>
-                  setActivityForm({ ...activityForm, note: event.target.value })
-                }
-              />
-              <button type="submit">Add Activity</button>
-            </form>
-            <div className="deal-list">
-              {activities.slice(0, 8).map((activity) => (
-                <div className="deal-card" key={activity.id}>
-                  <strong>
-                    {activity.type} - {getCustomerName(activity.customerId)}
-                  </strong>
-                  <span>{activity.note}</span>
-                  <small>{new Date(activity.createdAt).toLocaleString()}</small>
+              <div className="header-actions">
+                <button type="button" onClick={() => navigate("customers")}>+ Add Lead Manually</button>
+              </div>
+            </header>
+            <div className="filter-bar">
+              <span className="filter-label">Filter:</span>
+              {["All", "Lead", "Appointment"].map(s => (
+                <button key={s} type="button" className={customerStatusFilter === s ? "filter-pill active" : "filter-pill"} onClick={() => setCustomerStatusFilter(s)}>{s}</button>
+              ))}
+            </div>
+            <div className="lead-inbox">
+              {internetLeads.length === 0 && <p className="empty-state large">No incoming leads. Add customers with a web/internet source to see them here.</p>}
+              {internetLeads.map(c => (
+                <div className="inbox-card" key={c.id}>
+                  <div className="inbox-card-top">
+                    <div className="inbox-name-row">
+                      <strong>{c.firstName} {c.lastName}</strong>
+                      <span className={`status-badge ${statusClass(c.status)}`}>{c.status}</span>
+                      {!activities.some(a => a.customerId === c.id) && <span className="badge-urgent">No contact yet</span>}
+                    </div>
+                    <span className="source-tag">{c.source || "Unknown source"}</span>
+                  </div>
+                  <div className="inbox-card-mid">
+                    <span>📞 {c.phone}</span>
+                    <span>✉ {c.email || "No email"}</span>
+                    <span>🚗 {c.interestedVehicle}</span>
+                  </div>
+                  <div className="inbox-card-actions">
+                    <span className="assign-label">Assign to:</span>
+                    {["Avery", "Mike", "Sarah", "Dan"].map(rep => (
+                      <button key={rep} type="button" className={c.assignedTo === rep ? "rep-btn active" : "rep-btn"} onClick={() => assignLead(c, rep)}>{rep}</button>
+                    ))}
+                    <button type="button" className="open-btn" onClick={() => openProfile(c)}>Open Deal Jacket →</button>
+                  </div>
                 </div>
               ))}
             </div>
-          </article>
-        </section>
+          </>
+        )}
+
+        {/* ── CUSTOMERS ────────────────────────────────────────── */}
+        {currentPage === "customers" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Customer Database</p>
+                <h1>All Customers</h1>
+                <p className="page-subtitle">Search by name, phone, email, or vehicle. Click any row to open a full deal jacket. Capable of handling thousands of records.</p>
+              </div>
+            </header>
+
+            <article className="panel" style={{ marginBottom: 18 }}>
+              <div className="panel-header">
+                <p className="eyebrow">{editingCustomerId ? "Editing Customer" : "Add New Customer / Lead"}</p>
+                {editingCustomerId && <button type="button" className="ghost-button" onClick={resetCustomerForm}>Cancel</button>}
+              </div>
+              <form className="contact-form" onSubmit={saveCustomer}>
+                <input placeholder="First name *" value={customerForm.firstName} onChange={e => setCustomerForm({ ...customerForm, firstName: e.target.value })} required />
+                <input placeholder="Last name" value={customerForm.lastName} onChange={e => setCustomerForm({ ...customerForm, lastName: e.target.value })} />
+                <input placeholder="Phone" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+                <input placeholder="Email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
+                <input placeholder="Vehicle of interest" value={customerForm.interestedVehicle} onChange={e => setCustomerForm({ ...customerForm, interestedVehicle: e.target.value })} />
+                <input placeholder="Lead source (Cars.com, Walk-in, Referral...)" value={customerForm.source} onChange={e => setCustomerForm({ ...customerForm, source: e.target.value })} />
+                <input placeholder="Assigned rep" value={customerForm.assignedTo} onChange={e => setCustomerForm({ ...customerForm, assignedTo: e.target.value })} />
+                <input placeholder="Next follow-up" value={customerForm.nextFollowUp} onChange={e => setCustomerForm({ ...customerForm, nextFollowUp: e.target.value })} />
+                <select value={customerForm.status} onChange={e => setCustomerForm({ ...customerForm, status: e.target.value as Customer["status"] })}>
+                  <option>Lead</option><option>Appointment</option><option>Finance</option><option>Sold</option>
+                </select>
+                <button type="submit">{editingCustomerId ? "Save Changes" : "Add Customer"}</button>
+              </form>
+            </article>
+
+            <div className="search-bar-row">
+              <input className="search-input" placeholder="🔍  Search name, phone, email, or vehicle..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+              <select className="filter-select" value={customerStatusFilter} onChange={e => setCustomerStatusFilter(e.target.value)}>
+                <option value="All">All statuses</option>
+                <option>Lead</option><option>Appointment</option><option>Finance</option><option>Sold</option>
+              </select>
+              <select className="filter-select" value={customerSourceFilter} onChange={e => setCustomerSourceFilter(e.target.value)}>
+                <option value="All">All sources</option>
+                <option>Cars.com</option><option>AutoTrader</option><option>Website Lead</option><option>Walk-in</option><option>Referral</option>
+              </select>
+              <span className="result-count">Showing {filteredCustomers.length} of {customers.length}</span>
+            </div>
+
+            <div className="customer-table">
+              {filteredCustomers.length === 0 && <p className="empty-state large">No customers match your search or filters.</p>}
+              {filteredCustomers.map(c => (
+                <div className="cust-row" key={c.id}>
+                  <div className="cust-main" onClick={() => openProfile(c)}>
+                    <strong>{c.firstName} {c.lastName}</strong>
+                    <span>{c.interestedVehicle || "No vehicle specified"}</span>
+                    <small>{c.source || "No source"} · Rep: {c.assignedTo || "Unassigned"}</small>
+                  </div>
+                  <span className="cust-contact">{c.phone}<br /><small>{c.email || "No email"}</small></span>
+                  <span className={`status-badge ${statusClass(c.status)}`}>{c.status}</span>
+                  <div className="row-actions">
+                    <button type="button" onClick={() => openProfile(c)}>Deal Jacket</button>
+                    <button type="button" className="ghost-button" onClick={() => editCustomer(c)}>Edit</button>
+                    <button type="button" className="danger" onClick={() => deleteCustomer(c.id)}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── FINANCE ──────────────────────────────────────────── */}
+        {currentPage === "finance" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">F&I Manager</p>
+                <h1>Finance Applications</h1>
+                <p className="page-subtitle">Review and update status on all finance and credit applications across every deal. Open a customer deal jacket to submit a new one.</p>
+              </div>
+            </header>
+            <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 18 }}>
+              <div className="kpi-card kpi-blue"><span>Total Apps</span><strong>{financeApplications.length}</strong></div>
+              <div className="kpi-card kpi-yellow"><span>Pending</span><strong>{pendingFinance}</strong></div>
+              <div className="kpi-card kpi-green"><span>Approved</span><strong>{financeApplications.filter(a => a.status === "Approved").length}</strong></div>
+            </div>
+            <div className="deal-list">
+              {financeApplications.length === 0 && <p className="empty-state">No finance applications yet. Open a customer deal jacket to submit one.</p>}
+              {financeApplications.map(app => (
+                <div className="deal-card clickable" key={app.id} onClick={() => { const c = customers.find(x => x.id === app.customerId); if (c) openProfile(c); }}>
+                  <div className="deal-card-main">
+                    <strong>{app.applicantName || getCustomerName(app.customerId)}</strong>
+                    <span>{app.requestedVehicle || getCustomerName(app.customerId)}</span>
+                    <span>${app.monthlyIncome.toLocaleString()}/mo · ${app.downPayment.toLocaleString()} down · {app.creditRange}</span>
+                    {app.lender && <small>Lender: {app.lender}</small>}
+                  </div>
+                  <select value={app.status} onClick={e => e.stopPropagation()} onChange={e => updateFinanceStatus(app.id, e.target.value as FinanceApplication["status"])}>
+                    <option>New</option><option>Submitted</option><option>Approved</option><option>Needs Review</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── PIPELINE ─────────────────────────────────────────── */}
+        {currentPage === "pipeline" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Sales Pipeline</p>
+                <h1>Deals by Stage</h1>
+                <p className="page-subtitle">Track every active deal from initial desk to delivery. Click any deal card to open the customer's deal jacket.</p>
+              </div>
+            </header>
+            <div className="pipeline-full">
+              {pipelineStages.map(col => (
+                <div className="pipeline-col-full" key={col.stage}>
+                  <div className="pipeline-col-header">
+                    <strong>{col.stage}</strong>
+                    <span>{col.sales.length} deal{col.sales.length !== 1 ? "s" : ""} · ${col.value.toLocaleString()}</span>
+                  </div>
+                  {col.sales.length === 0 && <p className="empty-state">No deals in this stage.</p>}
+                  {col.sales.map(sale => (
+                    <div className="pipeline-card-full" key={sale.id} onClick={() => { const c = customers.find(x => x.id === sale.customerId); if (c) openProfile(c); }}>
+                      <strong>{sale.year} {sale.make} {sale.model}</strong>
+                      <span>Stock #{sale.stockNumber}</span>
+                      <span>${sale.salePrice.toLocaleString()}</span>
+                      <small>{getCustomerName(sale.customerId)}</small>
+                      <select value={sale.stage} onClick={e => e.stopPropagation()} onChange={e => updateSaleStage(sale.id, e.target.value as VehicleSale["stage"])}>
+                        <option>Working</option><option>Finance</option><option>Delivered</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <article className="panel" style={{ marginTop: 24 }}>
+              <p className="eyebrow">Add Vehicle to Pipeline</p>
+              <form className="contact-form" onSubmit={addVehicleSale}>
+                <select value={saleForm.customerId} onChange={e => setSaleForm({ ...saleForm, customerId: e.target.value })}>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                </select>
+                <input placeholder="Stock #" value={saleForm.stockNumber} onChange={e => setSaleForm({ ...saleForm, stockNumber: e.target.value })} />
+                <input placeholder="Year" value={saleForm.year} onChange={e => setSaleForm({ ...saleForm, year: e.target.value })} />
+                <input placeholder="Make" value={saleForm.make} onChange={e => setSaleForm({ ...saleForm, make: e.target.value })} />
+                <input placeholder="Model" value={saleForm.model} onChange={e => setSaleForm({ ...saleForm, model: e.target.value })} />
+                <input placeholder="Sale price ($)" value={saleForm.salePrice} onChange={e => setSaleForm({ ...saleForm, salePrice: e.target.value })} />
+                <select value={saleForm.stage} onChange={e => setSaleForm({ ...saleForm, stage: e.target.value as VehicleSale["stage"] })}>
+                  <option>Working</option><option>Finance</option><option>Delivered</option>
+                </select>
+                <button type="submit">Add to Pipeline</button>
+              </form>
+            </article>
+          </>
+        )}
+
+        {/* ── TRADES ───────────────────────────────────────────── */}
+        {currentPage === "trades" && (
+          <>
+            <header className="page-header">
+              <div><p className="eyebrow">Trade-In Manager</p><h1>Vehicle Appraisals</h1></div>
+            </header>
+            <article className="panel" style={{ marginBottom: 18 }}>
+              <p className="eyebrow">Add Trade-In</p>
+              <form className="contact-form" onSubmit={addTradeIn}>
+                <select value={tradeForm.customerId} onChange={e => setTradeForm({ ...tradeForm, customerId: e.target.value })}>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                </select>
+                <input placeholder="Year" value={tradeForm.year} onChange={e => setTradeForm({ ...tradeForm, year: e.target.value })} />
+                <input placeholder="Make" value={tradeForm.make} onChange={e => setTradeForm({ ...tradeForm, make: e.target.value })} />
+                <input placeholder="Model" value={tradeForm.model} onChange={e => setTradeForm({ ...tradeForm, model: e.target.value })} />
+                <input placeholder="Mileage" value={tradeForm.mileage} onChange={e => setTradeForm({ ...tradeForm, mileage: e.target.value })} />
+                <input placeholder="Payoff amount ($)" value={tradeForm.payoff} onChange={e => setTradeForm({ ...tradeForm, payoff: e.target.value })} />
+                <input placeholder="Estimated ACV ($)" value={tradeForm.estimatedValue} onChange={e => setTradeForm({ ...tradeForm, estimatedValue: e.target.value })} />
+                <button type="submit">Add Trade</button>
+              </form>
+            </article>
+            <div className="customer-table">
+              {tradeIns.length === 0 && <p className="empty-state large">No trade-ins recorded yet.</p>}
+              {tradeIns.map(t => (
+                <div className="cust-row" key={t.id}>
+                  <div className="cust-main"><strong>{t.year} {t.make} {t.model}</strong><span>{t.mileage.toLocaleString()} miles</span></div>
+                  <span className="cust-contact">{getCustomerName(t.customerId)}</span>
+                  <span>ACV: ${t.estimatedValue.toLocaleString()}</span>
+                  <span>Payoff: ${t.payoff.toLocaleString()}</span>
+                  <span className={t.estimatedValue - t.payoff >= 0 ? "kpi-green-text" : "badge-danger"}>
+                    Equity: ${(t.estimatedValue - t.payoff).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── VIN ──────────────────────────────────────────────── */}
+        {currentPage === "vin" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">VIN Decoder</p>
+                <h1>Look Up Any Vehicle</h1>
+                <p className="page-subtitle">Decode any 17-character VIN using the NHTSA database — year, make, model, trim, engine, and body class instantly.</p>
+              </div>
+            </header>
+            <article className="panel">
+              <form className="stack-form" onSubmit={lookupVin}>
+                <input placeholder="Enter 17-character VIN" value={vin} onChange={e => setVin(e.target.value.toUpperCase())} maxLength={17} style={{ fontFamily: "monospace", letterSpacing: 2 }} />
+                <button type="submit" disabled={vinLoading}>{vinLoading ? "Looking up..." : "Decode VIN"}</button>
+              </form>
+              {vinError && <p className="auth-error">{vinError}</p>}
+              {vinResult && (
+                <div className="vin-card">
+                  <strong className="vin-title">{vinResult.year} {vinResult.make} {vinResult.model}</strong>
+                  <div className="vin-grid">
+                    <div><span>VIN</span><b>{vinResult.vin}</b></div>
+                    <div><span>Trim</span><b>{vinResult.trim || "—"}</b></div>
+                    <div><span>Body Class</span><b>{vinResult.bodyClass || "—"}</b></div>
+                    <div><span>Engine</span><b>{vinResult.engine || "—"}</b></div>
+                    <div><span>Manufacturer</span><b>{vinResult.manufacturer || "—"}</b></div>
+                  </div>
+                </div>
+              )}
+            </article>
+          </>
+        )}
+
+        {/* ── ACTIVITIES ───────────────────────────────────────── */}
+        {currentPage === "activities" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Activity Log</p>
+                <h1>Calls, Texts, Emails & Notes</h1>
+                <p className="page-subtitle">All customer interactions across every rep and deal. Use a customer's Deal Jacket to log activities tied to that specific deal.</p>
+              </div>
+            </header>
+            <article className="panel" style={{ marginBottom: 18 }}>
+              <p className="eyebrow">Log Activity</p>
+              <form className="contact-form" onSubmit={addActivity}>
+                <select value={activityForm.customerId} onChange={e => setActivityForm({ ...activityForm, customerId: e.target.value })}>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                </select>
+                <select value={activityForm.type} onChange={e => setActivityForm({ ...activityForm, type: e.target.value as Activity["type"] })}>
+                  <option>Call</option><option>Text</option><option>Email</option><option>Appointment</option><option>Note</option>
+                </select>
+                <input placeholder="Notes or outcome..." value={activityForm.note} onChange={e => setActivityForm({ ...activityForm, note: e.target.value })} />
+                <button type="submit">Log Activity</button>
+              </form>
+            </article>
+            <div className="activity-timeline full-timeline">
+              {activities.length === 0 && <p className="empty-state large">No activities logged yet.</p>}
+              {activities.slice(0, 30).map(act => (
+                <div className="timeline-item" key={act.id}>
+                  <span className={`timeline-dot dot-${act.type.toLowerCase()}`} />
+                  <div>
+                    <strong>{act.type} — {getCustomerName(act.customerId)}</strong>
+                    <span>{act.note}</span>
+                    <small>{new Date(act.createdAt).toLocaleString()}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
