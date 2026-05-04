@@ -124,7 +124,12 @@ type VinDecodedVehicle = {
   trim: string;
   bodyClass: string;
   engine: string;
+  driveType: string;
+  transmission: string;
+  doors: string;
+  fuelType: string;
   manufacturer: string;
+  country: string;
 };
 
 type Database = {
@@ -306,16 +311,52 @@ app.get("/api/vin/:vin", async (req, res) => {
       return;
     }
 
+    // NHTSA returns ErrorCode "0" for a clean decode; anything else means partial or invalid
+    const errorCode = String(result.ErrorCode || "");
+    if (!result.Make && !result.Model) {
+      res
+        .status(404)
+        .json({
+          message: "VIN not recognized — check the number and try again",
+        });
+      return;
+    }
+
+    // Build a readable engine string from displacement, cylinders, and fuel type
+    const liters = result.DisplacementL
+      ? `${parseFloat(result.DisplacementL).toFixed(1)}L`
+      : "";
+    const cylinders = result.EngineCylinders
+      ? `${result.EngineCylinders}-cyl`
+      : "";
+    const fuel = result.FuelTypePrimary || "";
+    const engineStr =
+      [liters, cylinders, fuel].filter(Boolean).join(" ") ||
+      result.EngineModel ||
+      result.EngineConfiguration ||
+      "—";
+
     const vehicle: VinDecodedVehicle = {
       vin,
-      year: result.ModelYear || "",
-      make: result.Make || "",
-      model: result.Model || "",
-      trim: result.Trim || "",
-      bodyClass: result.BodyClass || "",
-      engine: result.EngineModel || result.EngineConfiguration || "",
-      manufacturer: result.Manufacturer || "",
+      year: result.ModelYear || "—",
+      make: result.Make || "—",
+      model: result.Model || "—",
+      trim: result.Trim || "—",
+      bodyClass: result.BodyClass || "—",
+      engine: engineStr,
+      driveType: result.DriveType || "—",
+      transmission: result.TransmissionStyle || "—",
+      doors: result.Doors || "—",
+      fuelType: result.FuelTypePrimary || "—",
+      manufacturer: result.Manufacturer || result.ManuFacturerName || "—",
+      country: result.PlantCountry || "—",
     };
+
+    // Warn on partial decode but still return what we have
+    if (errorCode && errorCode !== "0") {
+      (vehicle as VinDecodedVehicle & { warning?: string }).warning =
+        "Partial decode — some fields may be missing";
+    }
 
     res.json(vehicle);
   } catch {
