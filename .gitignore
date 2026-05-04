@@ -6,3 +6,4 @@ npm-debug.log*
 .vite/
 backend/dist/
 frontend/dist/
+backend/data/

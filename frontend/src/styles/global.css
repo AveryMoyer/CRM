@@ -95,6 +95,14 @@ button {
   margin-bottom: 28px;
 }
 
+.topbar-copy {
+  max-width: 760px;
+  margin: 16px 0 0;
+  color: #475569;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
 .topbar button,
 .contact-form button,
 .stack-form button {
@@ -131,7 +139,7 @@ h2 {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 18px;
 }
@@ -170,6 +178,128 @@ h2 {
   gap: 18px;
 }
 
+.hero-panel,
+.ops-grid {
+  margin-bottom: 18px;
+}
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 28px;
+  border-radius: 28px;
+  color: #ffffff;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(96, 165, 250, 0.35),
+      transparent 32%
+    ),
+    linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+}
+
+.hero-panel .eyebrow,
+.hero-panel h2,
+.hero-panel p {
+  color: #ffffff;
+}
+
+.hero-panel h2 {
+  max-width: 760px;
+  font-size: clamp(1.6rem, 3vw, 3rem);
+  letter-spacing: -0.04em;
+}
+
+.hero-panel p {
+  max-width: 780px;
+  color: #dbeafe;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-actions a {
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+  text-align: center;
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 18px;
+}
+
+.queue-list,
+.pipeline-board {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.queue-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.queue-item strong {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 1.4rem;
+}
+
+.queue-item div,
+.pipeline-column {
+  display: grid;
+  gap: 5px;
+}
+
+.queue-item span,
+.pipeline-column small {
+  color: #64748b;
+}
+
+.pipeline-board {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pipeline-column {
+  align-content: start;
+  padding: 12px;
+  border-radius: 18px;
+  background: #eef2ff;
+}
+
+.pipeline-column button {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  text-align: left;
+}
+
 .panel {
   padding: 24px;
 }
@@ -195,7 +325,11 @@ h2 {
 .contact-form input,
 .contact-form select,
 .stack-form input,
-.stack-form select {
+.stack-form select,
+.credit-form input,
+.credit-form select,
+.deal-card select,
+.table-row select {
   width: 100%;
   padding: 13px 14px;
   border: 1px solid #dbe3ef;
@@ -207,7 +341,11 @@ h2 {
 .contact-form input:focus,
 .contact-form select:focus,
 .stack-form input:focus,
-.stack-form select:focus {
+.stack-form select:focus,
+.credit-form input:focus,
+.credit-form select:focus,
+.deal-card select:focus,
+.table-row select:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
@@ -260,6 +398,24 @@ h2 {
 .deal-card b {
   color: #16a34a;
   font-size: 1.35rem;
+}
+
+.vin-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.vin-card strong {
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.vin-card span {
+  color: #475569;
 }
 
 .task {
@@ -341,10 +497,93 @@ h2 {
   font-weight: 700;
 }
 
+.auth-success,
+.app-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 700;
+}
+
+.app-message {
+  margin-bottom: 18px;
+}
+
 .stack-form {
   display: grid;
   gap: 10px;
   margin: 18px 0;
+}
+
+.profile-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.profile-tabs button {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.profile-tabs button.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.profile-card span {
+  color: #64748b;
+}
+
+.credit-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+}
+
+.checkbox-field input {
+  width: auto;
+}
+
+.credit-form button {
+  padding: 13px 18px;
+  border-radius: 14px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 800;
 }
 
 .row-actions {
@@ -383,7 +622,12 @@ h2 {
 
   .metric-grid,
   .content-grid,
-  .contact-form {
+  .ops-grid,
+  .hero-panel,
+  .pipeline-board,
+  .contact-form,
+  .credit-form,
+  .profile-grid {
     grid-template-columns: 1fr;
   }
 
