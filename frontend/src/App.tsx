@@ -583,6 +583,13 @@ function App() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerStatusFilter, setCustomerStatusFilter] = useState("All");
   const [customerSourceFilter, setCustomerSourceFilter] = useState("All");
+  const [customerSortCol, setCustomerSortCol] = useState<
+    "name" | "status" | "vehicle" | "rep" | "created"
+  >("name");
+  const [customerSortDir, setCustomerSortDir] = useState<"asc" | "desc">("asc");
+  const [custPage, setCustPage] = useState(0);
+  const [custPageSize, setCustPageSize] = useState(50);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [quickActivityNote, setQuickActivityNote] = useState("");
   const [quickActivityType, setQuickActivityType] =
     useState<Activity["type"]>("Note");
@@ -939,12 +946,13 @@ function App() {
   }));
 
   const filteredCustomers = useMemo(() => {
-    const q = customerSearch.toLowerCase();
-    return customers.filter((c) => {
+    const q = customerSearch.toLowerCase().trim();
+    const filtered = customers.filter((c) => {
       const name = `${c.firstName} ${c.lastName}`.toLowerCase();
       const matchSearch =
         !q ||
         name.includes(q) ||
+        c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
         c.phone.includes(q) ||
         (c.email || "").toLowerCase().includes(q) ||
         (c.interestedVehicle || "").toLowerCase().includes(q);
@@ -957,7 +965,42 @@ function App() {
           .includes(customerSourceFilter.toLowerCase());
       return matchSearch && matchStatus && matchSource;
     });
-  }, [customers, customerSearch, customerStatusFilter, customerSourceFilter]);
+    filtered.sort((a, b) => {
+      let av = "",
+        bv = "";
+      if (customerSortCol === "name") {
+        av = `${a.firstName} ${a.lastName}`;
+        bv = `${b.firstName} ${b.lastName}`;
+      }
+      if (customerSortCol === "status") {
+        av = a.status;
+        bv = b.status;
+      }
+      if (customerSortCol === "vehicle") {
+        av = a.interestedVehicle || "";
+        bv = b.interestedVehicle || "";
+      }
+      if (customerSortCol === "rep") {
+        av = a.assignedTo || "";
+        bv = b.assignedTo || "";
+      }
+      if (customerSortCol === "created") {
+        av = a.createdAt || "";
+        bv = b.createdAt || "";
+      }
+      return customerSortDir === "asc"
+        ? av.localeCompare(bv)
+        : bv.localeCompare(av);
+    });
+    return filtered;
+  }, [
+    customers,
+    customerSearch,
+    customerStatusFilter,
+    customerSourceFilter,
+    customerSortCol,
+    customerSortDir,
+  ]);
 
   const selectedCustomer = selectedCustomerId
     ? (customers.find((c) => c.id === selectedCustomerId) ?? null)
@@ -3006,221 +3049,445 @@ function App() {
         )}
 
         {/* ── CUSTOMERS ────────────────────────────────────────── */}
-        {currentPage === "customers" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Customer Database</p>
-                <h1>All Customers</h1>
-                <p className="page-subtitle">
-                  Search by name, phone, email, or vehicle. Click any row to
-                  open a full deal jacket. Capable of handling thousands of
-                  records.
-                </p>
-              </div>
-            </header>
+        {currentPage === "customers" &&
+          (() => {
+            const totalPages = Math.max(
+              1,
+              Math.ceil(filteredCustomers.length / custPageSize),
+            );
+            const safePage = Math.min(custPage, totalPages - 1);
+            const pageSlice = filteredCustomers.slice(
+              safePage * custPageSize,
+              (safePage + 1) * custPageSize,
+            );
 
-            <article className="panel" style={{ marginBottom: 18 }}>
-              <div className="panel-header">
-                <p className="eyebrow">
-                  {editingCustomerId
-                    ? "Editing Customer"
-                    : "Add New Customer / Lead"}
-                </p>
-                {editingCustomerId && (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={resetCustomerForm}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-              <form className="contact-form" onSubmit={saveCustomer}>
-                <input
-                  placeholder="First name *"
-                  value={customerForm.firstName}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      firstName: e.target.value,
-                    })
-                  }
-                  required
-                />
-                <input
-                  placeholder="Last name"
-                  value={customerForm.lastName}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      lastName: e.target.value,
-                    })
-                  }
-                />
-                <input
-                  placeholder="Phone"
-                  value={customerForm.phone}
-                  onChange={(e) =>
-                    setCustomerForm({ ...customerForm, phone: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Email"
-                  value={customerForm.email}
-                  onChange={(e) =>
-                    setCustomerForm({ ...customerForm, email: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Vehicle of interest"
-                  value={customerForm.interestedVehicle}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      interestedVehicle: e.target.value,
-                    })
-                  }
-                />
-                <input
-                  placeholder="Lead source (Cars.com, Walk-in, Referral...)"
-                  value={customerForm.source}
-                  onChange={(e) =>
-                    setCustomerForm({ ...customerForm, source: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Assigned rep"
-                  value={customerForm.assignedTo}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      assignedTo: e.target.value,
-                    })
-                  }
-                />
-                <input
-                  placeholder="Next follow-up"
-                  value={customerForm.nextFollowUp}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      nextFollowUp: e.target.value,
-                    })
-                  }
-                />
-                <select
-                  value={customerForm.status}
-                  onChange={(e) =>
-                    setCustomerForm({
-                      ...customerForm,
-                      status: e.target.value as Customer["status"],
-                    })
-                  }
-                >
-                  <option>New Lead</option>
-                  <option>Contacted</option>
-                  <option>Appt Set</option>
-                  <option>Appt Show</option>
-                  <option>Working</option>
-                  <option>Sold</option>
-                  <option>Lost</option>
-                </select>
-                <button type="submit">
-                  {editingCustomerId ? "Save Changes" : "Add Customer"}
-                </button>
-              </form>
-            </article>
+            function toggleSort(col: typeof customerSortCol) {
+              if (customerSortCol === col)
+                setCustomerSortDir((d) => (d === "asc" ? "desc" : "asc"));
+              else {
+                setCustomerSortCol(col);
+                setCustomerSortDir("asc");
+              }
+              setCustPage(0);
+            }
+            function SortIcon({ col }: { col: typeof customerSortCol }) {
+              if (customerSortCol !== col)
+                return <span className="sort-icon inactive">⇅</span>;
+              return (
+                <span className="sort-icon active">
+                  {customerSortDir === "asc" ? "↑" : "↓"}
+                </span>
+              );
+            }
 
-            <div className="search-bar-row">
-              <input
-                className="search-input"
-                placeholder="🔍  Search name, phone, email, or vehicle..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-              />
-              <select
-                className="filter-select"
-                value={customerStatusFilter}
-                onChange={(e) => setCustomerStatusFilter(e.target.value)}
-              >
-                <option value="All">All statuses</option>
-                <option>New Lead</option>
-                <option>Contacted</option>
-                <option>Appt Set</option>
-                <option>Appt Show</option>
-                <option>Working</option>
-                <option>Sold</option>
-                <option>Lost</option>
-              </select>
-              <select
-                className="filter-select"
-                value={customerSourceFilter}
-                onChange={(e) => setCustomerSourceFilter(e.target.value)}
-              >
-                <option value="All">All sources</option>
-                <option>Cars.com</option>
-                <option>AutoTrader</option>
-                <option>Website Lead</option>
-                <option>Walk-in</option>
-                <option>Referral</option>
-              </select>
-              <span className="result-count">
-                Showing {filteredCustomers.length} of {customers.length}
-              </span>
-            </div>
-
-            <div className="customer-table">
-              {filteredCustomers.length === 0 && (
-                <p className="empty-state large">
-                  No customers match your search or filters.
-                </p>
-              )}
-              {filteredCustomers.map((c) => (
-                <div className="cust-row" key={c.id}>
-                  <div className="cust-main" onClick={() => openProfile(c)}>
-                    <strong>
-                      {c.firstName} {c.lastName}
-                    </strong>
-                    <span>{c.interestedVehicle || "No vehicle specified"}</span>
-                    <small>
-                      {c.source || "No source"} · Rep:{" "}
-                      {c.assignedTo || "Unassigned"}
-                    </small>
+            return (
+              <>
+                <header className="page-header">
+                  <div>
+                    <p className="eyebrow">Customer Database</p>
+                    <h1>All Customers</h1>
                   </div>
-                  <span className="cust-contact">
-                    {c.phone}
-                    <br />
-                    <small>{c.email || "No email"}</small>
-                  </span>
-                  <span className={`status-badge ${statusClass(c.status)}`}>
-                    {c.status}
-                  </span>
-                  <div className="row-actions">
-                    <button type="button" onClick={() => openProfile(c)}>
-                      Deal Jacket
-                    </button>
+                  <div className="header-actions">
                     <button
                       type="button"
-                      className="ghost-button"
-                      onClick={() => editCustomer(c)}
+                      onClick={() => {
+                        setShowAddForm((v) => !v);
+                        if (editingCustomerId) resetCustomerForm();
+                      }}
                     >
-                      Edit
+                      {showAddForm || editingCustomerId
+                        ? "✕ Close Form"
+                        : "+ Add Customer"}
                     </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => deleteCustomer(c.id)}
+                  </div>
+                </header>
+
+                {/* Add / Edit Form — collapsible */}
+                {(showAddForm || editingCustomerId) && (
+                  <article className="panel" style={{ marginBottom: 14 }}>
+                    <div className="panel-header">
+                      <p className="eyebrow">
+                        {editingCustomerId
+                          ? "Editing Customer"
+                          : "Add New Customer / Lead"}
+                      </p>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => {
+                          resetCustomerForm();
+                          setShowAddForm(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <form className="contact-form" onSubmit={saveCustomer}>
+                      <input
+                        placeholder="First name *"
+                        value={customerForm.firstName}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            firstName: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                      <input
+                        placeholder="Last name"
+                        value={customerForm.lastName}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            lastName: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Phone"
+                        value={customerForm.phone}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            phone: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Email"
+                        value={customerForm.email}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            email: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Vehicle of interest"
+                        value={customerForm.interestedVehicle}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            interestedVehicle: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Lead source"
+                        value={customerForm.source}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            source: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Assigned rep"
+                        value={customerForm.assignedTo}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            assignedTo: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Next follow-up"
+                        value={customerForm.nextFollowUp}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            nextFollowUp: e.target.value,
+                          })
+                        }
+                      />
+                      <select
+                        value={customerForm.status}
+                        onChange={(e) =>
+                          setCustomerForm({
+                            ...customerForm,
+                            status: e.target.value as Customer["status"],
+                          })
+                        }
+                      >
+                        <option>New Lead</option>
+                        <option>Contacted</option>
+                        <option>Appt Set</option>
+                        <option>Appt Show</option>
+                        <option>Working</option>
+                        <option>Sold</option>
+                        <option>Lost</option>
+                      </select>
+                      <button type="submit">
+                        {editingCustomerId ? "Save Changes" : "Add Customer"}
+                      </button>
+                    </form>
+                  </article>
+                )}
+
+                {/* Search + filter toolbar */}
+                <div className="cust-toolbar">
+                  <input
+                    className="cust-search"
+                    placeholder="🔍  Name, phone, email, or vehicle..."
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value);
+                      setCustPage(0);
+                    }}
+                    autoComplete="off"
+                  />
+                  <select
+                    className="filter-select"
+                    value={customerStatusFilter}
+                    onChange={(e) => {
+                      setCustomerStatusFilter(e.target.value);
+                      setCustPage(0);
+                    }}
+                  >
+                    <option value="All">All statuses</option>
+                    <option>New Lead</option>
+                    <option>Contacted</option>
+                    <option>Appt Set</option>
+                    <option>Appt Show</option>
+                    <option>Working</option>
+                    <option>Sold</option>
+                    <option>Lost</option>
+                  </select>
+                  <select
+                    className="filter-select"
+                    value={customerSourceFilter}
+                    onChange={(e) => {
+                      setCustomerSourceFilter(e.target.value);
+                      setCustPage(0);
+                    }}
+                  >
+                    <option value="All">All sources</option>
+                    <option>Cars.com</option>
+                    <option>AutoTrader</option>
+                    <option>Website Lead</option>
+                    <option>Walk-in</option>
+                    <option>Referral</option>
+                    <option>Phone Call</option>
+                  </select>
+                  <div className="cust-toolbar-right">
+                    <span className="result-count">
+                      {filteredCustomers.length.toLocaleString()} of{" "}
+                      {customers.length.toLocaleString()}
+                    </span>
+                    <select
+                      className="filter-select"
+                      value={custPageSize}
+                      onChange={(e) => {
+                        setCustPageSize(Number(e.target.value));
+                        setCustPage(0);
+                      }}
                     >
-                      Delete
-                    </button>
+                      <option value={25}>25 / page</option>
+                      <option value={50}>50 / page</option>
+                      <option value={100}>100 / page</option>
+                      <option value={250}>250 / page</option>
+                    </select>
                   </div>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
+
+                {/* Data table */}
+                <div className="cust-table-wrap">
+                  <table className="cust-table">
+                    <thead>
+                      <tr>
+                        <th
+                          className="sortable"
+                          onClick={() => toggleSort("name")}
+                        >
+                          Name <SortIcon col="name" />
+                        </th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th
+                          className="sortable"
+                          onClick={() => toggleSort("vehicle")}
+                        >
+                          Vehicle <SortIcon col="vehicle" />
+                        </th>
+                        <th
+                          className="sortable"
+                          onClick={() => toggleSort("status")}
+                        >
+                          Status <SortIcon col="status" />
+                        </th>
+                        <th>Source</th>
+                        <th
+                          className="sortable"
+                          onClick={() => toggleSort("rep")}
+                        >
+                          Rep <SortIcon col="rep" />
+                        </th>
+                        <th
+                          className="sortable"
+                          onClick={() => toggleSort("created")}
+                        >
+                          Added <SortIcon col="created" />
+                        </th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageSlice.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={9}
+                            className="empty-state"
+                            style={{ textAlign: "center", padding: 32 }}
+                          >
+                            No customers match your filters.
+                          </td>
+                        </tr>
+                      )}
+                      {pageSlice.map((c) => (
+                        <tr
+                          key={c.id}
+                          className="cust-tr"
+                          onClick={() => openProfile(c)}
+                        >
+                          <td className="cust-name-cell">
+                            <strong>
+                              {c.firstName} {c.lastName}
+                            </strong>
+                            {c.temperature && (
+                              <span
+                                className={`temp-badge ${tempClass(c.temperature)}`}
+                              >
+                                {c.temperature}
+                              </span>
+                            )}
+                          </td>
+                          <td className="cust-phone">{c.phone}</td>
+                          <td className="cust-email">
+                            {c.email || <span className="muted">—</span>}
+                          </td>
+                          <td className="cust-vehicle">
+                            {c.interestedVehicle || (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <span
+                              className={`status-badge ${statusClass(c.status)}`}
+                            >
+                              {c.status}
+                            </span>
+                          </td>
+                          <td className="muted">{c.source || "—"}</td>
+                          <td className="muted">
+                            {c.assignedTo || (
+                              <span className="unassigned">Unassigned</span>
+                            )}
+                          </td>
+                          <td className="muted">
+                            {c.createdAt ? timeAgo(c.createdAt) : "—"}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="cust-actions">
+                              <button
+                                type="button"
+                                className="cust-action-btn"
+                                title="Open Deal Jacket"
+                                onClick={() => openProfile(c)}
+                              >
+                                Open
+                              </button>
+                              <button
+                                type="button"
+                                className="cust-action-btn ghost"
+                                title="Edit"
+                                onClick={() => {
+                                  editCustomer(c);
+                                  setShowAddForm(true);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="cust-action-btn danger"
+                                title="Delete"
+                                onClick={() => deleteCustomer(c.id)}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="cust-pagination">
+                    <button
+                      type="button"
+                      className="page-btn"
+                      disabled={safePage === 0}
+                      onClick={() => setCustPage(0)}
+                    >
+                      «
+                    </button>
+                    <button
+                      type="button"
+                      className="page-btn"
+                      disabled={safePage === 0}
+                      onClick={() => setCustPage(safePage - 1)}
+                    >
+                      ‹ Prev
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                      const start = Math.max(
+                        0,
+                        Math.min(safePage - 3, totalPages - 7),
+                      );
+                      const p = start + i;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`page-btn${p === safePage ? " active" : ""}`}
+                          onClick={() => setCustPage(p)}
+                        >
+                          {p + 1}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="page-btn"
+                      disabled={safePage === totalPages - 1}
+                      onClick={() => setCustPage(safePage + 1)}
+                    >
+                      Next ›
+                    </button>
+                    <button
+                      type="button"
+                      className="page-btn"
+                      disabled={safePage === totalPages - 1}
+                      onClick={() => setCustPage(totalPages - 1)}
+                    >
+                      »
+                    </button>
+                    <span className="page-info">
+                      Page {safePage + 1} of {totalPages} ·{" "}
+                      {filteredCustomers.length.toLocaleString()} records
+                    </span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
         {/* ── FINANCE ──────────────────────────────────────────── */}
         {currentPage === "finance" && (
