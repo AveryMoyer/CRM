@@ -2393,7 +2393,12 @@ button.danger:hover {
   color: #9ca3af !important;
 }
 
-/* ── Responsive ─────────────────────────────────────────────────────────────── */
+/* ── Bottom Navigation (mobile only) ────────────────────────────────────────── */
+.bottom-nav {
+  display: none;
+}
+
+/* ── Responsive: Large tablet ───────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .kpi-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -2410,51 +2415,286 @@ button.danger:hover {
   .pipeline-full {
     grid-template-columns: 1fr;
   }
+  .desk-layout {
+    grid-template-columns: 1fr;
+  }
+  .desk-calc-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
-@media (max-width: 768px) {
+/* ── Responsive: Tablet ─────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
   .sidebar {
-    width: 60px;
-    min-width: 60px;
-    padding: 16px 8px;
+    width: 64px;
+    min-width: 64px;
+  }
+  .sidebar-brand .brand-name {
+    display: none;
+  }
+  .sidebar nav::before {
+    display: none;
+  }
+  .nav-label {
+    display: none;
   }
   .sidebar a {
-    padding: 10px;
-    font-size: 0;
+    justify-content: center;
+    padding: 10px 8px;
+  }
+  .nav-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  .sidebar-footer button span:last-child {
+    display: none;
+  }
+  .sidebar-footer button {
     justify-content: center;
   }
-  .brand-mark {
-    font-size: 11px;
-    width: 36px;
-    height: 36px;
-  }
   .workspace {
-    padding: 18px 16px;
+    padding: 20px 16px;
   }
+  .desk-layout {
+    grid-template-columns: 1fr;
+  }
+  .desk-calc-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ro-board {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .ro-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .vin-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .pipeline-board {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Responsive: Mobile ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Hide desktop sidebar entirely on mobile */
+  .sidebar {
+    display: none;
+  }
+
+  /* Show mobile bottom nav */
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: #0b1120;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    min-width: 64px;
+    padding: 10px 8px 8px;
+    color: #64748b;
+    text-decoration: none;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    transition: color 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bottom-nav-item.active {
+    color: #a5b4fc;
+  }
+  .bottom-nav-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+  }
+  .bottom-nav-badge {
+    position: absolute;
+    top: -3px;
+    right: -5px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 99px;
+    padding: 1px 4px;
+    line-height: 1.2;
+  }
+  .bottom-nav-label {
+    white-space: nowrap;
+  }
+
+  /* Workspace: full width, bottom padding for nav */
+  .workspace {
+    padding: 16px 12px 90px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* App shell: block layout since sidebar is gone */
+  .app-shell {
+    flex-direction: column;
+  }
+
+  /* Page headers */
+  .page-header h1 {
+    font-size: 22px;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .page-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .page-header-actions button,
+  .page-header-actions input {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+
+  /* KPI grid: 2 columns */
   .kpi-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
+  .kpi-card {
+    padding: 14px;
+  }
+
+  /* Horizontal scroll for all data tables */
+  .data-table-wrap,
+  .crm-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    min-width: 500px;
+  }
+  .ro-table {
+    min-width: 480px;
+  }
+
+  /* Forms: single column */
+  .credit-form,
+  .contact-form,
+  .ro-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* Customer row: stack */
+  .cust-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .cust-row-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* Profile grid: single column */
   .profile-grid {
     grid-template-columns: 1fr;
   }
-  .credit-form,
-  .contact-form {
-    grid-template-columns: 1fr;
-  }
-  .cust-row {
-    flex-wrap: wrap;
-  }
+
+  /* Pipeline: single column with horizontal scroll */
   .pipeline-board {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(7, 280px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
   }
+
+  /* VIN grid: single column */
   .vin-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
+
+  /* Service board: 2 columns scrollable */
   .ro-board {
+    grid-template-columns: repeat(5, 260px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+
+  /* Desk tool: full single column */
+  .desk-layout {
     grid-template-columns: 1fr;
   }
-  .ro-form {
+  .desk-calc-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .desk-result-main strong {
+    font-size: 28px;
+  }
+  .desk-result {
+    padding: 16px;
+  }
+
+  /* CRM overview */
+  .crm-overview {
     grid-template-columns: 1fr;
+  }
+
+  /* Overview layout */
+  .overview-layout,
+  .deals-layout,
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Touch targets: minimum 44px */
+  button,
+  .sidebar a,
+  .bottom-nav-item,
+  select {
+    min-height: 44px;
+  }
+  input {
+    min-height: 42px;
+    font-size: 16px; /* prevent iOS zoom */
+  }
+
+  /* Book value panel: stack */
+  .bv-range {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* App message */
+  .app-message {
+    font-size: 13px;
+    padding: 10px 14px;
   }
 }
 

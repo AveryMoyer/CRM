@@ -3434,6 +3434,25 @@ function App() {
           </div>
         </aside>
 
+        {/* ── Mobile Bottom Navigation ─────────────────────────── */}
+        <nav className="bottom-nav">
+          {navItems.map((item) => (
+            <a
+              key={item.page}
+              className={`bottom-nav-item${currentPage === item.page ? " active" : ""}`}
+              href={`#/${item.page}`}
+            >
+              <span className="bottom-nav-icon">
+                {item.icon}
+                {item.badge ? (
+                  <span className="bottom-nav-badge">{item.badge}</span>
+                ) : null}
+              </span>
+              <span className="bottom-nav-label">{item.label}</span>
+            </a>
+          ))}
+        </nav>
+
         <section className="workspace">
           {appMessage && (
             <p className="app-message" onClick={() => setAppMessage("")}>
