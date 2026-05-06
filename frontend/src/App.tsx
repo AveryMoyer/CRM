@@ -153,6 +153,7 @@ type TradeIn = {
   mileage: number;
   payoff: number;
   estimatedValue: number;
+  notes?: string;
 };
 
 type VehicleSale = {
@@ -486,6 +487,20 @@ const initialCustomers: Customer[] = [
     nextFollowUp: "",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
   },
+  {
+    id: 9,
+    firstName: "Ernesto",
+    lastName: "Alverez",
+    email: "ernesto.alverez@gmail.com",
+    phone: "(713) 555-0294",
+    status: "Working",
+    temperature: "Hot",
+    interestedVehicle: "2024 Ford Bronco Raptor",
+    source: "Walk-In",
+    assignedTo: "Avery",
+    nextFollowUp: "Tomorrow 2pm",
+    createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+  },
 ];
 
 const initialFinanceApplications: FinanceApplication[] = [
@@ -512,6 +527,17 @@ const initialTradeIns: TradeIn[] = [
     mileage: 82000,
     payoff: 4200,
     estimatedValue: 12800,
+  },
+  {
+    id: 2,
+    customerId: 9,
+    year: "2023",
+    make: "Ford",
+    model: "Bronco Raptor",
+    mileage: 18400,
+    payoff: 52000,
+    estimatedValue: 68500,
+    notes: "this is my thunder buddy",
   },
 ];
 
@@ -1075,6 +1101,7 @@ function App() {
     mileage: "",
     payoff: "",
     estimatedValue: "",
+    notes: "",
   });
   const [tradeVinLoading, setTradeVinLoading] = useState(false);
   const [tradeBookValue, setTradeBookValue] = useState<BookValueResult | null>(
@@ -4973,6 +5000,13 @@ function App() {
                       </div>
                     </div>
                   )}
+                  <input
+                    placeholder="Notes (optional)"
+                    value={tradeForm.notes}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, notes: e.target.value })
+                    }
+                  />
                   <button type="submit">Add Trade</button>
                 </form>
               </article>
@@ -5004,6 +5038,17 @@ function App() {
                     >
                       Equity: ${(t.estimatedValue - t.payoff).toLocaleString()}
                     </span>
+                    {t.notes && (
+                      <span
+                        style={{
+                          fontStyle: "italic",
+                          color: "#64748b",
+                          fontSize: 12,
+                        }}
+                      >
+                        📝 {t.notes}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
