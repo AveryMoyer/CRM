@@ -2696,6 +2696,100 @@ button.danger:hover {
     font-size: 13px;
     padding: 10px 14px;
   }
+
+  /* ── Dashboard phone fixes ─────────────────────────────────── */
+  .eyebrow {
+    display: none; /* removes redundant subtitle, saves vertical space */
+  }
+  .page-header h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  .page-header {
+    margin-bottom: 14px;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    padding: 12px 14px;
+    border-radius: 12px;
+    gap: 4px;
+  }
+  .kpi-card strong {
+    font-size: 26px;
+  }
+  .kpi-card span {
+    font-size: 10px;
+  }
+  .kpi-card small {
+    font-size: 10px;
+  }
+  .dash-grid {
+    gap: 12px;
+  }
+
+  /* ── Desk tool phone fixes ─────────────────────────────────── */
+  .desk-section {
+    padding: 14px 14px;
+    border-radius: 12px;
+  }
+  .desk-section-title {
+    font-size: 10px;
+    margin-bottom: 12px;
+  }
+  /* Force exactly 2 fields per row on phones */
+  .desk-field {
+    flex: 1 1 calc(50% - 6px);
+    max-width: calc(50% - 6px);
+    min-width: 0;
+  }
+  .desk-field.full {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+  .desk-field input,
+  .desk-field select {
+    font-size: 16px; /* prevent iOS zoom */
+    padding: 10px 10px;
+  }
+  .desk-field label {
+    font-size: 10px;
+  }
+  .desk-row {
+    gap: 8px;
+  }
+  /* Payment result panel */
+  .desk-result {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+  .desk-result-main strong {
+    font-size: 34px;
+  }
+  .desk-result-breakdown {
+    gap: 12px;
+  }
+  .desk-result-breakdown span {
+    font-size: 12px;
+  }
+  /* Deal summary stacked below */
+  .desk-summary {
+    gap: 12px;
+  }
+  /* Calc grid: 2 columns on phone */
+  .desk-calc-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .desk-input-group input,
+  .desk-input-group select {
+    font-size: 16px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
