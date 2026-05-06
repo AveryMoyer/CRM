@@ -135,7 +135,8 @@ type AppPage =
   | "pipeline"
   | "trades"
   | "vin"
-  | "activities";
+  | "activities"
+  | "desk";
 
 const API_BASE = "http://localhost:4000";
 
@@ -407,6 +408,121 @@ function App() {
     termMonths: "72",
     taxRate: "8.5",
   });
+  // ── Desking Tool ─────────────────────────────────────────────────────────
+  const [desk, setDesk] = useState({
+    customerId: "",
+    stockNumber: "",
+    year: "",
+    make: "",
+    model: "",
+    trim: "",
+    msrp: "",
+    sellingPrice: "",
+    tradeYear: "",
+    tradeMake: "",
+    tradeModel: "",
+    tradeACV: "",
+    tradePayoff: "",
+    downPayment: "",
+    rebate: "",
+    docFee: "699",
+    titleFee: "100",
+    regFee: "200",
+    taxRate: "8.5",
+    gap: false,
+    gapPrice: "895",
+    warranty: false,
+    warrantyPrice: "2495",
+    tireWheel: false,
+    tirewheelPrice: "1195",
+    paintPro: false,
+    paintProPrice: "799",
+    creditLife: false,
+    creditLifePrice: "599",
+    apr: "7.9",
+    termMonths: "72",
+    lender: "",
+  });
+
+  const deskNumbers = useMemo(() => {
+    const msrp = parseFloat(desk.msrp) || 0;
+    const selling = parseFloat(desk.sellingPrice) || 0;
+    const discount = msrp - selling;
+    const acv = parseFloat(desk.tradeACV) || 0;
+    const payoff = parseFloat(desk.tradePayoff) || 0;
+    const equity = acv - payoff;
+    const down = parseFloat(desk.downPayment) || 0;
+    const rebate = parseFloat(desk.rebate) || 0;
+    const docFee = parseFloat(desk.docFee) || 0;
+    const titleFee = parseFloat(desk.titleFee) || 0;
+    const regFee = parseFloat(desk.regFee) || 0;
+    const taxRate = parseFloat(desk.taxRate) / 100;
+    const fiItems: { name: string; price: number }[] = [];
+    if (desk.gap)
+      fiItems.push({
+        name: "GAP Insurance",
+        price: parseFloat(desk.gapPrice) || 0,
+      });
+    if (desk.warranty)
+      fiItems.push({
+        name: "Extended Warranty",
+        price: parseFloat(desk.warrantyPrice) || 0,
+      });
+    if (desk.tireWheel)
+      fiItems.push({
+        name: "Tire & Wheel",
+        price: parseFloat(desk.tirewheelPrice) || 0,
+      });
+    if (desk.paintPro)
+      fiItems.push({
+        name: "Paint Protection",
+        price: parseFloat(desk.paintProPrice) || 0,
+      });
+    if (desk.creditLife)
+      fiItems.push({
+        name: "Credit Life/Disability",
+        price: parseFloat(desk.creditLifePrice) || 0,
+      });
+    const fiTotal = fiItems.reduce((t, i) => t + i.price, 0);
+    const salesTax = (selling + fiTotal) * taxRate;
+    const totalFees = docFee + titleFee + regFee;
+    const financed =
+      selling + salesTax + totalFees + fiTotal - down - equity - rebate;
+    const aprM = parseFloat(desk.apr) / 100 / 12;
+    const term = parseInt(desk.termMonths) || 72;
+    const monthly =
+      financed > 0 && aprM > 0
+        ? (financed * aprM) / (1 - Math.pow(1 + aprM, -term))
+        : 0;
+    return {
+      discount,
+      equity,
+      fiItems,
+      fiTotal,
+      salesTax,
+      totalFees,
+      financed,
+      monthly,
+      selling,
+      msrp,
+    };
+  }, [desk]);
+
+  const paymentGrid = useMemo(() => {
+    const terms = [36, 48, 60, 72, 84];
+    const downs = [0, 1000, 2000, 3000, 5000];
+    const base = deskNumbers.financed + (parseFloat(desk.downPayment) || 0);
+    const aprM = parseFloat(desk.apr) / 100 / 12;
+    return terms.map((term) => ({
+      term,
+      payments: downs.map((down) => {
+        const amt = base - down;
+        if (amt <= 0 || aprM === 0) return 0;
+        return (amt * aprM) / (1 - Math.pow(1 + aprM, -term));
+      }),
+    }));
+  }, [deskNumbers.financed, desk.downPayment, desk.apr]);
+
   const deskPayment = useMemo(() => {
     const price = parseFloat(deskCalc.salePrice) || 0;
     const acv = parseFloat(deskCalc.tradeACV) || 0;
@@ -559,6 +675,7 @@ function App() {
         "trades",
         "vin",
         "activities",
+        "desk",
       ];
       setCurrentPage(valid.includes(page) ? page : "dashboard");
     }
@@ -1824,6 +1941,7 @@ function App() {
     { page: "trades", label: "Trades" },
     { page: "vin", label: "VIN Lookup" },
     { page: "activities", label: "Activities" },
+    { page: "desk", label: "Desk Tool" },
   ];
 
   return (
@@ -2964,6 +3082,601 @@ function App() {
                 </div>
               )}
             </article>
+          </>
+        )}
+
+        {/* ── DESK TOOL ────────────────────────────────────────── */}
+        {currentPage === "desk" && (
+          <>
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Deal Desk</p>
+                <h1>Structure a Deal</h1>
+                <p className="page-subtitle">
+                  Build the full deal — vehicle, trade, F&I products, taxes,
+                  fees — and see the real monthly payment and amount financed
+                  instantly.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() =>
+                  setDesk({
+                    customerId: "",
+                    stockNumber: "",
+                    year: "",
+                    make: "",
+                    model: "",
+                    trim: "",
+                    msrp: "",
+                    sellingPrice: "",
+                    tradeYear: "",
+                    tradeMake: "",
+                    tradeModel: "",
+                    tradeACV: "",
+                    tradePayoff: "",
+                    downPayment: "",
+                    rebate: "",
+                    docFee: "699",
+                    titleFee: "100",
+                    regFee: "200",
+                    taxRate: "8.5",
+                    gap: false,
+                    gapPrice: "895",
+                    warranty: false,
+                    warrantyPrice: "2495",
+                    tireWheel: false,
+                    tirewheelPrice: "1195",
+                    paintPro: false,
+                    paintProPrice: "799",
+                    creditLife: false,
+                    creditLifePrice: "599",
+                    apr: "7.9",
+                    termMonths: "72",
+                    lender: "",
+                  })
+                }
+              >
+                Clear Desk
+              </button>
+            </header>
+
+            <div className="desk-layout">
+              {/* ── LEFT: Deal Builder ── */}
+              <div className="desk-builder">
+                {/* Customer */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Customer</p>
+                  <div className="desk-row">
+                    <div className="desk-field full">
+                      <label>Select Customer</label>
+                      <select
+                        value={desk.customerId}
+                        onChange={(e) =>
+                          setDesk({ ...desk, customerId: e.target.value })
+                        }
+                      >
+                        <option value="">— No customer selected —</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.firstName} {c.lastName} —{" "}
+                            {c.interestedVehicle || "No vehicle"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vehicle */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Vehicle</p>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>Stock #</label>
+                      <input
+                        placeholder="A1024"
+                        value={desk.stockNumber}
+                        onChange={(e) =>
+                          setDesk({ ...desk, stockNumber: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Year</label>
+                      <input
+                        placeholder="2024"
+                        value={desk.year}
+                        onChange={(e) =>
+                          setDesk({ ...desk, year: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Make</label>
+                      <input
+                        placeholder="Toyota"
+                        value={desk.make}
+                        onChange={(e) =>
+                          setDesk({ ...desk, make: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Model</label>
+                      <input
+                        placeholder="Camry"
+                        value={desk.model}
+                        onChange={(e) =>
+                          setDesk({ ...desk, model: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Trim</label>
+                      <input
+                        placeholder="XSE"
+                        value={desk.trim}
+                        onChange={(e) =>
+                          setDesk({ ...desk, trim: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>MSRP ($)</label>
+                      <input
+                        placeholder="42000"
+                        value={desk.msrp}
+                        onChange={(e) =>
+                          setDesk({ ...desk, msrp: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Selling Price ($)</label>
+                      <input
+                        placeholder="39995"
+                        value={desk.sellingPrice}
+                        onChange={(e) =>
+                          setDesk({ ...desk, sellingPrice: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field desk-computed">
+                      <label>Discount</label>
+                      <span
+                        className={
+                          deskNumbers.discount > 0
+                            ? "desk-positive"
+                            : deskNumbers.discount < 0
+                              ? "desk-negative"
+                              : "desk-zero"
+                        }
+                      >
+                        {deskNumbers.discount !== 0
+                          ? `$${Math.abs(deskNumbers.discount).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.discount > 0 ? "below MSRP" : "above MSRP"}`
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trade-In */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Trade-In</p>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>Year</label>
+                      <input
+                        placeholder="2020"
+                        value={desk.tradeYear}
+                        onChange={(e) =>
+                          setDesk({ ...desk, tradeYear: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Make</label>
+                      <input
+                        placeholder="Honda"
+                        value={desk.tradeMake}
+                        onChange={(e) =>
+                          setDesk({ ...desk, tradeMake: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Model</label>
+                      <input
+                        placeholder="Accord"
+                        value={desk.tradeModel}
+                        onChange={(e) =>
+                          setDesk({ ...desk, tradeModel: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>ACV ($)</label>
+                      <input
+                        placeholder="14000"
+                        value={desk.tradeACV}
+                        onChange={(e) =>
+                          setDesk({ ...desk, tradeACV: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Payoff ($)</label>
+                      <input
+                        placeholder="8500"
+                        value={desk.tradePayoff}
+                        onChange={(e) =>
+                          setDesk({ ...desk, tradePayoff: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field desk-computed">
+                      <label>Trade Equity</label>
+                      <span
+                        className={
+                          deskNumbers.equity > 0
+                            ? "desk-positive"
+                            : deskNumbers.equity < 0
+                              ? "desk-negative"
+                              : "desk-zero"
+                        }
+                      >
+                        {deskNumbers.equity !== 0
+                          ? `${deskNumbers.equity > 0 ? "+" : ""}$${deskNumbers.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.equity < 0 ? "(upside down)" : "equity"}`
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cash & Rebates */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Cash & Incentives</p>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>Down Payment ($)</label>
+                      <input
+                        placeholder="3000"
+                        value={desk.downPayment}
+                        onChange={(e) =>
+                          setDesk({ ...desk, downPayment: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Manufacturer Rebate ($)</label>
+                      <input
+                        placeholder="1500"
+                        value={desk.rebate}
+                        onChange={(e) =>
+                          setDesk({ ...desk, rebate: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* F&I Products */}
+                <div className="desk-section">
+                  <p className="desk-section-title">F&I Products</p>
+                  <div className="fi-menu">
+                    {(
+                      [
+                        {
+                          key: "gap",
+                          label: "GAP Insurance",
+                          priceKey: "gapPrice",
+                        },
+                        {
+                          key: "warranty",
+                          label: "Extended Warranty",
+                          priceKey: "warrantyPrice",
+                        },
+                        {
+                          key: "tireWheel",
+                          label: "Tire & Wheel Protection",
+                          priceKey: "tirewheelPrice",
+                        },
+                        {
+                          key: "paintPro",
+                          label: "Paint Protection",
+                          priceKey: "paintProPrice",
+                        },
+                        {
+                          key: "creditLife",
+                          label: "Credit Life / Disability",
+                          priceKey: "creditLifePrice",
+                        },
+                      ] as const
+                    ).map(({ key, label, priceKey }) => (
+                      <div className="fi-row" key={key}>
+                        <label className="fi-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={desk[key] as boolean}
+                            onChange={(e) =>
+                              setDesk({ ...desk, [key]: e.target.checked })
+                            }
+                          />
+                          <span
+                            className={
+                              desk[key] ? "fi-label active" : "fi-label"
+                            }
+                          >
+                            {label}
+                          </span>
+                        </label>
+                        <div className="fi-price-wrap">
+                          <span>$</span>
+                          <input
+                            className="fi-price"
+                            value={desk[priceKey] as string}
+                            onChange={(e) =>
+                              setDesk({ ...desk, [priceKey]: e.target.value })
+                            }
+                            disabled={!desk[key] as boolean}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Taxes & Fees */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Taxes & Fees</p>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>Sales Tax Rate (%)</label>
+                      <input
+                        value={desk.taxRate}
+                        onChange={(e) =>
+                          setDesk({ ...desk, taxRate: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Doc Fee ($)</label>
+                      <input
+                        value={desk.docFee}
+                        onChange={(e) =>
+                          setDesk({ ...desk, docFee: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Title Fee ($)</label>
+                      <input
+                        value={desk.titleFee}
+                        onChange={(e) =>
+                          setDesk({ ...desk, titleFee: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Reg / License ($)</label>
+                      <input
+                        value={desk.regFee}
+                        onChange={(e) =>
+                          setDesk({ ...desk, regFee: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Finance Terms */}
+                <div className="desk-section">
+                  <p className="desk-section-title">Finance Terms</p>
+                  <div className="desk-row">
+                    <div className="desk-field">
+                      <label>APR (%)</label>
+                      <input
+                        value={desk.apr}
+                        onChange={(e) =>
+                          setDesk({ ...desk, apr: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Term (months)</label>
+                      <select
+                        value={desk.termMonths}
+                        onChange={(e) =>
+                          setDesk({ ...desk, termMonths: e.target.value })
+                        }
+                      >
+                        <option>24</option>
+                        <option>36</option>
+                        <option>48</option>
+                        <option>60</option>
+                        <option>72</option>
+                        <option>84</option>
+                      </select>
+                    </div>
+                    <div className="desk-field">
+                      <label>Lender</label>
+                      <input
+                        placeholder="Chase Auto"
+                        value={desk.lender}
+                        onChange={(e) =>
+                          setDesk({ ...desk, lender: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── RIGHT: Deal Summary ── */}
+              <div className="desk-summary">
+                {/* Monthly Payment — big hero number */}
+                <div className="payment-hero">
+                  <p className="payment-hero-label">Est. Monthly Payment</p>
+                  <strong className="payment-hero-amount">
+                    {deskNumbers.monthly > 0
+                      ? `$${deskNumbers.monthly.toFixed(2)}`
+                      : "$—"}
+                  </strong>
+                  <p className="payment-hero-sub">
+                    {desk.termMonths} mo · {desk.apr}% APR
+                    {desk.lender ? ` · ${desk.lender}` : ""}
+                  </p>
+                </div>
+
+                {/* Deal Breakdown */}
+                <div className="deal-breakdown">
+                  <p className="desk-section-title">Deal Breakdown</p>
+
+                  <div className="deal-line">
+                    <span>Selling Price</span>
+                    <span>
+                      {deskNumbers.selling > 0
+                        ? `$${deskNumbers.selling.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : "—"}
+                    </span>
+                  </div>
+                  {deskNumbers.fiTotal > 0 && (
+                    <>
+                      {deskNumbers.fiItems.map((item) => (
+                        <div className="deal-line indent" key={item.name}>
+                          <span>+ {item.name}</span>
+                          <span>
+                            $
+                            {item.price.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  <div className="deal-line">
+                    <span>Sales Tax ({desk.taxRate}%)</span>
+                    <span>
+                      {deskNumbers.salesTax > 0
+                        ? `$${deskNumbers.salesTax.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="deal-line">
+                    <span>Doc / Title / Reg</span>
+                    <span>
+                      {deskNumbers.totalFees > 0
+                        ? `$${deskNumbers.totalFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : "—"}
+                    </span>
+                  </div>
+                  {deskNumbers.equity !== 0 && (
+                    <div
+                      className={`deal-line ${deskNumbers.equity > 0 ? "deal-line-credit" : "deal-line-debit"}`}
+                    >
+                      <span>
+                        {deskNumbers.equity > 0
+                          ? "– Trade Equity"
+                          : "+ Negative Equity"}
+                      </span>
+                      <span>
+                        {deskNumbers.equity > 0 ? "-" : "+"}$
+                        {Math.abs(deskNumbers.equity).toLocaleString(
+                          undefined,
+                          { maximumFractionDigits: 0 },
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(desk.downPayment) > 0 && (
+                    <div className="deal-line deal-line-credit">
+                      <span>– Down Payment</span>
+                      <span>
+                        -$
+                        {(parseFloat(desk.downPayment) || 0).toLocaleString(
+                          undefined,
+                          { maximumFractionDigits: 0 },
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(desk.rebate) > 0 && (
+                    <div className="deal-line deal-line-credit">
+                      <span>– Manufacturer Rebate</span>
+                      <span>
+                        -$
+                        {(parseFloat(desk.rebate) || 0).toLocaleString(
+                          undefined,
+                          { maximumFractionDigits: 0 },
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  <div className="deal-line deal-line-total">
+                    <span>Amount Financed</span>
+                    <strong>
+                      {deskNumbers.financed > 0
+                        ? `$${deskNumbers.financed.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                        : "—"}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Payment Grid */}
+                {deskNumbers.financed > 0 && (
+                  <div className="payment-grid-wrap">
+                    <p className="desk-section-title">Payment Grid</p>
+                    <p className="payment-grid-note">
+                      {desk.apr}% APR — payments at different terms and down
+                      payments
+                    </p>
+                    <div className="payment-grid-scroll">
+                      <table className="payment-grid-table">
+                        <thead>
+                          <tr>
+                            <th>Term</th>
+                            {[0, 1000, 2000, 3000, 5000].map((d) => (
+                              <th key={d}>${d.toLocaleString()} down</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentGrid.map((row) => (
+                            <tr
+                              key={row.term}
+                              className={
+                                row.term === parseInt(desk.termMonths)
+                                  ? "grid-row-active"
+                                  : ""
+                              }
+                            >
+                              <td>
+                                <strong>{row.term} mo</strong>
+                              </td>
+                              {row.payments.map((pmt, i) => (
+                                <td
+                                  key={i}
+                                  className={pmt > 0 ? "" : "grid-zero"}
+                                >
+                                  {pmt > 0 ? `$${pmt.toFixed(0)}` : "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </>
         )}
 
