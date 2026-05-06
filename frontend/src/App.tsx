@@ -590,6 +590,7 @@ function App() {
   const [custPage, setCustPage] = useState(0);
   const [custPageSize, setCustPageSize] = useState(50);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [dupMatches, setDupMatches] = useState<Customer[]>([]);
   const [quickActivityNote, setQuickActivityNote] = useState("");
   const [quickActivityType, setQuickActivityType] =
     useState<Activity["type"]>("Note");
@@ -1224,8 +1225,24 @@ function App() {
     window.scrollTo(0, 0);
   }
 
-  async function saveCustomer(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function findDuplicates(form: typeof customerForm): Customer[] {
+    const fullName = `${form.firstName} ${form.lastName}`.toLowerCase().trim();
+    const phone = form.phone.replace(/\D/g, "");
+    const email = (form.email || "").toLowerCase().trim();
+    return customers.filter((c) => {
+      if (editingCustomerId && c.id === editingCustomerId) return false;
+      const nameHit =
+        fullName.length > 2 &&
+        `${c.firstName} ${c.lastName}`.toLowerCase() === fullName;
+      const phoneHit =
+        phone.length >= 7 && c.phone.replace(/\D/g, "").includes(phone);
+      const emailHit =
+        email.length > 3 && (c.email || "").toLowerCase() === email;
+      return nameHit || phoneHit || emailHit;
+    });
+  }
+
+  async function doSaveCustomer() {
     if (editingCustomerId) {
       const res = await fetch(
         `${API_BASE}/api/customers/${editingCustomerId}`,
@@ -1240,6 +1257,7 @@ function App() {
         customers.map((c) => (c.id === editingCustomerId ? updated : c)),
       );
       resetCustomerForm();
+      setShowAddForm(false);
       setAppMessage("Customer updated.");
     } else {
       const res = await fetch(`${API_BASE}/api/customers`, {
@@ -1250,8 +1268,21 @@ function App() {
       const created = await res.json();
       setCustomers([created, ...customers]);
       resetCustomerForm();
+      setShowAddForm(false);
       setAppMessage("Customer added.");
     }
+  }
+
+  function saveCustomer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingCustomerId) {
+      const dups = findDuplicates(customerForm);
+      if (dups.length > 0) {
+        setDupMatches(dups);
+        return;
+      }
+    }
+    doSaveCustomer();
   }
 
   async function deleteCustomer(id: number) {
@@ -2470,415 +2501,417 @@ function App() {
   ];
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <div className="brand-mark">AS</div>
-          <div className="brand-name">
-            <strong>AutoSuite</strong>
-            <span>CRM</span>
-          </div>
-        </div>
-        <nav>
-          {navItems.map((item) => (
-            <a
-              key={item.page}
-              className={currentPage === item.page ? "active" : ""}
-              href={`#/${item.page}`}
-            >
-              <span className="nav-item-inner">
-                <span className="nav-icon">{item.icon}</span>
-                <span className="nav-label">{item.label}</span>
-              </span>
-              {item.badge ? (
-                <span className="nav-badge">{item.badge}</span>
-              ) : null}
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.removeItem("crm-authenticated");
-              setIsLoggedIn(false);
-            }}
-          >
-            <LogOut size={14} />
-            Log Out
-          </button>
-        </div>
-      </aside>
-
-      <section className="workspace">
-        {appMessage && (
-          <p className="app-message" onClick={() => setAppMessage("")}>
-            {appMessage} ×
-          </p>
-        )}
-
-        {/* ── DASHBOARD ──────────────────────────────────────── */}
-        {currentPage === "dashboard" && (
-          <>
-            <header className="page-header">
+    <>
+      {dupMatches.length > 0 && (
+        <div className="dup-backdrop" onClick={() => setDupMatches([])}>
+          <div className="dup-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="dup-modal-header">
+              <span className="dup-icon">⚠</span>
               <div>
-                <p className="eyebrow">AutoSuite CRM</p>
-                <h1>Today's Overview</h1>
-              </div>
-              <div className="header-actions">
-                <button type="button" onClick={() => navigate("leads")}>
-                  + New Lead
-                </button>
-              </div>
-            </header>
-
-            {/* ── KPI Row ── */}
-            <div className="kpi-grid">
-              <div className="kpi-card kpi-blue">
-                <span>New Leads</span>
-                <strong>{totalLeads}</strong>
-                <small>{urgentLeads.length} uncontacted</small>
-              </div>
-              <div className="kpi-card kpi-yellow">
-                <span>Active Opps</span>
-                <strong>{activeOpps}</strong>
-                <small>In pipeline</small>
-              </div>
-              <div className="kpi-card kpi-green">
-                <span>Units Sold</span>
-                <strong>{soldCount}</strong>
-                <small>Closing ratio {closingRatio}%</small>
-              </div>
-              <div className="kpi-card kpi-purple">
-                <span>Appt Show Rate</span>
-                <strong>{apptShowRate}%</strong>
-                <small>
-                  {apptShowCount} showed / {apptSetCount + apptShowCount} set
-                </small>
-              </div>
-              <div className="kpi-card kpi-dark">
-                <span>Pipeline Value</span>
-                <strong>${pipelineValue.toLocaleString()}</strong>
-                <small>Lead-to-contact {leadToContact}%</small>
+                <h3>
+                  Possible Duplicate{dupMatches.length > 1 ? "s" : ""} Found
+                </h3>
+                <p>
+                  A customer with the same name, phone, or email already exists.
+                </p>
               </div>
             </div>
-
-            {/* ── Conversion Funnel ── */}
-            <article className="panel funnel-panel">
-              <p className="eyebrow">Sales Funnel</p>
-              <h2>Lead-to-Close Conversion</h2>
-              <div className="funnel-stages">
-                {(
-                  [
-                    { label: "New Lead", count: totalLeads, cls: "funnel-new" },
-                    {
-                      label: "Contacted",
-                      count: contactedCount,
-                      cls: "funnel-contacted",
-                    },
-                    {
-                      label: "Appt Set",
-                      count: apptSetCount,
-                      cls: "funnel-appt-set",
-                    },
-                    {
-                      label: "Appt Show",
-                      count: apptShowCount,
-                      cls: "funnel-appt-show",
-                    },
-                    {
-                      label: "Working",
-                      count: workingCount,
-                      cls: "funnel-working",
-                    },
-                    { label: "Sold", count: soldCount, cls: "funnel-sold" },
-                    { label: "Lost", count: lostCount, cls: "funnel-lost" },
-                  ] as const
-                ).map(({ label, count, cls }) => {
-                  const pct = customers.length
-                    ? Math.round((count / customers.length) * 100)
-                    : 0;
-                  return (
-                    <div className="funnel-stage" key={label}>
-                      <div className="funnel-bar-wrap">
-                        <div
-                          className={`funnel-bar ${cls}`}
-                          style={{ width: `${Math.max(pct, 4)}%` }}
-                        />
-                      </div>
-                      <div className="funnel-label">
-                        <span className={`status-badge ${statusClass(label)}`}>
-                          {label}
-                        </span>
-                        <strong>{count}</strong>
-                        <small>{pct}%</small>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="funnel-kpi-row">
-                <div className="funnel-kpi">
-                  <span>Contact Rate</span>
-                  <strong>{leadToContact}%</strong>
+            <div className="dup-list">
+              {dupMatches.map((m) => (
+                <div className="dup-match" key={m.id}>
+                  <div className="dup-match-info">
+                    <strong>
+                      {m.firstName} {m.lastName}
+                    </strong>
+                    <span>{m.phone}</span>
+                    <span className="muted">{m.email || "No email"}</span>
+                    <span className={`status-badge ${statusClass(m.status)}`}>
+                      {m.status}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="cust-action-btn"
+                    onClick={() => {
+                      setDupMatches([]);
+                      setShowAddForm(false);
+                      openProfile(m);
+                    }}
+                  >
+                    View Customer
+                  </button>
                 </div>
-                <div className="funnel-kpi">
-                  <span>Show Rate</span>
+              ))}
+            </div>
+            <div className="dup-modal-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setDupMatches([])}
+              >
+                ← Go Back &amp; Edit
+              </button>
+              <button
+                type="button"
+                className="dup-add-anyway"
+                onClick={() => {
+                  setDupMatches([]);
+                  doSaveCustomer();
+                }}
+              >
+                Add Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <main className="app-shell">
+        <aside className="sidebar">
+          <div className="sidebar-brand">
+            <div className="brand-mark">AS</div>
+            <div className="brand-name">
+              <strong>AutoSuite</strong>
+              <span>CRM</span>
+            </div>
+          </div>
+          <nav>
+            {navItems.map((item) => (
+              <a
+                key={item.page}
+                className={currentPage === item.page ? "active" : ""}
+                href={`#/${item.page}`}
+              >
+                <span className="nav-item-inner">
+                  <span className="nav-icon">{item.icon}</span>
+                  <span className="nav-label">{item.label}</span>
+                </span>
+                {item.badge ? (
+                  <span className="nav-badge">{item.badge}</span>
+                ) : null}
+              </a>
+            ))}
+          </nav>
+          <div className="sidebar-footer">
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem("crm-authenticated");
+                setIsLoggedIn(false);
+              }}
+            >
+              <LogOut size={14} />
+              Log Out
+            </button>
+          </div>
+        </aside>
+
+        <section className="workspace">
+          {appMessage && (
+            <p className="app-message" onClick={() => setAppMessage("")}>
+              {appMessage} ×
+            </p>
+          )}
+
+          {/* ── DASHBOARD ──────────────────────────────────────── */}
+          {currentPage === "dashboard" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">AutoSuite CRM</p>
+                  <h1>Today's Overview</h1>
+                </div>
+                <div className="header-actions">
+                  <button type="button" onClick={() => navigate("leads")}>
+                    + New Lead
+                  </button>
+                </div>
+              </header>
+
+              {/* ── KPI Row ── */}
+              <div className="kpi-grid">
+                <div className="kpi-card kpi-blue">
+                  <span>New Leads</span>
+                  <strong>{totalLeads}</strong>
+                  <small>{urgentLeads.length} uncontacted</small>
+                </div>
+                <div className="kpi-card kpi-yellow">
+                  <span>Active Opps</span>
+                  <strong>{activeOpps}</strong>
+                  <small>In pipeline</small>
+                </div>
+                <div className="kpi-card kpi-green">
+                  <span>Units Sold</span>
+                  <strong>{soldCount}</strong>
+                  <small>Closing ratio {closingRatio}%</small>
+                </div>
+                <div className="kpi-card kpi-purple">
+                  <span>Appt Show Rate</span>
                   <strong>{apptShowRate}%</strong>
+                  <small>
+                    {apptShowCount} showed / {apptSetCount + apptShowCount} set
+                  </small>
                 </div>
-                <div className="funnel-kpi">
-                  <span>Closing Ratio</span>
-                  <strong>{closingRatio}%</strong>
-                </div>
-                <div className="funnel-kpi">
-                  <span>Deals Decided</span>
-                  <strong>{decidedDeals}</strong>
+                <div className="kpi-card kpi-dark">
+                  <span>Pipeline Value</span>
+                  <strong>${pipelineValue.toLocaleString()}</strong>
+                  <small>Lead-to-contact {leadToContact}%</small>
                 </div>
               </div>
-            </article>
 
-            {/* ── Stalled Deals + Equity Mining row ── */}
-            {(stalledLeads.length > 0 || equityTargets.length > 0) && (
-              <div className="dash-grid" style={{ marginTop: 18 }}>
-                {stalledLeads.length > 0 && (
-                  <article className="panel">
-                    <p className="eyebrow stalled-eye">Stalled Deals</p>
-                    <h2>No activity in 3+ days</h2>
-                    <div className="lead-list">
-                      {stalledLeads.map((c) => (
-                        <div className="lead-card stalled-card" key={c.id}>
-                          <div>
-                            <strong>
-                              {c.firstName} {c.lastName}
-                            </strong>
-                            <span>{c.interestedVehicle}</span>
-                            <small>
-                              <span
-                                className={`status-badge ${statusClass(c.status)}`}
-                              >
-                                {c.status}
-                              </span>
-                              {" · "}
-                              {c.assignedTo || "Unassigned"}
-                            </small>
-                          </div>
-                          <button
-                            type="button"
-                            className="open-btn"
-                            onClick={() => openProfile(c)}
-                          >
-                            Log Activity
-                          </button>
+              {/* ── Conversion Funnel ── */}
+              <article className="panel funnel-panel">
+                <p className="eyebrow">Sales Funnel</p>
+                <h2>Lead-to-Close Conversion</h2>
+                <div className="funnel-stages">
+                  {(
+                    [
+                      {
+                        label: "New Lead",
+                        count: totalLeads,
+                        cls: "funnel-new",
+                      },
+                      {
+                        label: "Contacted",
+                        count: contactedCount,
+                        cls: "funnel-contacted",
+                      },
+                      {
+                        label: "Appt Set",
+                        count: apptSetCount,
+                        cls: "funnel-appt-set",
+                      },
+                      {
+                        label: "Appt Show",
+                        count: apptShowCount,
+                        cls: "funnel-appt-show",
+                      },
+                      {
+                        label: "Working",
+                        count: workingCount,
+                        cls: "funnel-working",
+                      },
+                      { label: "Sold", count: soldCount, cls: "funnel-sold" },
+                      { label: "Lost", count: lostCount, cls: "funnel-lost" },
+                    ] as const
+                  ).map(({ label, count, cls }) => {
+                    const pct = customers.length
+                      ? Math.round((count / customers.length) * 100)
+                      : 0;
+                    return (
+                      <div className="funnel-stage" key={label}>
+                        <div className="funnel-bar-wrap">
+                          <div
+                            className={`funnel-bar ${cls}`}
+                            style={{ width: `${Math.max(pct, 4)}%` }}
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </article>
-                )}
-                {equityTargets.length > 0 && (
-                  <article className="panel">
-                    <p className="eyebrow equity-eye">Equity Mining</p>
-                    <h2>Re-engagement targets</h2>
-                    <p className="panel-note">
-                      Past buyers — potential trade-up or repeat purchase
-                    </p>
-                    <div className="lead-list">
-                      {equityTargets.map((c) => (
-                        <div className="lead-card equity-card" key={c.id}>
-                          <div>
-                            <strong>
-                              {c.firstName} {c.lastName}
-                            </strong>
-                            <span>{c.interestedVehicle}</span>
-                            <small>
-                              Purchased · Rep: {c.assignedTo || "—"}
-                            </small>
-                          </div>
-                          <button
-                            type="button"
-                            className="open-btn"
-                            onClick={() => openProfile(c)}
+                        <div className="funnel-label">
+                          <span
+                            className={`status-badge ${statusClass(label)}`}
                           >
-                            Re-engage
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                )}
-              </div>
-            )}
-
-            <div className="dash-grid">
-              <article className="panel">
-                <p className="eyebrow">Leads by Source</p>
-                <h2>Where buyers come from</h2>
-                <div className="report-table">
-                  {leadsBySource.map(([src, count]) => (
-                    <div className="report-row" key={src}>
-                      <span>{src}</span>
-                      <div className="report-bar-wrap">
-                        <div
-                          className="report-bar"
-                          style={{
-                            width: `${Math.round((count / customers.length) * 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <strong>{count}</strong>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="panel">
-                <p className="eyebrow">Deal Pipeline</p>
-                <h2>Working → Delivered</h2>
-                <div className="pipeline-board">
-                  {pipelineStages.map((col) => (
-                    <div className="pipeline-column" key={col.stage}>
-                      <div className="pipeline-col-header">
-                        <strong>{col.stage}</strong>
-                        <small>${col.value.toLocaleString()}</small>
-                      </div>
-                      {col.sales.map((sale) => (
-                        <button
-                          type="button"
-                          key={sale.id}
-                          className="pipeline-card"
-                          onClick={() => {
-                            const c = customers.find(
-                              (x) => x.id === sale.customerId,
-                            );
-                            if (c) openProfile(c);
-                          }}
-                        >
-                          <span>
-                            {sale.year} {sale.make} {sale.model}
+                            {label}
                           </span>
-                          <small>{getCustomerName(sale.customerId)}</small>
-                        </button>
-                      ))}
-                      {col.sales.length === 0 && (
-                        <small className="empty-col">No deals</small>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <article className="panel">
-                <p className="eyebrow">Uncontacted Leads</p>
-                <h2>Need immediate response</h2>
-                <div className="lead-list">
-                  {urgentLeads.length === 0 && (
-                    <p className="empty-state">
-                      All leads have been contacted. ✓
-                    </p>
-                  )}
-                  {urgentLeads.slice(0, 5).map((c) => (
-                    <div className="lead-card urgent-card" key={c.id}>
-                      <div>
-                        <strong>
-                          {c.firstName} {c.lastName}
-                        </strong>
-                        <span>{c.interestedVehicle}</span>
-                        <span className="source-tag">
-                          {c.source || "Unknown source"}
-                        </span>
+                          <strong>{count}</strong>
+                          <small>{pct}%</small>
+                        </div>
                       </div>
-                      <button type="button" onClick={() => openProfile(c)}>
-                        Open
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
+                </div>
+                <div className="funnel-kpi-row">
+                  <div className="funnel-kpi">
+                    <span>Contact Rate</span>
+                    <strong>{leadToContact}%</strong>
+                  </div>
+                  <div className="funnel-kpi">
+                    <span>Show Rate</span>
+                    <strong>{apptShowRate}%</strong>
+                  </div>
+                  <div className="funnel-kpi">
+                    <span>Closing Ratio</span>
+                    <strong>{closingRatio}%</strong>
+                  </div>
+                  <div className="funnel-kpi">
+                    <span>Deals Decided</span>
+                    <strong>{decidedDeals}</strong>
+                  </div>
                 </div>
               </article>
 
-              <article className="panel">
-                <p className="eyebrow">Active Appointments</p>
-                <h2>Scheduled visits</h2>
-                <div className="lead-list">
-                  {customers.filter(
-                    (c) => c.status === "Appt Set" || c.status === "Appt Show",
-                  ).length === 0 && (
-                    <p className="empty-state">No appointments scheduled.</p>
+              {/* ── Stalled Deals + Equity Mining row ── */}
+              {(stalledLeads.length > 0 || equityTargets.length > 0) && (
+                <div className="dash-grid" style={{ marginTop: 18 }}>
+                  {stalledLeads.length > 0 && (
+                    <article className="panel">
+                      <p className="eyebrow stalled-eye">Stalled Deals</p>
+                      <h2>No activity in 3+ days</h2>
+                      <div className="lead-list">
+                        {stalledLeads.map((c) => (
+                          <div className="lead-card stalled-card" key={c.id}>
+                            <div>
+                              <strong>
+                                {c.firstName} {c.lastName}
+                              </strong>
+                              <span>{c.interestedVehicle}</span>
+                              <small>
+                                <span
+                                  className={`status-badge ${statusClass(c.status)}`}
+                                >
+                                  {c.status}
+                                </span>
+                                {" · "}
+                                {c.assignedTo || "Unassigned"}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              className="open-btn"
+                              onClick={() => openProfile(c)}
+                            >
+                              Log Activity
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
                   )}
-                  {customers
-                    .filter(
-                      (c) =>
-                        c.status === "Appt Set" || c.status === "Appt Show",
-                    )
-                    .map((c) => (
-                      <div className="lead-card" key={c.id}>
+                  {equityTargets.length > 0 && (
+                    <article className="panel">
+                      <p className="eyebrow equity-eye">Equity Mining</p>
+                      <h2>Re-engagement targets</h2>
+                      <p className="panel-note">
+                        Past buyers — potential trade-up or repeat purchase
+                      </p>
+                      <div className="lead-list">
+                        {equityTargets.map((c) => (
+                          <div className="lead-card equity-card" key={c.id}>
+                            <div>
+                              <strong>
+                                {c.firstName} {c.lastName}
+                              </strong>
+                              <span>{c.interestedVehicle}</span>
+                              <small>
+                                Purchased · Rep: {c.assignedTo || "—"}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              className="open-btn"
+                              onClick={() => openProfile(c)}
+                            >
+                              Re-engage
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  )}
+                </div>
+              )}
+
+              <div className="dash-grid">
+                <article className="panel">
+                  <p className="eyebrow">Leads by Source</p>
+                  <h2>Where buyers come from</h2>
+                  <div className="report-table">
+                    {leadsBySource.map(([src, count]) => (
+                      <div className="report-row" key={src}>
+                        <span>{src}</span>
+                        <div className="report-bar-wrap">
+                          <div
+                            className="report-bar"
+                            style={{
+                              width: `${Math.round((count / customers.length) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <strong>{count}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="panel">
+                  <p className="eyebrow">Deal Pipeline</p>
+                  <h2>Working → Delivered</h2>
+                  <div className="pipeline-board">
+                    {pipelineStages.map((col) => (
+                      <div className="pipeline-column" key={col.stage}>
+                        <div className="pipeline-col-header">
+                          <strong>{col.stage}</strong>
+                          <small>${col.value.toLocaleString()}</small>
+                        </div>
+                        {col.sales.map((sale) => (
+                          <button
+                            type="button"
+                            key={sale.id}
+                            className="pipeline-card"
+                            onClick={() => {
+                              const c = customers.find(
+                                (x) => x.id === sale.customerId,
+                              );
+                              if (c) openProfile(c);
+                            }}
+                          >
+                            <span>
+                              {sale.year} {sale.make} {sale.model}
+                            </span>
+                            <small>{getCustomerName(sale.customerId)}</small>
+                          </button>
+                        ))}
+                        {col.sales.length === 0 && (
+                          <small className="empty-col">No deals</small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="panel">
+                  <p className="eyebrow">Uncontacted Leads</p>
+                  <h2>Need immediate response</h2>
+                  <div className="lead-list">
+                    {urgentLeads.length === 0 && (
+                      <p className="empty-state">
+                        All leads have been contacted. ✓
+                      </p>
+                    )}
+                    {urgentLeads.slice(0, 5).map((c) => (
+                      <div className="lead-card urgent-card" key={c.id}>
                         <div>
                           <strong>
                             {c.firstName} {c.lastName}
                           </strong>
                           <span>{c.interestedVehicle}</span>
-                          <small>
-                            Rep: {c.assignedTo || "Unassigned"} ·{" "}
-                            {c.nextFollowUp || "No time set"}
-                          </small>
+                          <span className="source-tag">
+                            {c.source || "Unknown source"}
+                          </span>
                         </div>
                         <button type="button" onClick={() => openProfile(c)}>
-                          View
+                          Open
                         </button>
                       </div>
                     ))}
-                </div>
-              </article>
-            </div>
+                  </div>
+                </article>
 
-            {/* My Day / Work Plan */}
-            <article className="panel" style={{ marginTop: 18 }}>
-              <p className="eyebrow">My Day — Work Plan</p>
-              <h2>Priority follow-ups right now</h2>
-              <div className="my-day-grid">
-                <div className="my-day-col">
-                  <p className="my-day-label urgent">
-                    🔴 Uncontacted — Act Now
-                  </p>
-                  {urgentLeads.length === 0 ? (
-                    <p className="empty-state">No uncontacted leads. 🎉</p>
-                  ) : (
-                    urgentLeads.slice(0, 4).map((c) => (
-                      <div className="my-day-card" key={c.id}>
-                        <div>
-                          <strong>
-                            {c.firstName} {c.lastName}
-                          </strong>
-                          <span>{c.interestedVehicle}</span>
-                          <small>
-                            {c.source || "Unknown source"} ·{" "}
-                            {c.assignedTo
-                              ? `Rep: ${c.assignedTo}`
-                              : "Unassigned"}
-                          </small>
-                        </div>
-                        <div className="my-day-btns">
-                          <button type="button" onClick={() => openProfile(c)}>
-                            Open
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="my-day-col">
-                  <p className="my-day-label appt">🟡 Appointments Today</p>
-                  {customers.filter(
-                    (c) => c.status === "Appt Set" || c.status === "Appt Show",
-                  ).length === 0 ? (
-                    <p className="empty-state">No appointments scheduled.</p>
-                  ) : (
-                    customers
+                <article className="panel">
+                  <p className="eyebrow">Active Appointments</p>
+                  <h2>Scheduled visits</h2>
+                  <div className="lead-list">
+                    {customers.filter(
+                      (c) =>
+                        c.status === "Appt Set" || c.status === "Appt Show",
+                    ).length === 0 && (
+                      <p className="empty-state">No appointments scheduled.</p>
+                    )}
+                    {customers
                       .filter(
                         (c) =>
                           c.status === "Appt Set" || c.status === "Appt Show",
                       )
-                      .slice(0, 4)
                       .map((c) => (
-                        <div className="my-day-card" key={c.id}>
+                        <div className="lead-card" key={c.id}>
                           <div>
                             <strong>
                               {c.firstName} {c.lastName}
@@ -2886,2356 +2919,2465 @@ function App() {
                             <span>{c.interestedVehicle}</span>
                             <small>
                               Rep: {c.assignedTo || "Unassigned"} ·{" "}
-                              {c.nextFollowUp || "Time TBD"}
+                              {c.nextFollowUp || "No time set"}
                             </small>
                           </div>
                           <button type="button" onClick={() => openProfile(c)}>
                             View
                           </button>
                         </div>
-                      ))
-                  )}
-                </div>
-                <div className="my-day-col">
-                  <p className="my-day-label finance">
-                    🟢 Finance Awaiting Decision
-                  </p>
-                  {financeApplications.filter((a) => a.status === "Submitted")
-                    .length === 0 ? (
-                    <p className="empty-state">No pending finance apps.</p>
-                  ) : (
-                    financeApplications
-                      .filter((a) => a.status === "Submitted")
-                      .slice(0, 4)
-                      .map((a) => (
-                        <div className="my-day-card" key={a.id}>
+                      ))}
+                  </div>
+                </article>
+              </div>
+
+              {/* My Day / Work Plan */}
+              <article className="panel" style={{ marginTop: 18 }}>
+                <p className="eyebrow">My Day — Work Plan</p>
+                <h2>Priority follow-ups right now</h2>
+                <div className="my-day-grid">
+                  <div className="my-day-col">
+                    <p className="my-day-label urgent">
+                      🔴 Uncontacted — Act Now
+                    </p>
+                    {urgentLeads.length === 0 ? (
+                      <p className="empty-state">No uncontacted leads. 🎉</p>
+                    ) : (
+                      urgentLeads.slice(0, 4).map((c) => (
+                        <div className="my-day-card" key={c.id}>
                           <div>
-                            <strong>
-                              {a.applicantName || getCustomerName(a.customerId)}
-                            </strong>
-                            <span>{a.requestedVehicle || "Vehicle TBD"}</span>
-                            <small>
-                              ${a.downPayment.toLocaleString()} down ·{" "}
-                              {a.creditRange}
-                            </small>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const c = customers.find(
-                                (x) => x.id === a.customerId,
-                              );
-                              if (c) openProfile(c);
-                            }}
-                          >
-                            View
-                          </button>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </div>
-            </article>
-          </>
-        )}
-
-        {/* ── LEADS INBOX ──────────────────────────────────────── */}
-        {currentPage === "leads" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Lead Inbox</p>
-                <h1>Internet & Phone Leads</h1>
-                <p className="page-subtitle">
-                  New leads from web forms, third-party providers, phone calls,
-                  and walk-ins. Assign and work each lead before they go cold.
-                </p>
-              </div>
-              <div className="header-actions">
-                <button type="button" onClick={() => navigate("customers")}>
-                  + Add Lead Manually
-                </button>
-              </div>
-            </header>
-            <div className="filter-bar">
-              <span className="filter-label">Filter:</span>
-              {["All", "Lead", "Appointment"].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={
-                    customerStatusFilter === s
-                      ? "filter-pill active"
-                      : "filter-pill"
-                  }
-                  onClick={() => setCustomerStatusFilter(s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            <div className="lead-inbox">
-              {internetLeads.length === 0 && (
-                <p className="empty-state large">
-                  No incoming leads. Add customers with a web/internet source to
-                  see them here.
-                </p>
-              )}
-              {internetLeads.map((c) => (
-                <div className="inbox-card" key={c.id}>
-                  <div className="inbox-card-top">
-                    <div className="inbox-name-row">
-                      <strong>
-                        {c.firstName} {c.lastName}
-                      </strong>
-                      <span className={`status-badge ${statusClass(c.status)}`}>
-                        {c.status}
-                      </span>
-                      {c.temperature && (
-                        <span
-                          className={`temp-badge ${tempClass(c.temperature)}`}
-                        >
-                          {c.temperature}
-                        </span>
-                      )}
-                      {!activities.some((a) => a.customerId === c.id) && (
-                        <span className="badge-urgent">No contact yet</span>
-                      )}
-                    </div>
-                    <div className="inbox-card-meta">
-                      <span className="source-tag">
-                        {c.source || "Unknown source"}
-                      </span>
-                      {c.createdAt && (
-                        <span
-                          className={`speed-to-lead ${Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 ? "speed-hot" : Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 * 24 ? "speed-warm" : "speed-cold"}`}
-                        >
-                          ⏱ {timeAgo(c.createdAt)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="inbox-card-mid">
-                    <span>📞 {c.phone}</span>
-                    <span>✉ {c.email || "No email"}</span>
-                    <span>🚗 {c.interestedVehicle}</span>
-                  </div>
-                  <div className="inbox-card-actions">
-                    <span className="assign-label">Assign to:</span>
-                    {["Avery", "Mike", "Sarah", "Dan"].map((rep) => (
-                      <button
-                        key={rep}
-                        type="button"
-                        className={
-                          c.assignedTo === rep ? "rep-btn active" : "rep-btn"
-                        }
-                        onClick={() => assignLead(c, rep)}
-                      >
-                        {rep}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="open-btn"
-                      onClick={() => openProfile(c)}
-                    >
-                      Open Deal Jacket →
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ── CUSTOMERS ────────────────────────────────────────── */}
-        {currentPage === "customers" &&
-          (() => {
-            const totalPages = Math.max(
-              1,
-              Math.ceil(filteredCustomers.length / custPageSize),
-            );
-            const safePage = Math.min(custPage, totalPages - 1);
-            const pageSlice = filteredCustomers.slice(
-              safePage * custPageSize,
-              (safePage + 1) * custPageSize,
-            );
-
-            function toggleSort(col: typeof customerSortCol) {
-              if (customerSortCol === col)
-                setCustomerSortDir((d) => (d === "asc" ? "desc" : "asc"));
-              else {
-                setCustomerSortCol(col);
-                setCustomerSortDir("asc");
-              }
-              setCustPage(0);
-            }
-            function SortIcon({ col }: { col: typeof customerSortCol }) {
-              if (customerSortCol !== col)
-                return <span className="sort-icon inactive">⇅</span>;
-              return (
-                <span className="sort-icon active">
-                  {customerSortDir === "asc" ? "↑" : "↓"}
-                </span>
-              );
-            }
-
-            return (
-              <>
-                <header className="page-header">
-                  <div>
-                    <p className="eyebrow">Customer Database</p>
-                    <h1>All Customers</h1>
-                  </div>
-                  <div className="header-actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddForm((v) => !v);
-                        if (editingCustomerId) resetCustomerForm();
-                      }}
-                    >
-                      {showAddForm || editingCustomerId
-                        ? "✕ Close Form"
-                        : "+ Add Customer"}
-                    </button>
-                  </div>
-                </header>
-
-                {/* Add / Edit Form — collapsible */}
-                {(showAddForm || editingCustomerId) && (
-                  <article className="panel" style={{ marginBottom: 14 }}>
-                    <div className="panel-header">
-                      <p className="eyebrow">
-                        {editingCustomerId
-                          ? "Editing Customer"
-                          : "Add New Customer / Lead"}
-                      </p>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => {
-                          resetCustomerForm();
-                          setShowAddForm(false);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <form className="contact-form" onSubmit={saveCustomer}>
-                      <input
-                        placeholder="First name *"
-                        value={customerForm.firstName}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            firstName: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                      <input
-                        placeholder="Last name"
-                        value={customerForm.lastName}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            lastName: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Phone"
-                        value={customerForm.phone}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            phone: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Email"
-                        value={customerForm.email}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            email: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Vehicle of interest"
-                        value={customerForm.interestedVehicle}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            interestedVehicle: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Lead source"
-                        value={customerForm.source}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            source: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Assigned rep"
-                        value={customerForm.assignedTo}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            assignedTo: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Next follow-up"
-                        value={customerForm.nextFollowUp}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            nextFollowUp: e.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        value={customerForm.status}
-                        onChange={(e) =>
-                          setCustomerForm({
-                            ...customerForm,
-                            status: e.target.value as Customer["status"],
-                          })
-                        }
-                      >
-                        <option>New Lead</option>
-                        <option>Contacted</option>
-                        <option>Appt Set</option>
-                        <option>Appt Show</option>
-                        <option>Working</option>
-                        <option>Sold</option>
-                        <option>Lost</option>
-                      </select>
-                      <button type="submit">
-                        {editingCustomerId ? "Save Changes" : "Add Customer"}
-                      </button>
-                    </form>
-                  </article>
-                )}
-
-                {/* Search + filter toolbar */}
-                <div className="cust-toolbar">
-                  <input
-                    className="cust-search"
-                    placeholder="🔍  Name, phone, email, or vehicle..."
-                    value={customerSearch}
-                    onChange={(e) => {
-                      setCustomerSearch(e.target.value);
-                      setCustPage(0);
-                    }}
-                    autoComplete="off"
-                  />
-                  <select
-                    className="filter-select"
-                    value={customerStatusFilter}
-                    onChange={(e) => {
-                      setCustomerStatusFilter(e.target.value);
-                      setCustPage(0);
-                    }}
-                  >
-                    <option value="All">All statuses</option>
-                    <option>New Lead</option>
-                    <option>Contacted</option>
-                    <option>Appt Set</option>
-                    <option>Appt Show</option>
-                    <option>Working</option>
-                    <option>Sold</option>
-                    <option>Lost</option>
-                  </select>
-                  <select
-                    className="filter-select"
-                    value={customerSourceFilter}
-                    onChange={(e) => {
-                      setCustomerSourceFilter(e.target.value);
-                      setCustPage(0);
-                    }}
-                  >
-                    <option value="All">All sources</option>
-                    <option>Cars.com</option>
-                    <option>AutoTrader</option>
-                    <option>Website Lead</option>
-                    <option>Walk-in</option>
-                    <option>Referral</option>
-                    <option>Phone Call</option>
-                  </select>
-                  <div className="cust-toolbar-right">
-                    <span className="result-count">
-                      {filteredCustomers.length.toLocaleString()} of{" "}
-                      {customers.length.toLocaleString()}
-                    </span>
-                    <select
-                      className="filter-select"
-                      value={custPageSize}
-                      onChange={(e) => {
-                        setCustPageSize(Number(e.target.value));
-                        setCustPage(0);
-                      }}
-                    >
-                      <option value={25}>25 / page</option>
-                      <option value={50}>50 / page</option>
-                      <option value={100}>100 / page</option>
-                      <option value={250}>250 / page</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Data table */}
-                <div className="cust-table-wrap">
-                  <table className="cust-table">
-                    <thead>
-                      <tr>
-                        <th
-                          className="sortable"
-                          onClick={() => toggleSort("name")}
-                        >
-                          Name <SortIcon col="name" />
-                        </th>
-                        <th>Phone</th>
-                        <th>Email</th>
-                        <th
-                          className="sortable"
-                          onClick={() => toggleSort("vehicle")}
-                        >
-                          Vehicle <SortIcon col="vehicle" />
-                        </th>
-                        <th
-                          className="sortable"
-                          onClick={() => toggleSort("status")}
-                        >
-                          Status <SortIcon col="status" />
-                        </th>
-                        <th>Source</th>
-                        <th
-                          className="sortable"
-                          onClick={() => toggleSort("rep")}
-                        >
-                          Rep <SortIcon col="rep" />
-                        </th>
-                        <th
-                          className="sortable"
-                          onClick={() => toggleSort("created")}
-                        >
-                          Added <SortIcon col="created" />
-                        </th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageSlice.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={9}
-                            className="empty-state"
-                            style={{ textAlign: "center", padding: 32 }}
-                          >
-                            No customers match your filters.
-                          </td>
-                        </tr>
-                      )}
-                      {pageSlice.map((c) => (
-                        <tr
-                          key={c.id}
-                          className="cust-tr"
-                          onClick={() => openProfile(c)}
-                        >
-                          <td className="cust-name-cell">
                             <strong>
                               {c.firstName} {c.lastName}
                             </strong>
-                            {c.temperature && (
-                              <span
-                                className={`temp-badge ${tempClass(c.temperature)}`}
-                              >
-                                {c.temperature}
-                              </span>
-                            )}
-                          </td>
-                          <td className="cust-phone">{c.phone}</td>
-                          <td className="cust-email">
-                            {c.email || <span className="muted">—</span>}
-                          </td>
-                          <td className="cust-vehicle">
-                            {c.interestedVehicle || (
-                              <span className="muted">—</span>
-                            )}
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <span
-                              className={`status-badge ${statusClass(c.status)}`}
+                            <span>{c.interestedVehicle}</span>
+                            <small>
+                              {c.source || "Unknown source"} ·{" "}
+                              {c.assignedTo
+                                ? `Rep: ${c.assignedTo}`
+                                : "Unassigned"}
+                            </small>
+                          </div>
+                          <div className="my-day-btns">
+                            <button
+                              type="button"
+                              onClick={() => openProfile(c)}
                             >
-                              {c.status}
-                            </span>
-                          </td>
-                          <td className="muted">{c.source || "—"}</td>
-                          <td className="muted">
-                            {c.assignedTo || (
-                              <span className="unassigned">Unassigned</span>
-                            )}
-                          </td>
-                          <td className="muted">
-                            {c.createdAt ? timeAgo(c.createdAt) : "—"}
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="cust-actions">
-                              <button
-                                type="button"
-                                className="cust-action-btn"
-                                title="Open Deal Jacket"
-                                onClick={() => openProfile(c)}
-                              >
-                                Open
-                              </button>
-                              <button
-                                type="button"
-                                className="cust-action-btn ghost"
-                                title="Edit"
-                                onClick={() => {
-                                  editCustomer(c);
-                                  setShowAddForm(true);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="cust-action-btn danger"
-                                title="Delete"
-                                onClick={() => deleteCustomer(c.id)}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="cust-pagination">
-                    <button
-                      type="button"
-                      className="page-btn"
-                      disabled={safePage === 0}
-                      onClick={() => setCustPage(0)}
-                    >
-                      «
-                    </button>
-                    <button
-                      type="button"
-                      className="page-btn"
-                      disabled={safePage === 0}
-                      onClick={() => setCustPage(safePage - 1)}
-                    >
-                      ‹ Prev
-                    </button>
-                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                      const start = Math.max(
-                        0,
-                        Math.min(safePage - 3, totalPages - 7),
-                      );
-                      const p = start + i;
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          className={`page-btn${p === safePage ? " active" : ""}`}
-                          onClick={() => setCustPage(p)}
-                        >
-                          {p + 1}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="page-btn"
-                      disabled={safePage === totalPages - 1}
-                      onClick={() => setCustPage(safePage + 1)}
-                    >
-                      Next ›
-                    </button>
-                    <button
-                      type="button"
-                      className="page-btn"
-                      disabled={safePage === totalPages - 1}
-                      onClick={() => setCustPage(totalPages - 1)}
-                    >
-                      »
-                    </button>
-                    <span className="page-info">
-                      Page {safePage + 1} of {totalPages} ·{" "}
-                      {filteredCustomers.length.toLocaleString()} records
-                    </span>
-                  </div>
-                )}
-              </>
-            );
-          })()}
-
-        {/* ── FINANCE ──────────────────────────────────────────── */}
-        {currentPage === "finance" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">F&I Manager</p>
-                <h1>Finance Applications</h1>
-                <p className="page-subtitle">
-                  Review and update status on all finance and credit
-                  applications across every deal. Open a customer deal jacket to
-                  submit a new one.
-                </p>
-              </div>
-            </header>
-            <div
-              className="kpi-grid"
-              style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 18 }}
-            >
-              <div className="kpi-card kpi-blue">
-                <span>Total Apps</span>
-                <strong>{financeApplications.length}</strong>
-              </div>
-              <div className="kpi-card kpi-yellow">
-                <span>Pending</span>
-                <strong>{pendingFinance}</strong>
-              </div>
-              <div className="kpi-card kpi-green">
-                <span>Approved</span>
-                <strong>
-                  {
-                    financeApplications.filter((a) => a.status === "Approved")
-                      .length
-                  }
-                </strong>
-              </div>
-            </div>
-            <div className="deal-list">
-              {financeApplications.length === 0 && (
-                <p className="empty-state">
-                  No finance applications yet. Open a customer deal jacket to
-                  submit one.
-                </p>
-              )}
-              {financeApplications.map((app) => (
-                <div
-                  className="deal-card clickable"
-                  key={app.id}
-                  onClick={() => {
-                    const c = customers.find((x) => x.id === app.customerId);
-                    if (c) openProfile(c);
-                  }}
-                >
-                  <div className="deal-card-main">
-                    <strong>
-                      {app.applicantName || getCustomerName(app.customerId)}
-                    </strong>
-                    <span>
-                      {app.requestedVehicle || getCustomerName(app.customerId)}
-                    </span>
-                    <span>
-                      ${app.monthlyIncome.toLocaleString()}/mo · $
-                      {app.downPayment.toLocaleString()} down ·{" "}
-                      {app.creditRange}
-                    </span>
-                    {app.lender && <small>Lender: {app.lender}</small>}
-                  </div>
-                  <select
-                    value={app.status}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) =>
-                      updateFinanceStatus(
-                        app.id,
-                        e.target.value as FinanceApplication["status"],
-                      )
-                    }
-                  >
-                    <option>New</option>
-                    <option>Submitted</option>
-                    <option>Approved</option>
-                    <option>Needs Review</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ── PIPELINE ─────────────────────────────────────────── */}
-        {currentPage === "pipeline" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Sales Pipeline</p>
-                <h1>Deals by Stage</h1>
-                <p className="page-subtitle">
-                  Track every active deal from initial desk to delivery. Click
-                  any deal card to open the customer's deal jacket.
-                </p>
-              </div>
-            </header>
-            <div className="pipeline-full">
-              {pipelineStages.map((col) => (
-                <div className="pipeline-col-full" key={col.stage}>
-                  <div className="pipeline-col-header">
-                    <strong>{col.stage}</strong>
-                    <span>
-                      {col.sales.length} deal{col.sales.length !== 1 ? "s" : ""}{" "}
-                      · ${col.value.toLocaleString()}
-                    </span>
-                  </div>
-                  {col.sales.length === 0 && (
-                    <p className="empty-state">No deals in this stage.</p>
-                  )}
-                  {col.sales.map((sale) => (
-                    <div
-                      className="pipeline-card-full"
-                      key={sale.id}
-                      onClick={() => {
-                        const c = customers.find(
-                          (x) => x.id === sale.customerId,
-                        );
-                        if (c) openProfile(c);
-                      }}
-                    >
-                      <strong>
-                        {sale.year} {sale.make} {sale.model}
-                      </strong>
-                      <span>Stock #{sale.stockNumber}</span>
-                      <span>${sale.salePrice.toLocaleString()}</span>
-                      <small>{getCustomerName(sale.customerId)}</small>
-                      <select
-                        value={sale.stage}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          updateSaleStage(
-                            sale.id,
-                            e.target.value as VehicleSale["stage"],
-                          )
-                        }
-                      >
-                        <option>Working</option>
-                        <option>Finance</option>
-                        <option>Delivered</option>
-                        <option>Lost</option>
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            {/* Desk / Payment Calculator */}
-            <article className="panel" style={{ marginTop: 24 }}>
-              <p className="eyebrow">Deal Desk</p>
-              <h2>Payment Calculator</h2>
-              <div className="desk-calc-grid">
-                <div className="desk-input-group">
-                  <label>Sale Price ($)</label>
-                  <input
-                    placeholder="e.g. 38995"
-                    value={deskCalc.salePrice}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, salePrice: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="desk-input-group">
-                  <label>Trade ACV ($)</label>
-                  <input
-                    placeholder="e.g. 12000"
-                    value={deskCalc.tradeACV}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, tradeACV: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="desk-input-group">
-                  <label>Trade Payoff ($)</label>
-                  <input
-                    placeholder="e.g. 8000"
-                    value={deskCalc.tradePayoff}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, tradePayoff: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="desk-input-group">
-                  <label>Down Payment ($)</label>
-                  <input
-                    placeholder="e.g. 3000"
-                    value={deskCalc.downPayment}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, downPayment: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="desk-input-group">
-                  <label>APR (%)</label>
-                  <input
-                    value={deskCalc.apr}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, apr: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="desk-input-group">
-                  <label>Term (months)</label>
-                  <select
-                    value={deskCalc.termMonths}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, termMonths: e.target.value })
-                    }
-                  >
-                    <option>24</option>
-                    <option>36</option>
-                    <option>48</option>
-                    <option>60</option>
-                    <option>72</option>
-                    <option>84</option>
-                  </select>
-                </div>
-                <div className="desk-input-group">
-                  <label>Tax Rate (%)</label>
-                  <input
-                    value={deskCalc.taxRate}
-                    onChange={(e) =>
-                      setDeskCalc({ ...deskCalc, taxRate: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              {deskPayment.monthly > 0 && (
-                <div className="desk-result">
-                  <div className="desk-result-main">
-                    <span>Est. Monthly Payment</span>
-                    <strong>${deskPayment.monthly.toFixed(2)}/mo</strong>
-                  </div>
-                  <div className="desk-result-breakdown">
-                    <span>
-                      Amount Financed:{" "}
-                      <b>
-                        $
-                        {deskPayment.amount.toLocaleString(undefined, {
-                          maximumFractionDigits: 0,
-                        })}
-                      </b>
-                    </span>
-                    <span>
-                      Trade Equity:{" "}
-                      <b
-                        className={
-                          deskPayment.tradeEquity >= 0
-                            ? "kpi-green-text"
-                            : "badge-danger"
-                        }
-                      >
-                        $
-                        {deskPayment.tradeEquity.toLocaleString(undefined, {
-                          maximumFractionDigits: 0,
-                        })}
-                      </b>
-                    </span>
-                    <span>
-                      Est. Tax:{" "}
-                      <b>
-                        $
-                        {deskPayment.taxed.toLocaleString(undefined, {
-                          maximumFractionDigits: 0,
-                        })}
-                      </b>
-                    </span>
-                  </div>
-                </div>
-              )}
-            </article>
-
-            <article className="panel" style={{ marginTop: 24 }}>
-              <p className="eyebrow">Add Vehicle to Pipeline</p>
-              <form className="contact-form" onSubmit={addVehicleSale}>
-                <select
-                  value={saleForm.customerId}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, customerId: e.target.value })
-                  }
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  placeholder="Stock #"
-                  value={saleForm.stockNumber}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, stockNumber: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Year"
-                  value={saleForm.year}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, year: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Make"
-                  value={saleForm.make}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, make: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Model"
-                  value={saleForm.model}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, model: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Sale price ($)"
-                  value={saleForm.salePrice}
-                  onChange={(e) =>
-                    setSaleForm({ ...saleForm, salePrice: e.target.value })
-                  }
-                />
-                <select
-                  value={saleForm.stage}
-                  onChange={(e) =>
-                    setSaleForm({
-                      ...saleForm,
-                      stage: e.target.value as VehicleSale["stage"],
-                    })
-                  }
-                >
-                  <option>Working</option>
-                  <option>Finance</option>
-                  <option>Delivered</option>
-                  <option>Lost</option>
-                </select>
-                <button type="submit">Add to Pipeline</button>
-              </form>
-            </article>
-          </>
-        )}
-
-        {/* ── TRADES ───────────────────────────────────────────── */}
-        {currentPage === "trades" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Trade-In Manager</p>
-                <h1>Vehicle Appraisals</h1>
-              </div>
-            </header>
-            <article className="panel" style={{ marginBottom: 18 }}>
-              <p className="eyebrow">Add Trade-In</p>
-              <form className="contact-form" onSubmit={addTradeIn}>
-                <select
-                  value={tradeForm.customerId}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, customerId: e.target.value })
-                  }
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  placeholder="Year"
-                  value={tradeForm.year}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, year: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Make"
-                  value={tradeForm.make}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, make: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Model"
-                  value={tradeForm.model}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, model: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Mileage"
-                  value={tradeForm.mileage}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, mileage: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Payoff amount ($)"
-                  value={tradeForm.payoff}
-                  onChange={(e) =>
-                    setTradeForm({ ...tradeForm, payoff: e.target.value })
-                  }
-                />
-                <input
-                  placeholder="Estimated ACV ($)"
-                  value={tradeForm.estimatedValue}
-                  onChange={(e) =>
-                    setTradeForm({
-                      ...tradeForm,
-                      estimatedValue: e.target.value,
-                    })
-                  }
-                />
-                <button type="submit">Add Trade</button>
-              </form>
-            </article>
-            <div className="customer-table">
-              {tradeIns.length === 0 && (
-                <p className="empty-state large">No trade-ins recorded yet.</p>
-              )}
-              {tradeIns.map((t) => (
-                <div className="cust-row" key={t.id}>
-                  <div className="cust-main">
-                    <strong>
-                      {t.year} {t.make} {t.model}
-                    </strong>
-                    <span>{t.mileage.toLocaleString()} miles</span>
-                  </div>
-                  <span className="cust-contact">
-                    {getCustomerName(t.customerId)}
-                  </span>
-                  <span>ACV: ${t.estimatedValue.toLocaleString()}</span>
-                  <span>Payoff: ${t.payoff.toLocaleString()}</span>
-                  <span
-                    className={
-                      t.estimatedValue - t.payoff >= 0
-                        ? "kpi-green-text"
-                        : "badge-danger"
-                    }
-                  >
-                    Equity: ${(t.estimatedValue - t.payoff).toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ── VIN ──────────────────────────────────────────────── */}
-        {currentPage === "vin" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">VIN Decoder</p>
-                <h1>Look Up Any Vehicle</h1>
-                <p className="page-subtitle">
-                  Decode any 17-character VIN using the NHTSA database — year,
-                  make, model, trim, engine, and body class instantly.
-                </p>
-              </div>
-            </header>
-            <article className="panel">
-              <form className="stack-form" onSubmit={lookupVin}>
-                <input
-                  placeholder="Enter 17-character VIN"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  maxLength={17}
-                  style={{ fontFamily: "monospace", letterSpacing: 2 }}
-                />
-                <button type="submit" disabled={vinLoading}>
-                  {vinLoading ? "Looking up..." : "Decode VIN"}
-                </button>
-              </form>
-              {vinError && <p className="auth-error">{vinError}</p>}
-              {vinResult && (
-                <div className="vin-card">
-                  {vinResult.warning && (
-                    <p className="vin-warning">⚠ {vinResult.warning}</p>
-                  )}
-                  <strong className="vin-title">
-                    {vinResult.year} {vinResult.make} {vinResult.model}
-                    {vinResult.trim && vinResult.trim !== "—"
-                      ? ` — ${vinResult.trim}`
-                      : ""}
-                  </strong>
-                  <div className="vin-grid">
-                    <div>
-                      <span>VIN</span>
-                      <b style={{ fontFamily: "monospace", letterSpacing: 1 }}>
-                        {vinResult.vin}
-                      </b>
-                    </div>
-                    <div>
-                      <span>Body Style</span>
-                      <b>{vinResult.bodyClass}</b>
-                    </div>
-                    <div>
-                      <span>Engine</span>
-                      <b>{vinResult.engine}</b>
-                    </div>
-                    <div>
-                      <span>Drive Type</span>
-                      <b>{vinResult.driveType}</b>
-                    </div>
-                    <div>
-                      <span>Transmission</span>
-                      <b>{vinResult.transmission}</b>
-                    </div>
-                    <div>
-                      <span>Fuel Type</span>
-                      <b>{vinResult.fuelType}</b>
-                    </div>
-                    <div>
-                      <span>Doors</span>
-                      <b>{vinResult.doors}</b>
-                    </div>
-                    <div>
-                      <span>Manufacturer</span>
-                      <b>{vinResult.manufacturer}</b>
-                    </div>
-                    <div>
-                      <span>Plant Country</span>
-                      <b>{vinResult.country}</b>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </article>
-          </>
-        )}
-
-        {/* ── DESK TOOL ────────────────────────────────────────── */}
-        {currentPage === "desk" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Deal Desk</p>
-                <h1>Structure a Deal</h1>
-                <p className="page-subtitle">
-                  Build the full deal — vehicle, trade, F&I products, taxes,
-                  fees — and see the real monthly payment and amount financed
-                  instantly.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() =>
-                  setDesk({
-                    customerId: "",
-                    stockNumber: "",
-                    year: "",
-                    make: "",
-                    model: "",
-                    trim: "",
-                    msrp: "",
-                    sellingPrice: "",
-                    tradeYear: "",
-                    tradeMake: "",
-                    tradeModel: "",
-                    tradeACV: "",
-                    tradePayoff: "",
-                    downPayment: "",
-                    rebate: "",
-                    docFee: "699",
-                    titleFee: "100",
-                    regFee: "200",
-                    taxRate: "8.5",
-                    gap: false,
-                    gapPrice: "895",
-                    warranty: false,
-                    warrantyPrice: "2495",
-                    tireWheel: false,
-                    tirewheelPrice: "1195",
-                    paintPro: false,
-                    paintProPrice: "799",
-                    creditLife: false,
-                    creditLifePrice: "599",
-                    apr: "7.9",
-                    termMonths: "72",
-                    lender: "",
-                  })
-                }
-              >
-                Clear Desk
-              </button>
-            </header>
-
-            <div className="desk-layout">
-              {/* ── LEFT: Deal Builder ── */}
-              <div className="desk-builder">
-                {/* Customer */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Customer</p>
-                  <div className="desk-row">
-                    <div className="desk-field full">
-                      <label>Select Customer</label>
-                      <select
-                        value={desk.customerId}
-                        onChange={(e) =>
-                          setDesk({ ...desk, customerId: e.target.value })
-                        }
-                      >
-                        <option value="">— No customer selected —</option>
-                        {customers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.firstName} {c.lastName} —{" "}
-                            {c.interestedVehicle || "No vehicle"}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vehicle */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Vehicle</p>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>Stock #</label>
-                      <input
-                        placeholder="A1024"
-                        value={desk.stockNumber}
-                        onChange={(e) =>
-                          setDesk({ ...desk, stockNumber: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Year</label>
-                      <input
-                        placeholder="2024"
-                        value={desk.year}
-                        onChange={(e) =>
-                          setDesk({ ...desk, year: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Make</label>
-                      <input
-                        placeholder="Toyota"
-                        value={desk.make}
-                        onChange={(e) =>
-                          setDesk({ ...desk, make: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Model</label>
-                      <input
-                        placeholder="Camry"
-                        value={desk.model}
-                        onChange={(e) =>
-                          setDesk({ ...desk, model: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Trim</label>
-                      <input
-                        placeholder="XSE"
-                        value={desk.trim}
-                        onChange={(e) =>
-                          setDesk({ ...desk, trim: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>MSRP ($)</label>
-                      <input
-                        placeholder="42000"
-                        value={desk.msrp}
-                        onChange={(e) =>
-                          setDesk({ ...desk, msrp: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Selling Price ($)</label>
-                      <input
-                        placeholder="39995"
-                        value={desk.sellingPrice}
-                        onChange={(e) =>
-                          setDesk({ ...desk, sellingPrice: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field desk-computed">
-                      <label>Discount</label>
-                      <span
-                        className={
-                          deskNumbers.discount > 0
-                            ? "desk-positive"
-                            : deskNumbers.discount < 0
-                              ? "desk-negative"
-                              : "desk-zero"
-                        }
-                      >
-                        {deskNumbers.discount !== 0
-                          ? `$${Math.abs(deskNumbers.discount).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.discount > 0 ? "below MSRP" : "above MSRP"}`
-                          : "—"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Trade-In */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Trade-In</p>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>Year</label>
-                      <input
-                        placeholder="2020"
-                        value={desk.tradeYear}
-                        onChange={(e) =>
-                          setDesk({ ...desk, tradeYear: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Make</label>
-                      <input
-                        placeholder="Honda"
-                        value={desk.tradeMake}
-                        onChange={(e) =>
-                          setDesk({ ...desk, tradeMake: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Model</label>
-                      <input
-                        placeholder="Accord"
-                        value={desk.tradeModel}
-                        onChange={(e) =>
-                          setDesk({ ...desk, tradeModel: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>ACV ($)</label>
-                      <input
-                        placeholder="14000"
-                        value={desk.tradeACV}
-                        onChange={(e) =>
-                          setDesk({ ...desk, tradeACV: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Payoff ($)</label>
-                      <input
-                        placeholder="8500"
-                        value={desk.tradePayoff}
-                        onChange={(e) =>
-                          setDesk({ ...desk, tradePayoff: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field desk-computed">
-                      <label>Trade Equity</label>
-                      <span
-                        className={
-                          deskNumbers.equity > 0
-                            ? "desk-positive"
-                            : deskNumbers.equity < 0
-                              ? "desk-negative"
-                              : "desk-zero"
-                        }
-                      >
-                        {deskNumbers.equity !== 0
-                          ? `${deskNumbers.equity > 0 ? "+" : ""}$${deskNumbers.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.equity < 0 ? "(upside down)" : "equity"}`
-                          : "—"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cash & Rebates */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Cash & Incentives</p>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>Down Payment ($)</label>
-                      <input
-                        placeholder="3000"
-                        value={desk.downPayment}
-                        onChange={(e) =>
-                          setDesk({ ...desk, downPayment: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Manufacturer Rebate ($)</label>
-                      <input
-                        placeholder="1500"
-                        value={desk.rebate}
-                        onChange={(e) =>
-                          setDesk({ ...desk, rebate: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* F&I Products */}
-                <div className="desk-section">
-                  <p className="desk-section-title">F&I Products</p>
-                  <div className="fi-menu">
-                    {(
-                      [
-                        {
-                          key: "gap",
-                          label: "GAP Insurance",
-                          priceKey: "gapPrice",
-                        },
-                        {
-                          key: "warranty",
-                          label: "Extended Warranty",
-                          priceKey: "warrantyPrice",
-                        },
-                        {
-                          key: "tireWheel",
-                          label: "Tire & Wheel Protection",
-                          priceKey: "tirewheelPrice",
-                        },
-                        {
-                          key: "paintPro",
-                          label: "Paint Protection",
-                          priceKey: "paintProPrice",
-                        },
-                        {
-                          key: "creditLife",
-                          label: "Credit Life / Disability",
-                          priceKey: "creditLifePrice",
-                        },
-                      ] as const
-                    ).map(({ key, label, priceKey }) => (
-                      <div className="fi-row" key={key}>
-                        <label className="fi-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={desk[key] as boolean}
-                            onChange={(e) =>
-                              setDesk({ ...desk, [key]: e.target.checked })
-                            }
-                          />
-                          <span
-                            className={
-                              desk[key] ? "fi-label active" : "fi-label"
-                            }
-                          >
-                            {label}
-                          </span>
-                        </label>
-                        <div className="fi-price-wrap">
-                          <span>$</span>
-                          <input
-                            className="fi-price"
-                            value={desk[priceKey] as string}
-                            onChange={(e) =>
-                              setDesk({ ...desk, [priceKey]: e.target.value })
-                            }
-                            disabled={!desk[key] as boolean}
-                          />
+                              Open
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
+                  </div>
+                  <div className="my-day-col">
+                    <p className="my-day-label appt">🟡 Appointments Today</p>
+                    {customers.filter(
+                      (c) =>
+                        c.status === "Appt Set" || c.status === "Appt Show",
+                    ).length === 0 ? (
+                      <p className="empty-state">No appointments scheduled.</p>
+                    ) : (
+                      customers
+                        .filter(
+                          (c) =>
+                            c.status === "Appt Set" || c.status === "Appt Show",
+                        )
+                        .slice(0, 4)
+                        .map((c) => (
+                          <div className="my-day-card" key={c.id}>
+                            <div>
+                              <strong>
+                                {c.firstName} {c.lastName}
+                              </strong>
+                              <span>{c.interestedVehicle}</span>
+                              <small>
+                                Rep: {c.assignedTo || "Unassigned"} ·{" "}
+                                {c.nextFollowUp || "Time TBD"}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openProfile(c)}
+                            >
+                              View
+                            </button>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  <div className="my-day-col">
+                    <p className="my-day-label finance">
+                      🟢 Finance Awaiting Decision
+                    </p>
+                    {financeApplications.filter((a) => a.status === "Submitted")
+                      .length === 0 ? (
+                      <p className="empty-state">No pending finance apps.</p>
+                    ) : (
+                      financeApplications
+                        .filter((a) => a.status === "Submitted")
+                        .slice(0, 4)
+                        .map((a) => (
+                          <div className="my-day-card" key={a.id}>
+                            <div>
+                              <strong>
+                                {a.applicantName ||
+                                  getCustomerName(a.customerId)}
+                              </strong>
+                              <span>{a.requestedVehicle || "Vehicle TBD"}</span>
+                              <small>
+                                ${a.downPayment.toLocaleString()} down ·{" "}
+                                {a.creditRange}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const c = customers.find(
+                                  (x) => x.id === a.customerId,
+                                );
+                                if (c) openProfile(c);
+                              }}
+                            >
+                              View
+                            </button>
+                          </div>
+                        ))
+                    )}
                   </div>
                 </div>
+              </article>
+            </>
+          )}
 
-                {/* Taxes & Fees */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Taxes & Fees</p>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>Sales Tax Rate (%)</label>
-                      <input
-                        value={desk.taxRate}
-                        onChange={(e) =>
-                          setDesk({ ...desk, taxRate: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Doc Fee ($)</label>
-                      <input
-                        value={desk.docFee}
-                        onChange={(e) =>
-                          setDesk({ ...desk, docFee: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Title Fee ($)</label>
-                      <input
-                        value={desk.titleFee}
-                        onChange={(e) =>
-                          setDesk({ ...desk, titleFee: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Reg / License ($)</label>
-                      <input
-                        value={desk.regFee}
-                        onChange={(e) =>
-                          setDesk({ ...desk, regFee: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Finance Terms */}
-                <div className="desk-section">
-                  <p className="desk-section-title">Finance Terms</p>
-                  <div className="desk-row">
-                    <div className="desk-field">
-                      <label>APR (%)</label>
-                      <input
-                        value={desk.apr}
-                        onChange={(e) =>
-                          setDesk({ ...desk, apr: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="desk-field">
-                      <label>Term (months)</label>
-                      <select
-                        value={desk.termMonths}
-                        onChange={(e) =>
-                          setDesk({ ...desk, termMonths: e.target.value })
-                        }
-                      >
-                        <option>24</option>
-                        <option>36</option>
-                        <option>48</option>
-                        <option>60</option>
-                        <option>72</option>
-                        <option>84</option>
-                      </select>
-                    </div>
-                    <div className="desk-field">
-                      <label>Lender</label>
-                      <input
-                        placeholder="Chase Auto"
-                        value={desk.lender}
-                        onChange={(e) =>
-                          setDesk({ ...desk, lender: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── RIGHT: Deal Summary ── */}
-              <div className="desk-summary">
-                {/* Monthly Payment — big hero number */}
-                <div className="payment-hero">
-                  <p className="payment-hero-label">Est. Monthly Payment</p>
-                  <strong className="payment-hero-amount">
-                    {deskNumbers.monthly > 0
-                      ? `$${deskNumbers.monthly.toFixed(2)}`
-                      : "$—"}
-                  </strong>
-                  <p className="payment-hero-sub">
-                    {desk.termMonths} mo · {desk.apr}% APR
-                    {desk.lender ? ` · ${desk.lender}` : ""}
+          {/* ── LEADS INBOX ──────────────────────────────────────── */}
+          {currentPage === "leads" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Lead Inbox</p>
+                  <h1>Internet & Phone Leads</h1>
+                  <p className="page-subtitle">
+                    New leads from web forms, third-party providers, phone
+                    calls, and walk-ins. Assign and work each lead before they
+                    go cold.
                   </p>
                 </div>
-
-                {/* Deal Breakdown */}
-                <div className="deal-breakdown">
-                  <p className="desk-section-title">Deal Breakdown</p>
-
-                  <div className="deal-line">
-                    <span>Selling Price</span>
-                    <span>
-                      {deskNumbers.selling > 0
-                        ? `$${deskNumbers.selling.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                        : "—"}
-                    </span>
-                  </div>
-                  {deskNumbers.fiTotal > 0 && (
-                    <>
-                      {deskNumbers.fiItems.map((item) => (
-                        <div className="deal-line indent" key={item.name}>
-                          <span>+ {item.name}</span>
-                          <span>
-                            $
-                            {item.price.toLocaleString(undefined, {
-                              maximumFractionDigits: 0,
-                            })}
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  <div className="deal-line">
-                    <span>Sales Tax ({desk.taxRate}%)</span>
-                    <span>
-                      {deskNumbers.salesTax > 0
-                        ? `$${deskNumbers.salesTax.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="deal-line">
-                    <span>Doc / Title / Reg</span>
-                    <span>
-                      {deskNumbers.totalFees > 0
-                        ? `$${deskNumbers.totalFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                        : "—"}
-                    </span>
-                  </div>
-                  {deskNumbers.equity !== 0 && (
-                    <div
-                      className={`deal-line ${deskNumbers.equity > 0 ? "deal-line-credit" : "deal-line-debit"}`}
-                    >
-                      <span>
-                        {deskNumbers.equity > 0
-                          ? "– Trade Equity"
-                          : "+ Negative Equity"}
-                      </span>
-                      <span>
-                        {deskNumbers.equity > 0 ? "-" : "+"}$
-                        {Math.abs(deskNumbers.equity).toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 0 },
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  {parseFloat(desk.downPayment) > 0 && (
-                    <div className="deal-line deal-line-credit">
-                      <span>– Down Payment</span>
-                      <span>
-                        -$
-                        {(parseFloat(desk.downPayment) || 0).toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 0 },
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  {parseFloat(desk.rebate) > 0 && (
-                    <div className="deal-line deal-line-credit">
-                      <span>– Manufacturer Rebate</span>
-                      <span>
-                        -$
-                        {(parseFloat(desk.rebate) || 0).toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 0 },
-                        )}
-                      </span>
-                    </div>
-                  )}
-                  <div className="deal-line deal-line-total">
-                    <span>Amount Financed</span>
-                    <strong>
-                      {deskNumbers.financed > 0
-                        ? `$${deskNumbers.financed.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                        : "—"}
-                    </strong>
-                  </div>
+                <div className="header-actions">
+                  <button type="button" onClick={() => navigate("customers")}>
+                    + Add Lead Manually
+                  </button>
                 </div>
-
-                {/* Payment Grid */}
-                {deskNumbers.financed > 0 && (
-                  <div className="payment-grid-wrap">
-                    <p className="desk-section-title">Payment Grid</p>
-                    <p className="payment-grid-note">
-                      {desk.apr}% APR — payments at different terms and down
-                      payments
-                    </p>
-                    <div className="payment-grid-scroll">
-                      <table className="payment-grid-table">
-                        <thead>
-                          <tr>
-                            <th>Term</th>
-                            {[0, 1000, 2000, 3000, 5000].map((d) => (
-                              <th key={d}>${d.toLocaleString()} down</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paymentGrid.map((row) => (
-                            <tr
-                              key={row.term}
-                              className={
-                                row.term === parseInt(desk.termMonths)
-                                  ? "grid-row-active"
-                                  : ""
-                              }
-                            >
-                              <td>
-                                <strong>{row.term} mo</strong>
-                              </td>
-                              {row.payments.map((pmt, i) => (
-                                <td
-                                  key={i}
-                                  className={pmt > 0 ? "" : "grid-zero"}
-                                >
-                                  {pmt > 0 ? `$${pmt.toFixed(0)}` : "—"}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ── ACTIVITIES ───────────────────────────────────────── */}
-        {currentPage === "activities" && (
-          <>
-            <header className="page-header">
-              <div>
-                <p className="eyebrow">Activity Log</p>
-                <h1>Calls, Texts, Emails & Notes</h1>
-                <p className="page-subtitle">
-                  All customer interactions across every rep and deal. Use a
-                  customer's Deal Jacket to log activities tied to that specific
-                  deal.
-                </p>
-              </div>
-            </header>
-            <article className="panel" style={{ marginBottom: 18 }}>
-              <p className="eyebrow">Log Activity</p>
-              <form className="contact-form" onSubmit={addActivity}>
-                <select
-                  value={activityForm.customerId}
-                  onChange={(e) =>
-                    setActivityForm({
-                      ...activityForm,
-                      customerId: e.target.value,
-                    })
-                  }
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={activityForm.type}
-                  onChange={(e) =>
-                    setActivityForm({
-                      ...activityForm,
-                      type: e.target.value as Activity["type"],
-                    })
-                  }
-                >
-                  <option>Call</option>
-                  <option>Text</option>
-                  <option>Email</option>
-                  <option>Appointment</option>
-                  <option>Note</option>
-                </select>
-                <input
-                  placeholder="Notes or outcome..."
-                  value={activityForm.note}
-                  onChange={(e) =>
-                    setActivityForm({ ...activityForm, note: e.target.value })
-                  }
-                />
-                <button type="submit">Log Activity</button>
-              </form>
-            </article>
-            <div className="activity-timeline full-timeline">
-              {activities.length === 0 && (
-                <p className="empty-state large">No activities logged yet.</p>
-              )}
-              {activities.slice(0, 30).map((act) => (
-                <div className="timeline-item" key={act.id}>
-                  <span
-                    className={`timeline-dot dot-${act.type.toLowerCase()}`}
-                  />
-                  <div>
-                    <strong>
-                      {act.type} — {getCustomerName(act.customerId)}
-                    </strong>
-                    <span>{act.note}</span>
-                    <small>{new Date(act.createdAt).toLocaleString()}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ── SERVICE ──────────────────────────────────────────── */}
-        {currentPage === "service" &&
-          (() => {
-            const roStatuses: RoStatus[] = [
-              "Check-In",
-              "In Progress",
-              "On Hold - Parts",
-              "Multi-Point",
-              "Ready",
-              "Closed",
-            ];
-            const openROs = repairOrders.filter((r) => r.status !== "Closed");
-            const readyROs = repairOrders.filter((r) => r.status === "Ready");
-            const inProgROs = repairOrders.filter(
-              (r) => r.status === "In Progress" || r.status === "Multi-Point",
-            );
-            const holdROs = repairOrders.filter(
-              (r) => r.status === "On Hold - Parts",
-            );
-            const serviceRev = openROs.reduce((t, r) => t + r.total, 0);
-
-            function roStatusClass(s: RoStatus) {
-              return (
-                {
-                  "Check-In": "ro-checkin",
-                  "In Progress": "ro-inprogress",
-                  "On Hold - Parts": "ro-hold",
-                  "Multi-Point": "ro-mpi",
-                  Ready: "ro-ready",
-                  Closed: "ro-closed",
-                }[s] ?? ""
-              );
-            }
-
-            async function updateRoStatus(id: number, status: RoStatus) {
-              try {
-                const res = await fetch(
-                  `${API_BASE}/api/repair-orders/${id}/status`,
-                  {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ status }),
-                  },
-                );
-                const updated = await res.json();
-                setRepairOrders((prev) =>
-                  prev.map((r) => (r.id === id ? updated : r)),
-                );
-              } catch {
-                setRepairOrders((prev) =>
-                  prev.map((r) =>
-                    r.id === id
-                      ? {
-                          ...r,
-                          status,
-                          closedAt:
-                            status === "Closed"
-                              ? new Date().toISOString()
-                              : r.closedAt,
-                        }
-                      : r,
-                  ),
-                );
-              }
-            }
-
-            async function handleCreateRo(e: React.FormEvent) {
-              e.preventDefault();
-              const newRo: RepairOrder = {
-                id: Date.now(),
-                roNumber: `RO-${String(Date.now()).slice(-6)}`,
-                customerName: roForm.customerName || "Walk-in",
-                customerPhone: roForm.customerPhone,
-                vehicleYear: roForm.vehicleYear,
-                vehicleMake: roForm.vehicleMake,
-                vehicleModel: roForm.vehicleModel,
-                vehicleMileageIn: Number(roForm.vehicleMileageIn) || 0,
-                vehicleVin: roForm.vehicleVin,
-                advisor: roForm.advisor,
-                technician: roForm.technician,
-                status: "Check-In",
-                promisedTime: roForm.promisedTime,
-                lines: roForm.concern
-                  ? [
-                      {
-                        id: 1,
-                        description: roForm.concern,
-                        type: "Concern",
-                        laborHours: 0,
-                        laborTotal: 0,
-                        partsTotal: 0,
-                        tech: "",
-                        status: "Open",
-                      },
-                    ]
-                  : [],
-                laborTotal: 0,
-                partsTotal: 0,
-                total: 0,
-                notes: roForm.notes,
-                createdAt: new Date().toISOString(),
-              };
-              try {
-                const res = await fetch(`${API_BASE}/api/repair-orders`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(newRo),
-                });
-                const saved = await res.json();
-                setRepairOrders((prev) => [saved, ...prev]);
-              } catch {
-                setRepairOrders((prev) => [newRo, ...prev]);
-              }
-              setRoForm({
-                customerName: "",
-                customerPhone: "",
-                vehicleYear: "",
-                vehicleMake: "",
-                vehicleModel: "",
-                vehicleMileageIn: "",
-                vehicleVin: "",
-                advisor: "",
-                technician: "",
-                promisedTime: "",
-                concern: "",
-                notes: "",
-              });
-              setShowRoForm(false);
-              setAppMessage(`RO ${newRo.roNumber} opened.`);
-            }
-
-            return (
-              <>
-                <header className="page-header">
-                  <div>
-                    <p className="eyebrow">Service Department</p>
-                    <h1>Open Repair Orders</h1>
-                    <p className="page-subtitle">
-                      Live view of every vehicle in service. Update status as
-                      work progresses.
-                    </p>
-                  </div>
-                  <div className="header-actions">
-                    <button
-                      type="button"
-                      onClick={() => setShowRoForm((v) => !v)}
-                    >
-                      + New RO
-                    </button>
-                  </div>
-                </header>
-
-                {/* Service KPIs */}
-                <div
-                  className="kpi-grid"
-                  style={{ gridTemplateColumns: "repeat(4,1fr)" }}
-                >
-                  <div className="kpi-card kpi-blue">
-                    <span>Open ROs</span>
-                    <strong>{openROs.length}</strong>
-                    <small>Active vehicles</small>
-                  </div>
-                  <div className="kpi-card kpi-yellow">
-                    <span>In Progress</span>
-                    <strong>{inProgROs.length}</strong>
-                    <small>Tech working now</small>
-                  </div>
-                  <div
-                    className="kpi-card"
-                    style={{
-                      background: "linear-gradient(135deg,#f97316,#ef4444)",
-                      color: "#fff",
-                    }}
+              </header>
+              <div className="filter-bar">
+                <span className="filter-label">Filter:</span>
+                {["All", "Lead", "Appointment"].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={
+                      customerStatusFilter === s
+                        ? "filter-pill active"
+                        : "filter-pill"
+                    }
+                    onClick={() => setCustomerStatusFilter(s)}
                   >
-                    <span>On Hold — Parts</span>
-                    <strong>{holdROs.length}</strong>
-                    <small>Waiting on parts</small>
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <div className="lead-inbox">
+                {internetLeads.length === 0 && (
+                  <p className="empty-state large">
+                    No incoming leads. Add customers with a web/internet source
+                    to see them here.
+                  </p>
+                )}
+                {internetLeads.map((c) => (
+                  <div className="inbox-card" key={c.id}>
+                    <div className="inbox-card-top">
+                      <div className="inbox-name-row">
+                        <strong>
+                          {c.firstName} {c.lastName}
+                        </strong>
+                        <span
+                          className={`status-badge ${statusClass(c.status)}`}
+                        >
+                          {c.status}
+                        </span>
+                        {c.temperature && (
+                          <span
+                            className={`temp-badge ${tempClass(c.temperature)}`}
+                          >
+                            {c.temperature}
+                          </span>
+                        )}
+                        {!activities.some((a) => a.customerId === c.id) && (
+                          <span className="badge-urgent">No contact yet</span>
+                        )}
+                      </div>
+                      <div className="inbox-card-meta">
+                        <span className="source-tag">
+                          {c.source || "Unknown source"}
+                        </span>
+                        {c.createdAt && (
+                          <span
+                            className={`speed-to-lead ${Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 ? "speed-hot" : Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 * 24 ? "speed-warm" : "speed-cold"}`}
+                          >
+                            ⏱ {timeAgo(c.createdAt)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="inbox-card-mid">
+                      <span>📞 {c.phone}</span>
+                      <span>✉ {c.email || "No email"}</span>
+                      <span>🚗 {c.interestedVehicle}</span>
+                    </div>
+                    <div className="inbox-card-actions">
+                      <span className="assign-label">Assign to:</span>
+                      {["Avery", "Mike", "Sarah", "Dan"].map((rep) => (
+                        <button
+                          key={rep}
+                          type="button"
+                          className={
+                            c.assignedTo === rep ? "rep-btn active" : "rep-btn"
+                          }
+                          onClick={() => assignLead(c, rep)}
+                        >
+                          {rep}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="open-btn"
+                        onClick={() => openProfile(c)}
+                      >
+                        Open Deal Jacket →
+                      </button>
+                    </div>
                   </div>
-                  <div className="kpi-card kpi-green">
-                    <span>Ready for Pickup</span>
-                    <strong>{readyROs.length}</strong>
-                    <small>${serviceRev.toLocaleString()} est. rev</small>
-                  </div>
-                </div>
+                ))}
+              </div>
+            </>
+          )}
 
-                {/* New RO Form */}
-                {showRoForm && (
-                  <article className="panel" style={{ marginBottom: 18 }}>
-                    <p className="eyebrow">Open New Repair Order</p>
-                    <h2>Vehicle Check-In</h2>
-                    <form className="ro-form" onSubmit={handleCreateRo}>
-                      <div className="ro-form-group">
-                        <label>Customer Name</label>
-                        <input
-                          placeholder="John Smith"
-                          value={roForm.customerName}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              customerName: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Phone</label>
-                        <input
-                          placeholder="(555) 000-0000"
-                          value={roForm.customerPhone}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              customerPhone: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Year</label>
-                        <input
-                          placeholder="2021"
-                          value={roForm.vehicleYear}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              vehicleYear: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Make</label>
-                        <input
-                          placeholder="Toyota"
-                          value={roForm.vehicleMake}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              vehicleMake: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Model</label>
-                        <input
-                          placeholder="Camry"
-                          value={roForm.vehicleModel}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              vehicleModel: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Mileage In</label>
-                        <input
-                          placeholder="38200"
-                          value={roForm.vehicleMileageIn}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              vehicleMileageIn: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>VIN (optional)</label>
-                        <input
-                          placeholder="1HGBH41JXMN109186"
-                          value={roForm.vehicleVin}
-                          onChange={(e) =>
-                            setRoForm({ ...roForm, vehicleVin: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Service Advisor</label>
-                        <select
-                          value={roForm.advisor}
-                          onChange={(e) =>
-                            setRoForm({ ...roForm, advisor: e.target.value })
-                          }
-                        >
-                          <option value="">Select advisor</option>
-                          {["Avery", "Mike", "Sarah", "Dan"].map((a) => (
-                            <option key={a}>{a}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Technician</label>
-                        <select
-                          value={roForm.technician}
-                          onChange={(e) =>
-                            setRoForm({ ...roForm, technician: e.target.value })
-                          }
-                        >
-                          <option value="">Unassigned</option>
-                          {["Mike T.", "Dan W.", "Chris R.", "Sam L."].map(
-                            (t) => (
-                              <option key={t}>{t}</option>
-                            ),
-                          )}
-                        </select>
-                      </div>
-                      <div className="ro-form-group">
-                        <label>Promised Time</label>
-                        <input
-                          placeholder="3:00 PM Today"
-                          value={roForm.promisedTime}
-                          onChange={(e) =>
-                            setRoForm({
-                              ...roForm,
-                              promisedTime: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group ro-form-wide">
-                        <label>Customer Concern</label>
-                        <input
-                          placeholder="Describe the concern or service needed..."
-                          value={roForm.concern}
-                          onChange={(e) =>
-                            setRoForm({ ...roForm, concern: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-group ro-form-wide">
-                        <label>Notes</label>
-                        <input
-                          placeholder="Internal notes..."
-                          value={roForm.notes}
-                          onChange={(e) =>
-                            setRoForm({ ...roForm, notes: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="ro-form-actions">
-                        <button type="submit">Open RO</button>
+          {/* ── CUSTOMERS ────────────────────────────────────────── */}
+          {currentPage === "customers" &&
+            (() => {
+              const totalPages = Math.max(
+                1,
+                Math.ceil(filteredCustomers.length / custPageSize),
+              );
+              const safePage = Math.min(custPage, totalPages - 1);
+              const pageSlice = filteredCustomers.slice(
+                safePage * custPageSize,
+                (safePage + 1) * custPageSize,
+              );
+
+              function toggleSort(col: typeof customerSortCol) {
+                if (customerSortCol === col)
+                  setCustomerSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                else {
+                  setCustomerSortCol(col);
+                  setCustomerSortDir("asc");
+                }
+                setCustPage(0);
+              }
+              function sortIcon(col: typeof customerSortCol) {
+                if (customerSortCol !== col)
+                  return <span className="sort-icon inactive">⇅</span>;
+                return (
+                  <span className="sort-icon active">
+                    {customerSortDir === "asc" ? "↑" : "↓"}
+                  </span>
+                );
+              }
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <p className="eyebrow">Customer Database</p>
+                      <h1>All Customers</h1>
+                    </div>
+                    <div className="header-actions">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddForm((v) => !v);
+                          if (editingCustomerId) resetCustomerForm();
+                        }}
+                      >
+                        {showAddForm || editingCustomerId
+                          ? "✕ Close Form"
+                          : "+ Add Customer"}
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* Add / Edit Form — collapsible */}
+                  {(showAddForm || editingCustomerId) && (
+                    <article className="panel" style={{ marginBottom: 14 }}>
+                      <div className="panel-header">
+                        <p className="eyebrow">
+                          {editingCustomerId
+                            ? "Editing Customer"
+                            : "Add New Customer / Lead"}
+                        </p>
                         <button
                           type="button"
                           className="ghost-button"
-                          onClick={() => setShowRoForm(false)}
+                          onClick={() => {
+                            resetCustomerForm();
+                            setShowAddForm(false);
+                          }}
                         >
                           Cancel
                         </button>
                       </div>
-                    </form>
-                  </article>
-                )}
+                      <form className="contact-form" onSubmit={saveCustomer}>
+                        <input
+                          placeholder="First name *"
+                          value={customerForm.firstName}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              firstName: e.target.value,
+                            })
+                          }
+                          required
+                        />
+                        <input
+                          placeholder="Last name"
+                          value={customerForm.lastName}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              lastName: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Phone"
+                          value={customerForm.phone}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              phone: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Email"
+                          value={customerForm.email}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              email: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Vehicle of interest"
+                          value={customerForm.interestedVehicle}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              interestedVehicle: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Lead source"
+                          value={customerForm.source}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              source: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Assigned rep"
+                          value={customerForm.assignedTo}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              assignedTo: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Next follow-up"
+                          value={customerForm.nextFollowUp}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              nextFollowUp: e.target.value,
+                            })
+                          }
+                        />
+                        <select
+                          value={customerForm.status}
+                          onChange={(e) =>
+                            setCustomerForm({
+                              ...customerForm,
+                              status: e.target.value as Customer["status"],
+                            })
+                          }
+                        >
+                          <option>New Lead</option>
+                          <option>Contacted</option>
+                          <option>Appt Set</option>
+                          <option>Appt Show</option>
+                          <option>Working</option>
+                          <option>Sold</option>
+                          <option>Lost</option>
+                        </select>
+                        <button type="submit">
+                          {editingCustomerId ? "Save Changes" : "Add Customer"}
+                        </button>
+                      </form>
+                    </article>
+                  )}
 
-                {/* RO Board — columns by status */}
-                <div className="ro-board">
-                  {roStatuses
-                    .filter((s) => s !== "Closed")
-                    .map((col) => {
-                      const colRos = repairOrders.filter(
-                        (r) => r.status === col,
-                      );
-                      return (
-                        <div className="ro-col" key={col}>
-                          <div className="ro-col-header">
-                            <span
-                              className={`ro-status-badge ${roStatusClass(col)}`}
-                            >
-                              {col}
-                            </span>
-                            <span className="ro-col-count">
-                              {colRos.length}
-                            </span>
-                          </div>
-                          {colRos.length === 0 && (
-                            <p
-                              className="empty-state"
-                              style={{ fontSize: 12, padding: "10px 0" }}
-                            >
-                              Empty
-                            </p>
-                          )}
-                          {colRos.map((ro) => (
-                            <div
-                              className={`ro-card ${roStatusClass(ro.status)}`}
-                              key={ro.id}
-                            >
-                              <div className="ro-card-header">
-                                <span className="ro-number">{ro.roNumber}</span>
-                                {ro.promisedTime && (
-                                  <span className="ro-promise">
-                                    <Clock size={11} /> {ro.promisedTime}
-                                  </span>
-                                )}
-                              </div>
-                              <strong className="ro-customer">
-                                {ro.customerName}
-                              </strong>
-                              <span className="ro-vehicle">
-                                {ro.vehicleYear} {ro.vehicleMake}{" "}
-                                {ro.vehicleModel}
-                              </span>
-                              <span
-                                className="ro-vehicle"
-                                style={{ color: "#94a3b8" }}
-                              >
-                                {ro.vehicleMileageIn.toLocaleString()} mi ·{" "}
-                                {ro.vehicleVin || "No VIN"}
-                              </span>
-                              <div className="ro-advisors">
-                                <span>Adv: {ro.advisor || "—"}</span>
-                                <span>Tech: {ro.technician || "—"}</span>
-                              </div>
-                              {ro.lines.length > 0 && (
-                                <div className="ro-lines">
-                                  {ro.lines.map((line) => (
-                                    <div className="ro-line" key={line.id}>
-                                      <span
-                                        className={`ro-line-status ${line.status === "Complete" ? "line-done" : line.status === "In Progress" ? "line-wip" : "line-open"}`}
-                                      >
-                                        {line.status === "Complete" ? (
-                                          <CheckCircle size={10} />
-                                        ) : line.status === "In Progress" ? (
-                                          <Clock size={10} />
-                                        ) : (
-                                          <AlertTriangle size={10} />
-                                        )}
-                                      </span>
-                                      <span className="ro-line-desc">
-                                        {line.description}
-                                      </span>
-                                      <span className="ro-line-total">
-                                        $
-                                        {(
-                                          line.laborTotal + line.partsTotal
-                                        ).toLocaleString()}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {ro.notes && (
-                                <p className="ro-notes">{ro.notes}</p>
-                              )}
-                              <div className="ro-total-row">
-                                <span>Total</span>
-                                <strong>${ro.total.toLocaleString()}</strong>
-                              </div>
-                              <div className="ro-status-actions">
-                                {roStatuses
-                                  .filter((s) => s !== ro.status)
-                                  .map((s) => (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      className={`ro-move-btn ${roStatusClass(s)}`}
-                                      onClick={() => updateRoStatus(ro.id, s)}
-                                    >
-                                      → {s}
-                                    </button>
-                                  ))}
-                              </div>
-                              {ro.customerId && (
-                                <button
-                                  type="button"
-                                  className="open-btn"
-                                  style={{ marginTop: 6, width: "100%" }}
-                                  onClick={() => {
-                                    window.location.hash = `#/customers/${ro.customerId}`;
-                                  }}
-                                >
-                                  View Customer Profile
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                </div>
+                  {/* Search + filter toolbar */}
+                  <div className="cust-toolbar">
+                    <input
+                      className="cust-search"
+                      placeholder="🔍  Name, phone, email, or vehicle..."
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                        setCustPage(0);
+                      }}
+                      autoComplete="off"
+                    />
+                    <select
+                      className="filter-select"
+                      value={customerStatusFilter}
+                      onChange={(e) => {
+                        setCustomerStatusFilter(e.target.value);
+                        setCustPage(0);
+                      }}
+                    >
+                      <option value="All">All statuses</option>
+                      <option>New Lead</option>
+                      <option>Contacted</option>
+                      <option>Appt Set</option>
+                      <option>Appt Show</option>
+                      <option>Working</option>
+                      <option>Sold</option>
+                      <option>Lost</option>
+                    </select>
+                    <select
+                      className="filter-select"
+                      value={customerSourceFilter}
+                      onChange={(e) => {
+                        setCustomerSourceFilter(e.target.value);
+                        setCustPage(0);
+                      }}
+                    >
+                      <option value="All">All sources</option>
+                      <option>Cars.com</option>
+                      <option>AutoTrader</option>
+                      <option>Website Lead</option>
+                      <option>Walk-in</option>
+                      <option>Referral</option>
+                      <option>Phone Call</option>
+                    </select>
+                    <div className="cust-toolbar-right">
+                      <span className="result-count">
+                        {filteredCustomers.length.toLocaleString()} of{" "}
+                        {customers.length.toLocaleString()}
+                      </span>
+                      <select
+                        className="filter-select"
+                        value={custPageSize}
+                        onChange={(e) => {
+                          setCustPageSize(Number(e.target.value));
+                          setCustPage(0);
+                        }}
+                      >
+                        <option value={25}>25 / page</option>
+                        <option value={50}>50 / page</option>
+                        <option value={100}>100 / page</option>
+                        <option value={250}>250 / page</option>
+                      </select>
+                    </div>
+                  </div>
 
-                {/* Closed ROs */}
-                {repairOrders.filter((r) => r.status === "Closed").length >
-                  0 && (
-                  <article className="panel" style={{ marginTop: 18 }}>
-                    <p className="eyebrow">Closed Today</p>
-                    <h2>Completed Repair Orders</h2>
-                    <table className="ro-table">
+                  {/* Data table */}
+                  <div className="cust-table-wrap">
+                    <table className="cust-table">
                       <thead>
                         <tr>
-                          <th>RO #</th>
-                          <th>Customer</th>
-                          <th>Vehicle</th>
-                          <th>Advisor</th>
-                          <th>Tech</th>
-                          <th>Total</th>
-                          <th>Closed</th>
+                          <th
+                            className="sortable"
+                            onClick={() => toggleSort("name")}
+                          >
+                            Name {sortIcon("name")}
+                          </th>
+                          <th>Phone</th>
+                          <th>Email</th>
+                          <th
+                            className="sortable"
+                            onClick={() => toggleSort("vehicle")}
+                          >
+                            Vehicle {sortIcon("vehicle")}
+                          </th>
+                          <th
+                            className="sortable"
+                            onClick={() => toggleSort("status")}
+                          >
+                            Status {sortIcon("status")}
+                          </th>
+                          <th>Source</th>
+                          <th
+                            className="sortable"
+                            onClick={() => toggleSort("rep")}
+                          >
+                            Rep {sortIcon("rep")}
+                          </th>
+                          <th
+                            className="sortable"
+                            onClick={() => toggleSort("created")}
+                          >
+                            Added {sortIcon("created")}
+                          </th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {repairOrders
-                          .filter((r) => r.status === "Closed")
-                          .map((ro) => (
-                            <tr key={ro.id}>
-                              <td>
-                                <code>{ro.roNumber}</code>
-                              </td>
-                              <td>{ro.customerName}</td>
-                              <td>
-                                {ro.vehicleYear} {ro.vehicleMake}{" "}
-                                {ro.vehicleModel}
-                              </td>
-                              <td>{ro.advisor}</td>
-                              <td>{ro.technician}</td>
-                              <td>
-                                <strong>${ro.total.toLocaleString()}</strong>
-                              </td>
-                              <td>
-                                <small>
-                                  {ro.closedAt
-                                    ? new Date(ro.closedAt).toLocaleTimeString(
-                                        [],
-                                        { hour: "2-digit", minute: "2-digit" },
-                                      )
-                                    : "—"}
-                                </small>
-                              </td>
-                            </tr>
-                          ))}
+                        {pageSlice.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={9}
+                              className="empty-state"
+                              style={{ textAlign: "center", padding: 32 }}
+                            >
+                              No customers match your filters.
+                            </td>
+                          </tr>
+                        )}
+                        {pageSlice.map((c) => (
+                          <tr
+                            key={c.id}
+                            className="cust-tr"
+                            onClick={() => openProfile(c)}
+                          >
+                            <td className="cust-name-cell">
+                              <strong>
+                                {c.firstName} {c.lastName}
+                              </strong>
+                              {c.temperature && (
+                                <span
+                                  className={`temp-badge ${tempClass(c.temperature)}`}
+                                >
+                                  {c.temperature}
+                                </span>
+                              )}
+                            </td>
+                            <td className="cust-phone">{c.phone}</td>
+                            <td className="cust-email">
+                              {c.email || <span className="muted">—</span>}
+                            </td>
+                            <td className="cust-vehicle">
+                              {c.interestedVehicle || (
+                                <span className="muted">—</span>
+                              )}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <span
+                                className={`status-badge ${statusClass(c.status)}`}
+                              >
+                                {c.status}
+                              </span>
+                            </td>
+                            <td className="muted">{c.source || "—"}</td>
+                            <td className="muted">
+                              {c.assignedTo || (
+                                <span className="unassigned">Unassigned</span>
+                              )}
+                            </td>
+                            <td className="muted">
+                              {c.createdAt ? timeAgo(c.createdAt) : "—"}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div className="cust-actions">
+                                <button
+                                  type="button"
+                                  className="cust-action-btn"
+                                  title="Open Deal Jacket"
+                                  onClick={() => openProfile(c)}
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cust-action-btn ghost"
+                                  title="Edit"
+                                  onClick={() => {
+                                    editCustomer(c);
+                                    setShowAddForm(true);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cust-action-btn danger"
+                                  title="Delete"
+                                  onClick={() => deleteCustomer(c.id)}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
-                  </article>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="cust-pagination">
+                      <button
+                        type="button"
+                        className="page-btn"
+                        disabled={safePage === 0}
+                        onClick={() => setCustPage(0)}
+                      >
+                        «
+                      </button>
+                      <button
+                        type="button"
+                        className="page-btn"
+                        disabled={safePage === 0}
+                        onClick={() => setCustPage(safePage - 1)}
+                      >
+                        ‹ Prev
+                      </button>
+                      {Array.from(
+                        { length: Math.min(totalPages, 7) },
+                        (_, i) => {
+                          const start = Math.max(
+                            0,
+                            Math.min(safePage - 3, totalPages - 7),
+                          );
+                          const p = start + i;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              className={`page-btn${p === safePage ? " active" : ""}`}
+                              onClick={() => setCustPage(p)}
+                            >
+                              {p + 1}
+                            </button>
+                          );
+                        },
+                      )}
+                      <button
+                        type="button"
+                        className="page-btn"
+                        disabled={safePage === totalPages - 1}
+                        onClick={() => setCustPage(safePage + 1)}
+                      >
+                        Next ›
+                      </button>
+                      <button
+                        type="button"
+                        className="page-btn"
+                        disabled={safePage === totalPages - 1}
+                        onClick={() => setCustPage(totalPages - 1)}
+                      >
+                        »
+                      </button>
+                      <span className="page-info">
+                        Page {safePage + 1} of {totalPages} ·{" "}
+                        {filteredCustomers.length.toLocaleString()} records
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+          {/* ── FINANCE ──────────────────────────────────────────── */}
+          {currentPage === "finance" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">F&I Manager</p>
+                  <h1>Finance Applications</h1>
+                  <p className="page-subtitle">
+                    Review and update status on all finance and credit
+                    applications across every deal. Open a customer deal jacket
+                    to submit a new one.
+                  </p>
+                </div>
+              </header>
+              <div
+                className="kpi-grid"
+                style={{
+                  gridTemplateColumns: "repeat(3,1fr)",
+                  marginBottom: 18,
+                }}
+              >
+                <div className="kpi-card kpi-blue">
+                  <span>Total Apps</span>
+                  <strong>{financeApplications.length}</strong>
+                </div>
+                <div className="kpi-card kpi-yellow">
+                  <span>Pending</span>
+                  <strong>{pendingFinance}</strong>
+                </div>
+                <div className="kpi-card kpi-green">
+                  <span>Approved</span>
+                  <strong>
+                    {
+                      financeApplications.filter((a) => a.status === "Approved")
+                        .length
+                    }
+                  </strong>
+                </div>
+              </div>
+              <div className="deal-list">
+                {financeApplications.length === 0 && (
+                  <p className="empty-state">
+                    No finance applications yet. Open a customer deal jacket to
+                    submit one.
+                  </p>
                 )}
-              </>
-            );
-          })()}
-      </section>
-    </main>
+                {financeApplications.map((app) => (
+                  <div
+                    className="deal-card clickable"
+                    key={app.id}
+                    onClick={() => {
+                      const c = customers.find((x) => x.id === app.customerId);
+                      if (c) openProfile(c);
+                    }}
+                  >
+                    <div className="deal-card-main">
+                      <strong>
+                        {app.applicantName || getCustomerName(app.customerId)}
+                      </strong>
+                      <span>
+                        {app.requestedVehicle ||
+                          getCustomerName(app.customerId)}
+                      </span>
+                      <span>
+                        ${app.monthlyIncome.toLocaleString()}/mo · $
+                        {app.downPayment.toLocaleString()} down ·{" "}
+                        {app.creditRange}
+                      </span>
+                      {app.lender && <small>Lender: {app.lender}</small>}
+                    </div>
+                    <select
+                      value={app.status}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        updateFinanceStatus(
+                          app.id,
+                          e.target.value as FinanceApplication["status"],
+                        )
+                      }
+                    >
+                      <option>New</option>
+                      <option>Submitted</option>
+                      <option>Approved</option>
+                      <option>Needs Review</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── PIPELINE ─────────────────────────────────────────── */}
+          {currentPage === "pipeline" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Sales Pipeline</p>
+                  <h1>Deals by Stage</h1>
+                  <p className="page-subtitle">
+                    Track every active deal from initial desk to delivery. Click
+                    any deal card to open the customer's deal jacket.
+                  </p>
+                </div>
+              </header>
+              <div className="pipeline-full">
+                {pipelineStages.map((col) => (
+                  <div className="pipeline-col-full" key={col.stage}>
+                    <div className="pipeline-col-header">
+                      <strong>{col.stage}</strong>
+                      <span>
+                        {col.sales.length} deal
+                        {col.sales.length !== 1 ? "s" : ""} · $
+                        {col.value.toLocaleString()}
+                      </span>
+                    </div>
+                    {col.sales.length === 0 && (
+                      <p className="empty-state">No deals in this stage.</p>
+                    )}
+                    {col.sales.map((sale) => (
+                      <div
+                        className="pipeline-card-full"
+                        key={sale.id}
+                        onClick={() => {
+                          const c = customers.find(
+                            (x) => x.id === sale.customerId,
+                          );
+                          if (c) openProfile(c);
+                        }}
+                      >
+                        <strong>
+                          {sale.year} {sale.make} {sale.model}
+                        </strong>
+                        <span>Stock #{sale.stockNumber}</span>
+                        <span>${sale.salePrice.toLocaleString()}</span>
+                        <small>{getCustomerName(sale.customerId)}</small>
+                        <select
+                          value={sale.stage}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            updateSaleStage(
+                              sale.id,
+                              e.target.value as VehicleSale["stage"],
+                            )
+                          }
+                        >
+                          <option>Working</option>
+                          <option>Finance</option>
+                          <option>Delivered</option>
+                          <option>Lost</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {/* Desk / Payment Calculator */}
+              <article className="panel" style={{ marginTop: 24 }}>
+                <p className="eyebrow">Deal Desk</p>
+                <h2>Payment Calculator</h2>
+                <div className="desk-calc-grid">
+                  <div className="desk-input-group">
+                    <label>Sale Price ($)</label>
+                    <input
+                      placeholder="e.g. 38995"
+                      value={deskCalc.salePrice}
+                      onChange={(e) =>
+                        setDeskCalc({ ...deskCalc, salePrice: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="desk-input-group">
+                    <label>Trade ACV ($)</label>
+                    <input
+                      placeholder="e.g. 12000"
+                      value={deskCalc.tradeACV}
+                      onChange={(e) =>
+                        setDeskCalc({ ...deskCalc, tradeACV: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="desk-input-group">
+                    <label>Trade Payoff ($)</label>
+                    <input
+                      placeholder="e.g. 8000"
+                      value={deskCalc.tradePayoff}
+                      onChange={(e) =>
+                        setDeskCalc({
+                          ...deskCalc,
+                          tradePayoff: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="desk-input-group">
+                    <label>Down Payment ($)</label>
+                    <input
+                      placeholder="e.g. 3000"
+                      value={deskCalc.downPayment}
+                      onChange={(e) =>
+                        setDeskCalc({
+                          ...deskCalc,
+                          downPayment: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="desk-input-group">
+                    <label>APR (%)</label>
+                    <input
+                      value={deskCalc.apr}
+                      onChange={(e) =>
+                        setDeskCalc({ ...deskCalc, apr: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="desk-input-group">
+                    <label>Term (months)</label>
+                    <select
+                      value={deskCalc.termMonths}
+                      onChange={(e) =>
+                        setDeskCalc({ ...deskCalc, termMonths: e.target.value })
+                      }
+                    >
+                      <option>24</option>
+                      <option>36</option>
+                      <option>48</option>
+                      <option>60</option>
+                      <option>72</option>
+                      <option>84</option>
+                    </select>
+                  </div>
+                  <div className="desk-input-group">
+                    <label>Tax Rate (%)</label>
+                    <input
+                      value={deskCalc.taxRate}
+                      onChange={(e) =>
+                        setDeskCalc({ ...deskCalc, taxRate: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                {deskPayment.monthly > 0 && (
+                  <div className="desk-result">
+                    <div className="desk-result-main">
+                      <span>Est. Monthly Payment</span>
+                      <strong>${deskPayment.monthly.toFixed(2)}/mo</strong>
+                    </div>
+                    <div className="desk-result-breakdown">
+                      <span>
+                        Amount Financed:{" "}
+                        <b>
+                          $
+                          {deskPayment.amount.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </b>
+                      </span>
+                      <span>
+                        Trade Equity:{" "}
+                        <b
+                          className={
+                            deskPayment.tradeEquity >= 0
+                              ? "kpi-green-text"
+                              : "badge-danger"
+                          }
+                        >
+                          $
+                          {deskPayment.tradeEquity.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </b>
+                      </span>
+                      <span>
+                        Est. Tax:{" "}
+                        <b>
+                          $
+                          {deskPayment.taxed.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </b>
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </article>
+
+              <article className="panel" style={{ marginTop: 24 }}>
+                <p className="eyebrow">Add Vehicle to Pipeline</p>
+                <form className="contact-form" onSubmit={addVehicleSale}>
+                  <select
+                    value={saleForm.customerId}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, customerId: e.target.value })
+                    }
+                  >
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    placeholder="Stock #"
+                    value={saleForm.stockNumber}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, stockNumber: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Year"
+                    value={saleForm.year}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, year: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Make"
+                    value={saleForm.make}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, make: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Model"
+                    value={saleForm.model}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, model: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Sale price ($)"
+                    value={saleForm.salePrice}
+                    onChange={(e) =>
+                      setSaleForm({ ...saleForm, salePrice: e.target.value })
+                    }
+                  />
+                  <select
+                    value={saleForm.stage}
+                    onChange={(e) =>
+                      setSaleForm({
+                        ...saleForm,
+                        stage: e.target.value as VehicleSale["stage"],
+                      })
+                    }
+                  >
+                    <option>Working</option>
+                    <option>Finance</option>
+                    <option>Delivered</option>
+                    <option>Lost</option>
+                  </select>
+                  <button type="submit">Add to Pipeline</button>
+                </form>
+              </article>
+            </>
+          )}
+
+          {/* ── TRADES ───────────────────────────────────────────── */}
+          {currentPage === "trades" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Trade-In Manager</p>
+                  <h1>Vehicle Appraisals</h1>
+                </div>
+              </header>
+              <article className="panel" style={{ marginBottom: 18 }}>
+                <p className="eyebrow">Add Trade-In</p>
+                <form className="contact-form" onSubmit={addTradeIn}>
+                  <select
+                    value={tradeForm.customerId}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, customerId: e.target.value })
+                    }
+                  >
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    placeholder="Year"
+                    value={tradeForm.year}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, year: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Make"
+                    value={tradeForm.make}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, make: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Model"
+                    value={tradeForm.model}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, model: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Mileage"
+                    value={tradeForm.mileage}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, mileage: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Payoff amount ($)"
+                    value={tradeForm.payoff}
+                    onChange={(e) =>
+                      setTradeForm({ ...tradeForm, payoff: e.target.value })
+                    }
+                  />
+                  <input
+                    placeholder="Estimated ACV ($)"
+                    value={tradeForm.estimatedValue}
+                    onChange={(e) =>
+                      setTradeForm({
+                        ...tradeForm,
+                        estimatedValue: e.target.value,
+                      })
+                    }
+                  />
+                  <button type="submit">Add Trade</button>
+                </form>
+              </article>
+              <div className="customer-table">
+                {tradeIns.length === 0 && (
+                  <p className="empty-state large">
+                    No trade-ins recorded yet.
+                  </p>
+                )}
+                {tradeIns.map((t) => (
+                  <div className="cust-row" key={t.id}>
+                    <div className="cust-main">
+                      <strong>
+                        {t.year} {t.make} {t.model}
+                      </strong>
+                      <span>{t.mileage.toLocaleString()} miles</span>
+                    </div>
+                    <span className="cust-contact">
+                      {getCustomerName(t.customerId)}
+                    </span>
+                    <span>ACV: ${t.estimatedValue.toLocaleString()}</span>
+                    <span>Payoff: ${t.payoff.toLocaleString()}</span>
+                    <span
+                      className={
+                        t.estimatedValue - t.payoff >= 0
+                          ? "kpi-green-text"
+                          : "badge-danger"
+                      }
+                    >
+                      Equity: ${(t.estimatedValue - t.payoff).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── VIN ──────────────────────────────────────────────── */}
+          {currentPage === "vin" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">VIN Decoder</p>
+                  <h1>Look Up Any Vehicle</h1>
+                  <p className="page-subtitle">
+                    Decode any 17-character VIN using the NHTSA database — year,
+                    make, model, trim, engine, and body class instantly.
+                  </p>
+                </div>
+              </header>
+              <article className="panel">
+                <form className="stack-form" onSubmit={lookupVin}>
+                  <input
+                    placeholder="Enter 17-character VIN"
+                    value={vin}
+                    onChange={(e) => setVin(e.target.value.toUpperCase())}
+                    maxLength={17}
+                    style={{ fontFamily: "monospace", letterSpacing: 2 }}
+                  />
+                  <button type="submit" disabled={vinLoading}>
+                    {vinLoading ? "Looking up..." : "Decode VIN"}
+                  </button>
+                </form>
+                {vinError && <p className="auth-error">{vinError}</p>}
+                {vinResult && (
+                  <div className="vin-card">
+                    {vinResult.warning && (
+                      <p className="vin-warning">⚠ {vinResult.warning}</p>
+                    )}
+                    <strong className="vin-title">
+                      {vinResult.year} {vinResult.make} {vinResult.model}
+                      {vinResult.trim && vinResult.trim !== "—"
+                        ? ` — ${vinResult.trim}`
+                        : ""}
+                    </strong>
+                    <div className="vin-grid">
+                      <div>
+                        <span>VIN</span>
+                        <b
+                          style={{ fontFamily: "monospace", letterSpacing: 1 }}
+                        >
+                          {vinResult.vin}
+                        </b>
+                      </div>
+                      <div>
+                        <span>Body Style</span>
+                        <b>{vinResult.bodyClass}</b>
+                      </div>
+                      <div>
+                        <span>Engine</span>
+                        <b>{vinResult.engine}</b>
+                      </div>
+                      <div>
+                        <span>Drive Type</span>
+                        <b>{vinResult.driveType}</b>
+                      </div>
+                      <div>
+                        <span>Transmission</span>
+                        <b>{vinResult.transmission}</b>
+                      </div>
+                      <div>
+                        <span>Fuel Type</span>
+                        <b>{vinResult.fuelType}</b>
+                      </div>
+                      <div>
+                        <span>Doors</span>
+                        <b>{vinResult.doors}</b>
+                      </div>
+                      <div>
+                        <span>Manufacturer</span>
+                        <b>{vinResult.manufacturer}</b>
+                      </div>
+                      <div>
+                        <span>Plant Country</span>
+                        <b>{vinResult.country}</b>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </article>
+            </>
+          )}
+
+          {/* ── DESK TOOL ────────────────────────────────────────── */}
+          {currentPage === "desk" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Deal Desk</p>
+                  <h1>Structure a Deal</h1>
+                  <p className="page-subtitle">
+                    Build the full deal — vehicle, trade, F&I products, taxes,
+                    fees — and see the real monthly payment and amount financed
+                    instantly.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() =>
+                    setDesk({
+                      customerId: "",
+                      stockNumber: "",
+                      year: "",
+                      make: "",
+                      model: "",
+                      trim: "",
+                      msrp: "",
+                      sellingPrice: "",
+                      tradeYear: "",
+                      tradeMake: "",
+                      tradeModel: "",
+                      tradeACV: "",
+                      tradePayoff: "",
+                      downPayment: "",
+                      rebate: "",
+                      docFee: "699",
+                      titleFee: "100",
+                      regFee: "200",
+                      taxRate: "8.5",
+                      gap: false,
+                      gapPrice: "895",
+                      warranty: false,
+                      warrantyPrice: "2495",
+                      tireWheel: false,
+                      tirewheelPrice: "1195",
+                      paintPro: false,
+                      paintProPrice: "799",
+                      creditLife: false,
+                      creditLifePrice: "599",
+                      apr: "7.9",
+                      termMonths: "72",
+                      lender: "",
+                    })
+                  }
+                >
+                  Clear Desk
+                </button>
+              </header>
+
+              <div className="desk-layout">
+                {/* ── LEFT: Deal Builder ── */}
+                <div className="desk-builder">
+                  {/* Customer */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Customer</p>
+                    <div className="desk-row">
+                      <div className="desk-field full">
+                        <label>Select Customer</label>
+                        <select
+                          value={desk.customerId}
+                          onChange={(e) =>
+                            setDesk({ ...desk, customerId: e.target.value })
+                          }
+                        >
+                          <option value="">— No customer selected —</option>
+                          {customers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.firstName} {c.lastName} —{" "}
+                              {c.interestedVehicle || "No vehicle"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Vehicle</p>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>Stock #</label>
+                        <input
+                          placeholder="A1024"
+                          value={desk.stockNumber}
+                          onChange={(e) =>
+                            setDesk({ ...desk, stockNumber: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Year</label>
+                        <input
+                          placeholder="2024"
+                          value={desk.year}
+                          onChange={(e) =>
+                            setDesk({ ...desk, year: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Make</label>
+                        <input
+                          placeholder="Toyota"
+                          value={desk.make}
+                          onChange={(e) =>
+                            setDesk({ ...desk, make: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Model</label>
+                        <input
+                          placeholder="Camry"
+                          value={desk.model}
+                          onChange={(e) =>
+                            setDesk({ ...desk, model: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Trim</label>
+                        <input
+                          placeholder="XSE"
+                          value={desk.trim}
+                          onChange={(e) =>
+                            setDesk({ ...desk, trim: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>MSRP ($)</label>
+                        <input
+                          placeholder="42000"
+                          value={desk.msrp}
+                          onChange={(e) =>
+                            setDesk({ ...desk, msrp: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Selling Price ($)</label>
+                        <input
+                          placeholder="39995"
+                          value={desk.sellingPrice}
+                          onChange={(e) =>
+                            setDesk({ ...desk, sellingPrice: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field desk-computed">
+                        <label>Discount</label>
+                        <span
+                          className={
+                            deskNumbers.discount > 0
+                              ? "desk-positive"
+                              : deskNumbers.discount < 0
+                                ? "desk-negative"
+                                : "desk-zero"
+                          }
+                        >
+                          {deskNumbers.discount !== 0
+                            ? `$${Math.abs(deskNumbers.discount).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.discount > 0 ? "below MSRP" : "above MSRP"}`
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trade-In */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Trade-In</p>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>Year</label>
+                        <input
+                          placeholder="2020"
+                          value={desk.tradeYear}
+                          onChange={(e) =>
+                            setDesk({ ...desk, tradeYear: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Make</label>
+                        <input
+                          placeholder="Honda"
+                          value={desk.tradeMake}
+                          onChange={(e) =>
+                            setDesk({ ...desk, tradeMake: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Model</label>
+                        <input
+                          placeholder="Accord"
+                          value={desk.tradeModel}
+                          onChange={(e) =>
+                            setDesk({ ...desk, tradeModel: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>ACV ($)</label>
+                        <input
+                          placeholder="14000"
+                          value={desk.tradeACV}
+                          onChange={(e) =>
+                            setDesk({ ...desk, tradeACV: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Payoff ($)</label>
+                        <input
+                          placeholder="8500"
+                          value={desk.tradePayoff}
+                          onChange={(e) =>
+                            setDesk({ ...desk, tradePayoff: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field desk-computed">
+                        <label>Trade Equity</label>
+                        <span
+                          className={
+                            deskNumbers.equity > 0
+                              ? "desk-positive"
+                              : deskNumbers.equity < 0
+                                ? "desk-negative"
+                                : "desk-zero"
+                          }
+                        >
+                          {deskNumbers.equity !== 0
+                            ? `${deskNumbers.equity > 0 ? "+" : ""}$${deskNumbers.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${deskNumbers.equity < 0 ? "(upside down)" : "equity"}`
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cash & Rebates */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Cash & Incentives</p>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>Down Payment ($)</label>
+                        <input
+                          placeholder="3000"
+                          value={desk.downPayment}
+                          onChange={(e) =>
+                            setDesk({ ...desk, downPayment: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Manufacturer Rebate ($)</label>
+                        <input
+                          placeholder="1500"
+                          value={desk.rebate}
+                          onChange={(e) =>
+                            setDesk({ ...desk, rebate: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* F&I Products */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">F&I Products</p>
+                    <div className="fi-menu">
+                      {(
+                        [
+                          {
+                            key: "gap",
+                            label: "GAP Insurance",
+                            priceKey: "gapPrice",
+                          },
+                          {
+                            key: "warranty",
+                            label: "Extended Warranty",
+                            priceKey: "warrantyPrice",
+                          },
+                          {
+                            key: "tireWheel",
+                            label: "Tire & Wheel Protection",
+                            priceKey: "tirewheelPrice",
+                          },
+                          {
+                            key: "paintPro",
+                            label: "Paint Protection",
+                            priceKey: "paintProPrice",
+                          },
+                          {
+                            key: "creditLife",
+                            label: "Credit Life / Disability",
+                            priceKey: "creditLifePrice",
+                          },
+                        ] as const
+                      ).map(({ key, label, priceKey }) => (
+                        <div className="fi-row" key={key}>
+                          <label className="fi-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={desk[key] as boolean}
+                              onChange={(e) =>
+                                setDesk({ ...desk, [key]: e.target.checked })
+                              }
+                            />
+                            <span
+                              className={
+                                desk[key] ? "fi-label active" : "fi-label"
+                              }
+                            >
+                              {label}
+                            </span>
+                          </label>
+                          <div className="fi-price-wrap">
+                            <span>$</span>
+                            <input
+                              className="fi-price"
+                              value={desk[priceKey] as string}
+                              onChange={(e) =>
+                                setDesk({ ...desk, [priceKey]: e.target.value })
+                              }
+                              disabled={!desk[key] as boolean}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Taxes & Fees */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Taxes & Fees</p>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>Sales Tax Rate (%)</label>
+                        <input
+                          value={desk.taxRate}
+                          onChange={(e) =>
+                            setDesk({ ...desk, taxRate: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Doc Fee ($)</label>
+                        <input
+                          value={desk.docFee}
+                          onChange={(e) =>
+                            setDesk({ ...desk, docFee: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Title Fee ($)</label>
+                        <input
+                          value={desk.titleFee}
+                          onChange={(e) =>
+                            setDesk({ ...desk, titleFee: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Reg / License ($)</label>
+                        <input
+                          value={desk.regFee}
+                          onChange={(e) =>
+                            setDesk({ ...desk, regFee: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Finance Terms */}
+                  <div className="desk-section">
+                    <p className="desk-section-title">Finance Terms</p>
+                    <div className="desk-row">
+                      <div className="desk-field">
+                        <label>APR (%)</label>
+                        <input
+                          value={desk.apr}
+                          onChange={(e) =>
+                            setDesk({ ...desk, apr: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="desk-field">
+                        <label>Term (months)</label>
+                        <select
+                          value={desk.termMonths}
+                          onChange={(e) =>
+                            setDesk({ ...desk, termMonths: e.target.value })
+                          }
+                        >
+                          <option>24</option>
+                          <option>36</option>
+                          <option>48</option>
+                          <option>60</option>
+                          <option>72</option>
+                          <option>84</option>
+                        </select>
+                      </div>
+                      <div className="desk-field">
+                        <label>Lender</label>
+                        <input
+                          placeholder="Chase Auto"
+                          value={desk.lender}
+                          onChange={(e) =>
+                            setDesk({ ...desk, lender: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── RIGHT: Deal Summary ── */}
+                <div className="desk-summary">
+                  {/* Monthly Payment — big hero number */}
+                  <div className="payment-hero">
+                    <p className="payment-hero-label">Est. Monthly Payment</p>
+                    <strong className="payment-hero-amount">
+                      {deskNumbers.monthly > 0
+                        ? `$${deskNumbers.monthly.toFixed(2)}`
+                        : "$—"}
+                    </strong>
+                    <p className="payment-hero-sub">
+                      {desk.termMonths} mo · {desk.apr}% APR
+                      {desk.lender ? ` · ${desk.lender}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Deal Breakdown */}
+                  <div className="deal-breakdown">
+                    <p className="desk-section-title">Deal Breakdown</p>
+
+                    <div className="deal-line">
+                      <span>Selling Price</span>
+                      <span>
+                        {deskNumbers.selling > 0
+                          ? `$${deskNumbers.selling.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </span>
+                    </div>
+                    {deskNumbers.fiTotal > 0 && (
+                      <>
+                        {deskNumbers.fiItems.map((item) => (
+                          <div className="deal-line indent" key={item.name}>
+                            <span>+ {item.name}</span>
+                            <span>
+                              $
+                              {item.price.toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    <div className="deal-line">
+                      <span>Sales Tax ({desk.taxRate}%)</span>
+                      <span>
+                        {deskNumbers.salesTax > 0
+                          ? `$${deskNumbers.salesTax.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="deal-line">
+                      <span>Doc / Title / Reg</span>
+                      <span>
+                        {deskNumbers.totalFees > 0
+                          ? `$${deskNumbers.totalFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </span>
+                    </div>
+                    {deskNumbers.equity !== 0 && (
+                      <div
+                        className={`deal-line ${deskNumbers.equity > 0 ? "deal-line-credit" : "deal-line-debit"}`}
+                      >
+                        <span>
+                          {deskNumbers.equity > 0
+                            ? "– Trade Equity"
+                            : "+ Negative Equity"}
+                        </span>
+                        <span>
+                          {deskNumbers.equity > 0 ? "-" : "+"}$
+                          {Math.abs(deskNumbers.equity).toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 },
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {parseFloat(desk.downPayment) > 0 && (
+                      <div className="deal-line deal-line-credit">
+                        <span>– Down Payment</span>
+                        <span>
+                          -$
+                          {(parseFloat(desk.downPayment) || 0).toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 },
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    {parseFloat(desk.rebate) > 0 && (
+                      <div className="deal-line deal-line-credit">
+                        <span>– Manufacturer Rebate</span>
+                        <span>
+                          -$
+                          {(parseFloat(desk.rebate) || 0).toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 },
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    <div className="deal-line deal-line-total">
+                      <span>Amount Financed</span>
+                      <strong>
+                        {deskNumbers.financed > 0
+                          ? `$${deskNumbers.financed.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Payment Grid */}
+                  {deskNumbers.financed > 0 && (
+                    <div className="payment-grid-wrap">
+                      <p className="desk-section-title">Payment Grid</p>
+                      <p className="payment-grid-note">
+                        {desk.apr}% APR — payments at different terms and down
+                        payments
+                      </p>
+                      <div className="payment-grid-scroll">
+                        <table className="payment-grid-table">
+                          <thead>
+                            <tr>
+                              <th>Term</th>
+                              {[0, 1000, 2000, 3000, 5000].map((d) => (
+                                <th key={d}>${d.toLocaleString()} down</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paymentGrid.map((row) => (
+                              <tr
+                                key={row.term}
+                                className={
+                                  row.term === parseInt(desk.termMonths)
+                                    ? "grid-row-active"
+                                    : ""
+                                }
+                              >
+                                <td>
+                                  <strong>{row.term} mo</strong>
+                                </td>
+                                {row.payments.map((pmt, i) => (
+                                  <td
+                                    key={i}
+                                    className={pmt > 0 ? "" : "grid-zero"}
+                                  >
+                                    {pmt > 0 ? `$${pmt.toFixed(0)}` : "—"}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── ACTIVITIES ───────────────────────────────────────── */}
+          {currentPage === "activities" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Activity Log</p>
+                  <h1>Calls, Texts, Emails & Notes</h1>
+                  <p className="page-subtitle">
+                    All customer interactions across every rep and deal. Use a
+                    customer's Deal Jacket to log activities tied to that
+                    specific deal.
+                  </p>
+                </div>
+              </header>
+              <article className="panel" style={{ marginBottom: 18 }}>
+                <p className="eyebrow">Log Activity</p>
+                <form className="contact-form" onSubmit={addActivity}>
+                  <select
+                    value={activityForm.customerId}
+                    onChange={(e) =>
+                      setActivityForm({
+                        ...activityForm,
+                        customerId: e.target.value,
+                      })
+                    }
+                  >
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={activityForm.type}
+                    onChange={(e) =>
+                      setActivityForm({
+                        ...activityForm,
+                        type: e.target.value as Activity["type"],
+                      })
+                    }
+                  >
+                    <option>Call</option>
+                    <option>Text</option>
+                    <option>Email</option>
+                    <option>Appointment</option>
+                    <option>Note</option>
+                  </select>
+                  <input
+                    placeholder="Notes or outcome..."
+                    value={activityForm.note}
+                    onChange={(e) =>
+                      setActivityForm({ ...activityForm, note: e.target.value })
+                    }
+                  />
+                  <button type="submit">Log Activity</button>
+                </form>
+              </article>
+              <div className="activity-timeline full-timeline">
+                {activities.length === 0 && (
+                  <p className="empty-state large">No activities logged yet.</p>
+                )}
+                {activities.slice(0, 30).map((act) => (
+                  <div className="timeline-item" key={act.id}>
+                    <span
+                      className={`timeline-dot dot-${act.type.toLowerCase()}`}
+                    />
+                    <div>
+                      <strong>
+                        {act.type} — {getCustomerName(act.customerId)}
+                      </strong>
+                      <span>{act.note}</span>
+                      <small>{new Date(act.createdAt).toLocaleString()}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── SERVICE ──────────────────────────────────────────── */}
+          {currentPage === "service" &&
+            (() => {
+              const roStatuses: RoStatus[] = [
+                "Check-In",
+                "In Progress",
+                "On Hold - Parts",
+                "Multi-Point",
+                "Ready",
+                "Closed",
+              ];
+              const openROs = repairOrders.filter((r) => r.status !== "Closed");
+              const readyROs = repairOrders.filter((r) => r.status === "Ready");
+              const inProgROs = repairOrders.filter(
+                (r) => r.status === "In Progress" || r.status === "Multi-Point",
+              );
+              const holdROs = repairOrders.filter(
+                (r) => r.status === "On Hold - Parts",
+              );
+              const serviceRev = openROs.reduce((t, r) => t + r.total, 0);
+
+              function roStatusClass(s: RoStatus) {
+                return (
+                  {
+                    "Check-In": "ro-checkin",
+                    "In Progress": "ro-inprogress",
+                    "On Hold - Parts": "ro-hold",
+                    "Multi-Point": "ro-mpi",
+                    Ready: "ro-ready",
+                    Closed: "ro-closed",
+                  }[s] ?? ""
+                );
+              }
+
+              async function updateRoStatus(id: number, status: RoStatus) {
+                try {
+                  const res = await fetch(
+                    `${API_BASE}/api/repair-orders/${id}/status`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status }),
+                    },
+                  );
+                  const updated = await res.json();
+                  setRepairOrders((prev) =>
+                    prev.map((r) => (r.id === id ? updated : r)),
+                  );
+                } catch {
+                  setRepairOrders((prev) =>
+                    prev.map((r) =>
+                      r.id === id
+                        ? {
+                            ...r,
+                            status,
+                            closedAt:
+                              status === "Closed"
+                                ? new Date().toISOString()
+                                : r.closedAt,
+                          }
+                        : r,
+                    ),
+                  );
+                }
+              }
+
+              async function handleCreateRo(e: React.FormEvent) {
+                e.preventDefault();
+                const newRo: RepairOrder = {
+                  id: Date.now(),
+                  roNumber: `RO-${String(Date.now()).slice(-6)}`,
+                  customerName: roForm.customerName || "Walk-in",
+                  customerPhone: roForm.customerPhone,
+                  vehicleYear: roForm.vehicleYear,
+                  vehicleMake: roForm.vehicleMake,
+                  vehicleModel: roForm.vehicleModel,
+                  vehicleMileageIn: Number(roForm.vehicleMileageIn) || 0,
+                  vehicleVin: roForm.vehicleVin,
+                  advisor: roForm.advisor,
+                  technician: roForm.technician,
+                  status: "Check-In",
+                  promisedTime: roForm.promisedTime,
+                  lines: roForm.concern
+                    ? [
+                        {
+                          id: 1,
+                          description: roForm.concern,
+                          type: "Concern",
+                          laborHours: 0,
+                          laborTotal: 0,
+                          partsTotal: 0,
+                          tech: "",
+                          status: "Open",
+                        },
+                      ]
+                    : [],
+                  laborTotal: 0,
+                  partsTotal: 0,
+                  total: 0,
+                  notes: roForm.notes,
+                  createdAt: new Date().toISOString(),
+                };
+                try {
+                  const res = await fetch(`${API_BASE}/api/repair-orders`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(newRo),
+                  });
+                  const saved = await res.json();
+                  setRepairOrders((prev) => [saved, ...prev]);
+                } catch {
+                  setRepairOrders((prev) => [newRo, ...prev]);
+                }
+                setRoForm({
+                  customerName: "",
+                  customerPhone: "",
+                  vehicleYear: "",
+                  vehicleMake: "",
+                  vehicleModel: "",
+                  vehicleMileageIn: "",
+                  vehicleVin: "",
+                  advisor: "",
+                  technician: "",
+                  promisedTime: "",
+                  concern: "",
+                  notes: "",
+                });
+                setShowRoForm(false);
+                setAppMessage(`RO ${newRo.roNumber} opened.`);
+              }
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <p className="eyebrow">Service Department</p>
+                      <h1>Open Repair Orders</h1>
+                      <p className="page-subtitle">
+                        Live view of every vehicle in service. Update status as
+                        work progresses.
+                      </p>
+                    </div>
+                    <div className="header-actions">
+                      <button
+                        type="button"
+                        onClick={() => setShowRoForm((v) => !v)}
+                      >
+                        + New RO
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* Service KPIs */}
+                  <div
+                    className="kpi-grid"
+                    style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+                  >
+                    <div className="kpi-card kpi-blue">
+                      <span>Open ROs</span>
+                      <strong>{openROs.length}</strong>
+                      <small>Active vehicles</small>
+                    </div>
+                    <div className="kpi-card kpi-yellow">
+                      <span>In Progress</span>
+                      <strong>{inProgROs.length}</strong>
+                      <small>Tech working now</small>
+                    </div>
+                    <div
+                      className="kpi-card"
+                      style={{
+                        background: "linear-gradient(135deg,#f97316,#ef4444)",
+                        color: "#fff",
+                      }}
+                    >
+                      <span>On Hold — Parts</span>
+                      <strong>{holdROs.length}</strong>
+                      <small>Waiting on parts</small>
+                    </div>
+                    <div className="kpi-card kpi-green">
+                      <span>Ready for Pickup</span>
+                      <strong>{readyROs.length}</strong>
+                      <small>${serviceRev.toLocaleString()} est. rev</small>
+                    </div>
+                  </div>
+
+                  {/* New RO Form */}
+                  {showRoForm && (
+                    <article className="panel" style={{ marginBottom: 18 }}>
+                      <p className="eyebrow">Open New Repair Order</p>
+                      <h2>Vehicle Check-In</h2>
+                      <form className="ro-form" onSubmit={handleCreateRo}>
+                        <div className="ro-form-group">
+                          <label>Customer Name</label>
+                          <input
+                            placeholder="John Smith"
+                            value={roForm.customerName}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                customerName: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Phone</label>
+                          <input
+                            placeholder="(555) 000-0000"
+                            value={roForm.customerPhone}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                customerPhone: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Year</label>
+                          <input
+                            placeholder="2021"
+                            value={roForm.vehicleYear}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                vehicleYear: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Make</label>
+                          <input
+                            placeholder="Toyota"
+                            value={roForm.vehicleMake}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                vehicleMake: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Model</label>
+                          <input
+                            placeholder="Camry"
+                            value={roForm.vehicleModel}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                vehicleModel: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Mileage In</label>
+                          <input
+                            placeholder="38200"
+                            value={roForm.vehicleMileageIn}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                vehicleMileageIn: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>VIN (optional)</label>
+                          <input
+                            placeholder="1HGBH41JXMN109186"
+                            value={roForm.vehicleVin}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                vehicleVin: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Service Advisor</label>
+                          <select
+                            value={roForm.advisor}
+                            onChange={(e) =>
+                              setRoForm({ ...roForm, advisor: e.target.value })
+                            }
+                          >
+                            <option value="">Select advisor</option>
+                            {["Avery", "Mike", "Sarah", "Dan"].map((a) => (
+                              <option key={a}>{a}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Technician</label>
+                          <select
+                            value={roForm.technician}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                technician: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Unassigned</option>
+                            {["Mike T.", "Dan W.", "Chris R.", "Sam L."].map(
+                              (t) => (
+                                <option key={t}>{t}</option>
+                              ),
+                            )}
+                          </select>
+                        </div>
+                        <div className="ro-form-group">
+                          <label>Promised Time</label>
+                          <input
+                            placeholder="3:00 PM Today"
+                            value={roForm.promisedTime}
+                            onChange={(e) =>
+                              setRoForm({
+                                ...roForm,
+                                promisedTime: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group ro-form-wide">
+                          <label>Customer Concern</label>
+                          <input
+                            placeholder="Describe the concern or service needed..."
+                            value={roForm.concern}
+                            onChange={(e) =>
+                              setRoForm({ ...roForm, concern: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-group ro-form-wide">
+                          <label>Notes</label>
+                          <input
+                            placeholder="Internal notes..."
+                            value={roForm.notes}
+                            onChange={(e) =>
+                              setRoForm({ ...roForm, notes: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="ro-form-actions">
+                          <button type="submit">Open RO</button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => setShowRoForm(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </article>
+                  )}
+
+                  {/* RO Board — columns by status */}
+                  <div className="ro-board">
+                    {roStatuses
+                      .filter((s) => s !== "Closed")
+                      .map((col) => {
+                        const colRos = repairOrders.filter(
+                          (r) => r.status === col,
+                        );
+                        return (
+                          <div className="ro-col" key={col}>
+                            <div className="ro-col-header">
+                              <span
+                                className={`ro-status-badge ${roStatusClass(col)}`}
+                              >
+                                {col}
+                              </span>
+                              <span className="ro-col-count">
+                                {colRos.length}
+                              </span>
+                            </div>
+                            {colRos.length === 0 && (
+                              <p
+                                className="empty-state"
+                                style={{ fontSize: 12, padding: "10px 0" }}
+                              >
+                                Empty
+                              </p>
+                            )}
+                            {colRos.map((ro) => (
+                              <div
+                                className={`ro-card ${roStatusClass(ro.status)}`}
+                                key={ro.id}
+                              >
+                                <div className="ro-card-header">
+                                  <span className="ro-number">
+                                    {ro.roNumber}
+                                  </span>
+                                  {ro.promisedTime && (
+                                    <span className="ro-promise">
+                                      <Clock size={11} /> {ro.promisedTime}
+                                    </span>
+                                  )}
+                                </div>
+                                <strong className="ro-customer">
+                                  {ro.customerName}
+                                </strong>
+                                <span className="ro-vehicle">
+                                  {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                  {ro.vehicleModel}
+                                </span>
+                                <span
+                                  className="ro-vehicle"
+                                  style={{ color: "#94a3b8" }}
+                                >
+                                  {ro.vehicleMileageIn.toLocaleString()} mi ·{" "}
+                                  {ro.vehicleVin || "No VIN"}
+                                </span>
+                                <div className="ro-advisors">
+                                  <span>Adv: {ro.advisor || "—"}</span>
+                                  <span>Tech: {ro.technician || "—"}</span>
+                                </div>
+                                {ro.lines.length > 0 && (
+                                  <div className="ro-lines">
+                                    {ro.lines.map((line) => (
+                                      <div className="ro-line" key={line.id}>
+                                        <span
+                                          className={`ro-line-status ${line.status === "Complete" ? "line-done" : line.status === "In Progress" ? "line-wip" : "line-open"}`}
+                                        >
+                                          {line.status === "Complete" ? (
+                                            <CheckCircle size={10} />
+                                          ) : line.status === "In Progress" ? (
+                                            <Clock size={10} />
+                                          ) : (
+                                            <AlertTriangle size={10} />
+                                          )}
+                                        </span>
+                                        <span className="ro-line-desc">
+                                          {line.description}
+                                        </span>
+                                        <span className="ro-line-total">
+                                          $
+                                          {(
+                                            line.laborTotal + line.partsTotal
+                                          ).toLocaleString()}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {ro.notes && (
+                                  <p className="ro-notes">{ro.notes}</p>
+                                )}
+                                <div className="ro-total-row">
+                                  <span>Total</span>
+                                  <strong>${ro.total.toLocaleString()}</strong>
+                                </div>
+                                <div className="ro-status-actions">
+                                  {roStatuses
+                                    .filter((s) => s !== ro.status)
+                                    .map((s) => (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        className={`ro-move-btn ${roStatusClass(s)}`}
+                                        onClick={() => updateRoStatus(ro.id, s)}
+                                      >
+                                        → {s}
+                                      </button>
+                                    ))}
+                                </div>
+                                {ro.customerId && (
+                                  <button
+                                    type="button"
+                                    className="open-btn"
+                                    style={{ marginTop: 6, width: "100%" }}
+                                    onClick={() => {
+                                      window.location.hash = `#/customers/${ro.customerId}`;
+                                    }}
+                                  >
+                                    View Customer Profile
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Closed ROs */}
+                  {repairOrders.filter((r) => r.status === "Closed").length >
+                    0 && (
+                    <article className="panel" style={{ marginTop: 18 }}>
+                      <p className="eyebrow">Closed Today</p>
+                      <h2>Completed Repair Orders</h2>
+                      <table className="ro-table">
+                        <thead>
+                          <tr>
+                            <th>RO #</th>
+                            <th>Customer</th>
+                            <th>Vehicle</th>
+                            <th>Advisor</th>
+                            <th>Tech</th>
+                            <th>Total</th>
+                            <th>Closed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {repairOrders
+                            .filter((r) => r.status === "Closed")
+                            .map((ro) => (
+                              <tr key={ro.id}>
+                                <td>
+                                  <code>{ro.roNumber}</code>
+                                </td>
+                                <td>{ro.customerName}</td>
+                                <td>
+                                  {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                  {ro.vehicleModel}
+                                </td>
+                                <td>{ro.advisor}</td>
+                                <td>{ro.technician}</td>
+                                <td>
+                                  <strong>${ro.total.toLocaleString()}</strong>
+                                </td>
+                                <td>
+                                  <small>
+                                    {ro.closedAt
+                                      ? new Date(
+                                          ro.closedAt,
+                                        ).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "—"}
+                                  </small>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </article>
+                  )}
+                </>
+              );
+            })()}
+        </section>
+      </main>
+    </>
   );
 }
 
