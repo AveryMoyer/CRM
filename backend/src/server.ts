@@ -17,10 +17,19 @@ type Customer = {
   lastName: string;
   email: string;
   phone: string;
-  status: "Lead" | "Appointment" | "Finance" | "Sold";
+  status:
+    | "New Lead"
+    | "Contacted"
+    | "Appt Set"
+    | "Appt Show"
+    | "Working"
+    | "Sold"
+    | "Lost";
+  temperature?: "Hot" | "Warm" | "Cold";
   interestedVehicle: string;
   source: string;
   assignedTo: string;
+  createdAt?: string;
   nextFollowUp: string;
 };
 
@@ -159,7 +168,8 @@ const defaultDatabase: Database = {
       lastName: "Lee",
       email: "jordan@example.com",
       phone: "(555) 123-0148",
-      status: "Appointment",
+      status: "Appt Show",
+      temperature: "Hot",
       interestedVehicle: "2024 Toyota Camry",
       source: "Website Lead",
       assignedTo: "Avery",
@@ -171,7 +181,8 @@ const defaultDatabase: Database = {
       lastName: "Smith",
       email: "taylor@example.com",
       phone: "(555) 981-4432",
-      status: "Finance",
+      status: "Working",
+      temperature: "Hot",
       interestedVehicle: "2023 Ford F-150",
       source: "Walk-in",
       assignedTo: "Avery",
@@ -314,11 +325,9 @@ app.get("/api/vin/:vin", async (req, res) => {
     // NHTSA returns ErrorCode "0" for a clean decode; anything else means partial or invalid
     const errorCode = String(result.ErrorCode || "");
     if (!result.Make && !result.Model) {
-      res
-        .status(404)
-        .json({
-          message: "VIN not recognized — check the number and try again",
-        });
+      res.status(404).json({
+        message: "VIN not recognized — check the number and try again",
+      });
       return;
     }
 
@@ -467,7 +476,8 @@ app.get("/api/summary", (_req, res) => {
     (application) => application.status !== "Approved",
   ).length;
   const appointmentCount = db.customers.filter(
-    (customer) => customer.status === "Appointment",
+    (customer) =>
+      customer.status === "Appt Set" || customer.status === "Appt Show",
   ).length;
 
   res.json({

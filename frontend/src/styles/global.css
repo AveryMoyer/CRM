@@ -721,21 +721,38 @@ button {
   white-space: nowrap;
 }
 
-.badge-lead {
-  background: #dbeafe;
-  color: #1d4ed8;
+/* Full funnel stage badges */
+.badge-new-lead {
+  background: #e0f2fe;
+  color: #0369a1;
 }
-.badge-appt {
+.badge-contacted {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.badge-appt-set {
   background: #fef9c3;
   color: #854d0e;
+}
+.badge-appt-show {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.badge-working {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+.badge-sold {
+  background: #dcfce7;
+  color: #166534;
+}
+.badge-lost {
+  background: #f1f5f9;
+  color: #64748b;
 }
 .badge-finance {
   background: #dcfce7;
   color: #166534;
-}
-.badge-sold {
-  background: #e9d5ff;
-  color: #6b21a8;
 }
 .badge-danger {
   background: #fee2e2;
@@ -748,6 +765,169 @@ button {
   font-weight: 700;
   padding: 2px 9px;
   border-radius: 99px;
+}
+
+/* Temperature badges */
+.temp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.temp-hot {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.temp-warm {
+  background: #fffbeb;
+  color: #d97706;
+}
+.temp-cold {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+/* Speed-to-lead timer */
+.inbox-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.speed-to-lead {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.speed-hot {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.speed-warm {
+  background: #fffbeb;
+  color: #d97706;
+}
+.speed-cold {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+/* ── Conversion Funnel ──────────────────────────────────────────────────────── */
+.funnel-panel {
+  margin: 18px 0;
+}
+.funnel-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+.funnel-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.funnel-bar-wrap {
+  flex: 1;
+  background: #f1f5f9;
+  border-radius: 6px;
+  height: 10px;
+  overflow: hidden;
+}
+.funnel-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+.funnel-new {
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+}
+.funnel-contacted {
+  background: linear-gradient(90deg, #818cf8, #6366f1);
+}
+.funnel-appt-set {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.funnel-appt-show {
+  background: linear-gradient(90deg, #fb923c, #f97316);
+}
+.funnel-working {
+  background: linear-gradient(90deg, #c084fc, #a855f7);
+}
+.funnel-sold {
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+.funnel-lost {
+  background: linear-gradient(90deg, #94a3b8, #64748b);
+}
+.funnel-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+}
+.funnel-label strong {
+  font-size: 15px;
+  color: #0f172a;
+  min-width: 20px;
+  text-align: right;
+}
+.funnel-label small {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.funnel-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.funnel-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.funnel-kpi span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+.funnel-kpi strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* ── Stalled / Equity panel accents ────────────────────────────────────────── */
+.stalled-eye {
+  color: #f59e0b !important;
+}
+.equity-eye {
+  color: #10b981 !important;
+}
+.panel-note {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: -8px 0 10px;
+}
+
+.stalled-card {
+  border-left: 3px solid #f59e0b !important;
+}
+.equity-card {
+  border-left: 3px solid #10b981 !important;
 }
 
 .source-tag {

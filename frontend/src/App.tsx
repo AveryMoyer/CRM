@@ -17,17 +17,29 @@ import "./styles/global.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type CustomerStatus =
+  | "New Lead"
+  | "Contacted"
+  | "Appt Set"
+  | "Appt Show"
+  | "Working"
+  | "Sold"
+  | "Lost";
+type LeadTemp = "Hot" | "Warm" | "Cold";
+
 type Customer = {
   id: number;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  status: "Lead" | "Appointment" | "Finance" | "Sold";
+  status: CustomerStatus;
+  temperature?: LeadTemp;
   interestedVehicle: string;
   source?: string;
   assignedTo?: string;
   nextFollowUp?: string;
+  createdAt?: string;
 };
 
 type FinanceApplication = {
@@ -163,11 +175,13 @@ const initialCustomers: Customer[] = [
     lastName: "Lee",
     email: "jordan@example.com",
     phone: "(555) 123-0148",
-    status: "Appointment",
+    status: "Appt Show",
+    temperature: "Hot",
     interestedVehicle: "2024 Toyota Camry",
     source: "Cars.com",
     assignedTo: "Avery",
     nextFollowUp: "Today",
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
   },
   {
     id: 2,
@@ -175,11 +189,13 @@ const initialCustomers: Customer[] = [
     lastName: "Smith",
     email: "taylor@example.com",
     phone: "(555) 981-4432",
-    status: "Finance",
+    status: "Working",
+    temperature: "Hot",
     interestedVehicle: "2023 Ford F-150",
     source: "Walk-in",
     assignedTo: "Avery",
     nextFollowUp: "Tomorrow",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
   },
   {
     id: 3,
@@ -187,11 +203,13 @@ const initialCustomers: Customer[] = [
     lastName: "Davis",
     email: "morgan@example.com",
     phone: "(555) 234-5678",
-    status: "Lead",
+    status: "New Lead",
+    temperature: "Warm",
     interestedVehicle: "2024 Honda CR-V",
     source: "Website Lead",
     assignedTo: "",
     nextFollowUp: "",
+    createdAt: new Date(Date.now() - 1000 * 60 * 22).toISOString(),
   },
   {
     id: 4,
@@ -199,11 +217,13 @@ const initialCustomers: Customer[] = [
     lastName: "Johnson",
     email: "casey@example.com",
     phone: "(555) 345-6789",
-    status: "Lead",
+    status: "Contacted",
+    temperature: "Warm",
     interestedVehicle: "2023 Chevy Silverado",
     source: "AutoTrader",
-    assignedTo: "",
+    assignedTo: "Avery",
     nextFollowUp: "",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
   },
   {
     id: 5,
@@ -216,6 +236,7 @@ const initialCustomers: Customer[] = [
     source: "Referral",
     assignedTo: "Mike",
     nextFollowUp: "",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
   },
   {
     id: 6,
@@ -223,11 +244,40 @@ const initialCustomers: Customer[] = [
     lastName: "Brown",
     email: "alex@example.com",
     phone: "(555) 567-8901",
-    status: "Lead",
+    status: "New Lead",
+    temperature: "Cold",
     interestedVehicle: "2024 Jeep Wrangler",
     source: "Cars.com",
     assignedTo: "",
     nextFollowUp: "",
+    createdAt: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+  },
+  {
+    id: 7,
+    firstName: "Sam",
+    lastName: "Torres",
+    email: "sam@example.com",
+    phone: "(555) 678-9012",
+    status: "Appt Set",
+    temperature: "Warm",
+    interestedVehicle: "2024 Hyundai Tucson",
+    source: "Phone Call",
+    assignedTo: "Mike",
+    nextFollowUp: "Tomorrow 10am",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+  },
+  {
+    id: 8,
+    firstName: "Dana",
+    lastName: "Park",
+    email: "dana@example.com",
+    phone: "(555) 789-0123",
+    status: "Lost",
+    interestedVehicle: "2023 BMW 3-Series",
+    source: "Cars.com",
+    assignedTo: "Avery",
+    nextFollowUp: "",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
   },
 ];
 
@@ -330,7 +380,7 @@ function App() {
     lastName: "",
     email: "",
     phone: "",
-    status: "Lead" as Customer["status"],
+    status: "New Lead" as Customer["status"],
     interestedVehicle: "",
     source: "",
     assignedTo: "",
@@ -564,22 +614,66 @@ function App() {
     (a) => a.status !== "Approved",
   ).length;
   const appointmentCount = customers.filter(
-    (c) => c.status === "Appointment",
+    (c) => c.status === "Appt Set" || c.status === "Appt Show",
   ).length;
   const soldCount = customers.filter((c) => c.status === "Sold").length;
-  const totalLeads = customers.filter((c) => c.status === "Lead").length;
-  const closingRatio = customers.length
-    ? Math.round((soldCount / customers.length) * 100)
-    : 0;
+  const lostCount = customers.filter((c) => c.status === "Lost").length;
+  const workingCount = customers.filter((c) => c.status === "Working").length;
+  const totalLeads = customers.filter((c) => c.status === "New Lead").length;
+  const contactedCount = customers.filter(
+    (c) => c.status === "Contacted",
+  ).length;
+  const apptSetCount = customers.filter((c) => c.status === "Appt Set").length;
+  const apptShowCount = customers.filter(
+    (c) => c.status === "Appt Show",
+  ).length;
+
+  // Funnel KPIs (Tekion/CDK style)
+  const decidedDeals = soldCount + lostCount;
+  const closingRatio =
+    decidedDeals > 0 ? Math.round((soldCount / decidedDeals) * 100) : 0;
+  const activeOpps =
+    contactedCount + apptSetCount + apptShowCount + workingCount;
+  const leadToContact =
+    customers.length > 0
+      ? Math.round(((customers.length - totalLeads) / customers.length) * 100)
+      : 0;
+  const apptShowRate =
+    apptSetCount + apptShowCount > 0
+      ? Math.round((apptShowCount / (apptSetCount + apptShowCount)) * 100)
+      : 0;
 
   const urgentLeads = useMemo(
     () =>
       customers.filter(
         (c) =>
-          c.status === "Lead" && !activities.some((a) => a.customerId === c.id),
+          c.status === "New Lead" &&
+          !activities.some((a) => a.customerId === c.id),
       ),
     [customers, activities],
   );
+
+  // Equity mining: Sold customers (already bought — prime re-engagement targets)
+  const equityTargets = useMemo(
+    () => customers.filter((c) => c.status === "Sold"),
+    [customers],
+  );
+
+  // Stalled: in-progress leads with no activity in 3+ days
+  const stalledLeads = useMemo(() => {
+    const cutoff = Date.now() - 1000 * 60 * 60 * 72;
+    return customers.filter((c) => {
+      if (["New Lead", "Sold", "Lost"].includes(c.status)) return false;
+      const lastAct = activities
+        .filter((a) => a.customerId === c.id)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0];
+      if (!lastAct) return true;
+      return new Date(lastAct.createdAt).getTime() < cutoff;
+    });
+  }, [customers, activities]);
 
   const internetLeads = useMemo(
     () =>
@@ -587,7 +681,7 @@ function App() {
         .filter((c) => {
           const src = (c.source || "").toLowerCase();
           return (
-            c.status === "Lead" ||
+            c.status === "New Lead" ||
             [
               "cars.com",
               "autotrader",
@@ -746,13 +840,36 @@ function App() {
     return (
       (
         {
-          Lead: "badge-lead",
-          Appointment: "badge-appt",
-          Finance: "badge-finance",
+          "New Lead": "badge-new-lead",
+          Contacted: "badge-contacted",
+          "Appt Set": "badge-appt-set",
+          "Appt Show": "badge-appt-show",
+          Working: "badge-working",
           Sold: "badge-sold",
+          Lost: "badge-lost",
         } as Record<string, string>
       )[s] ?? ""
     );
+  }
+
+  function tempClass(t?: string) {
+    return (
+      (
+        { Hot: "temp-hot", Warm: "temp-warm", Cold: "temp-cold" } as Record<
+          string,
+          string
+        >
+      )[t ?? ""] ?? ""
+    );
+  }
+
+  function timeAgo(iso?: string): string {
+    if (!iso) return "";
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -816,7 +933,7 @@ function App() {
       lastName: "",
       email: "",
       phone: "",
-      status: "Lead",
+      status: "New Lead" as CustomerStatus,
       interestedVehicle: "",
       source: "",
       assignedTo: "",
@@ -880,7 +997,7 @@ function App() {
     const res = await fetch(`${API_BASE}/api/customers/${customer.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...customer, assignedTo, status: "Appointment" }),
+      body: JSON.stringify({ ...customer, assignedTo, status: "Appt Set" }),
     });
     const updated = await res.json();
     setCustomers(customers.map((c) => (c.id === customer.id ? updated : c)));
@@ -2073,33 +2190,181 @@ function App() {
               </div>
             </header>
 
+            {/* ── KPI Row ── */}
             <div className="kpi-grid">
               <div className="kpi-card kpi-blue">
-                <span>Open Leads</span>
+                <span>New Leads</span>
                 <strong>{totalLeads}</strong>
                 <small>{urgentLeads.length} uncontacted</small>
               </div>
               <div className="kpi-card kpi-yellow">
-                <span>Appointments</span>
-                <strong>{appointmentCount}</strong>
-                <small>Active</small>
+                <span>Active Opps</span>
+                <strong>{activeOpps}</strong>
+                <small>In pipeline</small>
               </div>
               <div className="kpi-card kpi-green">
-                <span>Finance Queue</span>
-                <strong>{pendingFinance}</strong>
-                <small>Pending approval</small>
-              </div>
-              <div className="kpi-card kpi-purple">
                 <span>Units Sold</span>
                 <strong>{soldCount}</strong>
                 <small>Closing ratio {closingRatio}%</small>
               </div>
+              <div className="kpi-card kpi-purple">
+                <span>Appt Show Rate</span>
+                <strong>{apptShowRate}%</strong>
+                <small>
+                  {apptShowCount} showed / {apptSetCount + apptShowCount} set
+                </small>
+              </div>
               <div className="kpi-card kpi-dark">
                 <span>Pipeline Value</span>
                 <strong>${pipelineValue.toLocaleString()}</strong>
-                <small>All active deals</small>
+                <small>Lead-to-contact {leadToContact}%</small>
               </div>
             </div>
+
+            {/* ── Conversion Funnel ── */}
+            <article className="panel funnel-panel">
+              <p className="eyebrow">Sales Funnel</p>
+              <h2>Lead-to-Close Conversion</h2>
+              <div className="funnel-stages">
+                {(
+                  [
+                    { label: "New Lead", count: totalLeads, cls: "funnel-new" },
+                    {
+                      label: "Contacted",
+                      count: contactedCount,
+                      cls: "funnel-contacted",
+                    },
+                    {
+                      label: "Appt Set",
+                      count: apptSetCount,
+                      cls: "funnel-appt-set",
+                    },
+                    {
+                      label: "Appt Show",
+                      count: apptShowCount,
+                      cls: "funnel-appt-show",
+                    },
+                    {
+                      label: "Working",
+                      count: workingCount,
+                      cls: "funnel-working",
+                    },
+                    { label: "Sold", count: soldCount, cls: "funnel-sold" },
+                    { label: "Lost", count: lostCount, cls: "funnel-lost" },
+                  ] as const
+                ).map(({ label, count, cls }) => {
+                  const pct = customers.length
+                    ? Math.round((count / customers.length) * 100)
+                    : 0;
+                  return (
+                    <div className="funnel-stage" key={label}>
+                      <div className="funnel-bar-wrap">
+                        <div
+                          className={`funnel-bar ${cls}`}
+                          style={{ width: `${Math.max(pct, 4)}%` }}
+                        />
+                      </div>
+                      <div className="funnel-label">
+                        <span className={`status-badge ${statusClass(label)}`}>
+                          {label}
+                        </span>
+                        <strong>{count}</strong>
+                        <small>{pct}%</small>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="funnel-kpi-row">
+                <div className="funnel-kpi">
+                  <span>Contact Rate</span>
+                  <strong>{leadToContact}%</strong>
+                </div>
+                <div className="funnel-kpi">
+                  <span>Show Rate</span>
+                  <strong>{apptShowRate}%</strong>
+                </div>
+                <div className="funnel-kpi">
+                  <span>Closing Ratio</span>
+                  <strong>{closingRatio}%</strong>
+                </div>
+                <div className="funnel-kpi">
+                  <span>Deals Decided</span>
+                  <strong>{decidedDeals}</strong>
+                </div>
+              </div>
+            </article>
+
+            {/* ── Stalled Deals + Equity Mining row ── */}
+            {(stalledLeads.length > 0 || equityTargets.length > 0) && (
+              <div className="dash-grid" style={{ marginTop: 18 }}>
+                {stalledLeads.length > 0 && (
+                  <article className="panel">
+                    <p className="eyebrow stalled-eye">Stalled Deals</p>
+                    <h2>No activity in 3+ days</h2>
+                    <div className="lead-list">
+                      {stalledLeads.map((c) => (
+                        <div className="lead-card stalled-card" key={c.id}>
+                          <div>
+                            <strong>
+                              {c.firstName} {c.lastName}
+                            </strong>
+                            <span>{c.interestedVehicle}</span>
+                            <small>
+                              <span
+                                className={`status-badge ${statusClass(c.status)}`}
+                              >
+                                {c.status}
+                              </span>
+                              {" · "}
+                              {c.assignedTo || "Unassigned"}
+                            </small>
+                          </div>
+                          <button
+                            type="button"
+                            className="open-btn"
+                            onClick={() => openProfile(c)}
+                          >
+                            Log Activity
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                )}
+                {equityTargets.length > 0 && (
+                  <article className="panel">
+                    <p className="eyebrow equity-eye">Equity Mining</p>
+                    <h2>Re-engagement targets</h2>
+                    <p className="panel-note">
+                      Past buyers — potential trade-up or repeat purchase
+                    </p>
+                    <div className="lead-list">
+                      {equityTargets.map((c) => (
+                        <div className="lead-card equity-card" key={c.id}>
+                          <div>
+                            <strong>
+                              {c.firstName} {c.lastName}
+                            </strong>
+                            <span>{c.interestedVehicle}</span>
+                            <small>
+                              Purchased · Rep: {c.assignedTo || "—"}
+                            </small>
+                          </div>
+                          <button
+                            type="button"
+                            className="open-btn"
+                            onClick={() => openProfile(c)}
+                          >
+                            Re-engage
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                )}
+              </div>
+            )}
 
             <div className="dash-grid">
               <article className="panel">
@@ -2191,12 +2456,16 @@ function App() {
                 <p className="eyebrow">Active Appointments</p>
                 <h2>Scheduled visits</h2>
                 <div className="lead-list">
-                  {customers.filter((c) => c.status === "Appointment")
-                    .length === 0 && (
+                  {customers.filter(
+                    (c) => c.status === "Appt Set" || c.status === "Appt Show",
+                  ).length === 0 && (
                     <p className="empty-state">No appointments scheduled.</p>
                   )}
                   {customers
-                    .filter((c) => c.status === "Appointment")
+                    .filter(
+                      (c) =>
+                        c.status === "Appt Set" || c.status === "Appt Show",
+                    )
                     .map((c) => (
                       <div className="lead-card" key={c.id}>
                         <div>
@@ -2255,12 +2524,16 @@ function App() {
                 </div>
                 <div className="my-day-col">
                   <p className="my-day-label appt">🟡 Appointments Today</p>
-                  {customers.filter((c) => c.status === "Appointment")
-                    .length === 0 ? (
+                  {customers.filter(
+                    (c) => c.status === "Appt Set" || c.status === "Appt Show",
+                  ).length === 0 ? (
                     <p className="empty-state">No appointments scheduled.</p>
                   ) : (
                     customers
-                      .filter((c) => c.status === "Appointment")
+                      .filter(
+                        (c) =>
+                          c.status === "Appt Set" || c.status === "Appt Show",
+                      )
                       .slice(0, 4)
                       .map((c) => (
                         <div className="my-day-card" key={c.id}>
@@ -2376,13 +2649,29 @@ function App() {
                       <span className={`status-badge ${statusClass(c.status)}`}>
                         {c.status}
                       </span>
+                      {c.temperature && (
+                        <span
+                          className={`temp-badge ${tempClass(c.temperature)}`}
+                        >
+                          {c.temperature}
+                        </span>
+                      )}
                       {!activities.some((a) => a.customerId === c.id) && (
                         <span className="badge-urgent">No contact yet</span>
                       )}
                     </div>
-                    <span className="source-tag">
-                      {c.source || "Unknown source"}
-                    </span>
+                    <div className="inbox-card-meta">
+                      <span className="source-tag">
+                        {c.source || "Unknown source"}
+                      </span>
+                      {c.createdAt && (
+                        <span
+                          className={`speed-to-lead ${Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 ? "speed-hot" : Date.now() - new Date(c.createdAt).getTime() < 1000 * 60 * 60 * 24 ? "speed-warm" : "speed-cold"}`}
+                        >
+                          ⏱ {timeAgo(c.createdAt)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="inbox-card-mid">
                     <span>📞 {c.phone}</span>
@@ -2531,10 +2820,13 @@ function App() {
                     })
                   }
                 >
-                  <option>Lead</option>
-                  <option>Appointment</option>
-                  <option>Finance</option>
+                  <option>New Lead</option>
+                  <option>Contacted</option>
+                  <option>Appt Set</option>
+                  <option>Appt Show</option>
+                  <option>Working</option>
                   <option>Sold</option>
+                  <option>Lost</option>
                 </select>
                 <button type="submit">
                   {editingCustomerId ? "Save Changes" : "Add Customer"}
@@ -2555,10 +2847,13 @@ function App() {
                 onChange={(e) => setCustomerStatusFilter(e.target.value)}
               >
                 <option value="All">All statuses</option>
-                <option>Lead</option>
-                <option>Appointment</option>
-                <option>Finance</option>
+                <option>New Lead</option>
+                <option>Contacted</option>
+                <option>Appt Set</option>
+                <option>Appt Show</option>
+                <option>Working</option>
                 <option>Sold</option>
+                <option>Lost</option>
               </select>
               <select
                 className="filter-select"
