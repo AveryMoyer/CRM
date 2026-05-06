@@ -87,6 +87,7 @@ type Customer = {
   assignedTo?: string;
   nextFollowUp?: string;
   createdAt?: string;
+  address?: string;
 };
 
 type FinanceApplication = {
@@ -615,7 +616,10 @@ function App() {
     source: "",
     assignedTo: "",
     nextFollowUp: "",
+    address: "",
+    temperature: "" as LeadTemp | "",
   });
+  const [profileEditMode, setProfileEditMode] = useState(false);
   const [financeForm, setFinanceForm] = useState({
     customerId: "1",
     applicantName: "",
@@ -949,15 +953,19 @@ function App() {
 
   const filteredCustomers = useMemo(() => {
     const q = activeSearch.toLowerCase().trim();
+    const qDigits = q.replace(/\D/g, "");
     const filtered = customers.filter((c) => {
       const name = `${c.firstName} ${c.lastName}`.toLowerCase();
       const matchSearch =
         !q ||
         name.includes(q) ||
-        c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
+        c.firstName.toLowerCase().includes(q) ||
+        c.lastName.toLowerCase().includes(q) ||
+        (qDigits.length >= 3 && c.phone.replace(/\D/g, "").includes(qDigits)) ||
         c.phone.includes(q) ||
         (c.email || "").toLowerCase().includes(q) ||
-        (c.interestedVehicle || "").toLowerCase().includes(q);
+        (c.interestedVehicle || "").toLowerCase().includes(q) ||
+        (c.address || "").toLowerCase().includes(q);
       const matchStatus =
         customerStatusFilter === "All" || c.status === customerStatusFilter;
       const matchSource =
@@ -1241,6 +1249,8 @@ function App() {
       source: "",
       assignedTo: "",
       nextFollowUp: "",
+      address: "",
+      temperature: "" as LeadTemp | "",
     });
   }
 
@@ -1256,6 +1266,8 @@ function App() {
       source: c.source || "",
       assignedTo: c.assignedTo || "",
       nextFollowUp: c.nextFollowUp || "",
+      address: c.address || "",
+      temperature: (c.temperature || "") as LeadTemp | "",
     });
     window.scrollTo(0, 0);
   }
@@ -1745,41 +1757,366 @@ function App() {
               </div>
 
               {profileTab === "overview" && (
-                <div className="overview-layout">
-                  <div className="profile-grid">
-                    <div className="profile-card">
-                      <p className="card-label">Vehicle of Interest</p>
-                      <strong>
-                        {selectedCustomer.interestedVehicle || "Not specified"}
-                      </strong>
+                <div className="crm-overview">
+                  {/* ── Left: Contact Card ── */}
+                  <div className="crm-contact-panel">
+                    <div className="crm-avatar">
+                      {selectedCustomer.firstName[0]}
+                      {selectedCustomer.lastName[0] || ""}
                     </div>
-                    <div className="profile-card">
-                      <p className="card-label">Lead Source</p>
-                      <strong>{selectedCustomer.source || "Walk-in"}</strong>
+                    <div className="crm-name-block">
+                      <h2>
+                        {selectedCustomer.firstName} {selectedCustomer.lastName}
+                      </h2>
+                      <div className="crm-badges">
+                        <span
+                          className={`status-badge ${statusClass(selectedCustomer.status)}`}
+                        >
+                          {selectedCustomer.status}
+                        </span>
+                        {selectedCustomer.temperature && (
+                          <span
+                            className={`temp-badge ${tempClass(selectedCustomer.temperature)}`}
+                          >
+                            {selectedCustomer.temperature}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="profile-card">
-                      <p className="card-label">Assigned Rep</p>
-                      <strong>
-                        {selectedCustomer.assignedTo || "Unassigned"}
-                      </strong>
+
+                    {/* Quick action buttons */}
+                    <div className="crm-quick-actions">
+                      {[
+                        { label: "📞 Call", type: "Call" as Activity["type"] },
+                        { label: "💬 Text", type: "Text" as Activity["type"] },
+                        { label: "✉ Email", type: "Email" as Activity["type"] },
+                        {
+                          label: "📅 Appt",
+                          type: "Appointment" as Activity["type"],
+                        },
+                        { label: "📝 Note", type: "Note" as Activity["type"] },
+                      ].map(({ label, type }) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className="quick-action-btn"
+                          onClick={() => {
+                            setQuickActivityType(type);
+                            setQuickActivityNote(`${type} logged`);
+                            setTimeout(addQuickActivity, 0);
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                    <div className="profile-card">
-                      <p className="card-label">Next Follow-Up</p>
-                      <strong>
-                        {selectedCustomer.nextFollowUp || "Not scheduled"}
-                      </strong>
-                    </div>
-                    <div className="profile-card">
-                      <p className="card-label">Finance Apps</p>
-                      <strong>{profileFinance.length}</strong>
-                    </div>
-                    <div className="profile-card">
-                      <p className="card-label">Trade-Ins</p>
-                      <strong>{profileTrades.length}</strong>
+
+                    {/* Contact info — view or edit */}
+                    {profileEditMode ? (
+                      <form
+                        className="crm-edit-form"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          doSaveCustomer();
+                          setProfileEditMode(false);
+                        }}
+                      >
+                        <div className="crm-edit-row">
+                          <label>
+                            First Name
+                            <input
+                              value={customerForm.firstName}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  firstName: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </label>
+                          <label>
+                            Last Name
+                            <input
+                              value={customerForm.lastName}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  lastName: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="crm-edit-row">
+                          <label>
+                            Phone
+                            <input
+                              value={customerForm.phone}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  phone: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Email
+                            <input
+                              type="email"
+                              value={customerForm.email}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  email: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <label>
+                          Address
+                          <input
+                            value={customerForm.address}
+                            placeholder="123 Main St, City, ST 12345"
+                            onChange={(e) =>
+                              setCustomerForm({
+                                ...customerForm,
+                                address: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <div className="crm-edit-row">
+                          <label>
+                            Status
+                            <select
+                              value={customerForm.status}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  status: e.target.value as CustomerStatus,
+                                })
+                              }
+                            >
+                              <option>New Lead</option>
+                              <option>Contacted</option>
+                              <option>Appt Set</option>
+                              <option>Appt Show</option>
+                              <option>Working</option>
+                              <option>Sold</option>
+                              <option>Lost</option>
+                            </select>
+                          </label>
+                          <label>
+                            Temperature
+                            <select
+                              value={customerForm.temperature}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  temperature: e.target.value as LeadTemp | "",
+                                })
+                              }
+                            >
+                              <option value="">—</option>
+                              <option>Hot</option>
+                              <option>Warm</option>
+                              <option>Cold</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="crm-edit-row">
+                          <label>
+                            Source
+                            <input
+                              value={customerForm.source}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  source: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Assigned Rep
+                            <input
+                              value={customerForm.assignedTo}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  assignedTo: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <label>
+                          Vehicle of Interest
+                          <input
+                            value={customerForm.interestedVehicle}
+                            onChange={(e) =>
+                              setCustomerForm({
+                                ...customerForm,
+                                interestedVehicle: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Next Follow-Up
+                          <input
+                            value={customerForm.nextFollowUp}
+                            onChange={(e) =>
+                              setCustomerForm({
+                                ...customerForm,
+                                nextFollowUp: e.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <div className="crm-edit-actions">
+                          <button type="submit" className="search-go-btn">
+                            Save Changes
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => {
+                              resetCustomerForm();
+                              setProfileEditMode(false);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="crm-contact-info">
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">📞</span>
+                          <div>
+                            <span className="crm-info-label">Phone</span>
+                            <a
+                              href={`tel:${selectedCustomer.phone}`}
+                              className="crm-info-value"
+                            >
+                              {selectedCustomer.phone || (
+                                <span className="muted">—</span>
+                              )}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">✉</span>
+                          <div>
+                            <span className="crm-info-label">Email</span>
+                            <a
+                              href={`mailto:${selectedCustomer.email}`}
+                              className="crm-info-value"
+                            >
+                              {selectedCustomer.email || (
+                                <span className="muted">—</span>
+                              )}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">📍</span>
+                          <div>
+                            <span className="crm-info-label">Address</span>
+                            <span className="crm-info-value">
+                              {selectedCustomer.address || (
+                                <span className="muted">Not on file</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">🚗</span>
+                          <div>
+                            <span className="crm-info-label">
+                              Vehicle Interest
+                            </span>
+                            <span className="crm-info-value">
+                              {selectedCustomer.interestedVehicle || (
+                                <span className="muted">—</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">📅</span>
+                          <div>
+                            <span className="crm-info-label">
+                              Next Follow-Up
+                            </span>
+                            <span className="crm-info-value">
+                              {selectedCustomer.nextFollowUp || (
+                                <span className="muted">Not scheduled</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">👤</span>
+                          <div>
+                            <span className="crm-info-label">Assigned Rep</span>
+                            <span className="crm-info-value">
+                              {selectedCustomer.assignedTo || (
+                                <span className="muted">Unassigned</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="crm-info-row">
+                          <span className="crm-info-icon">🔗</span>
+                          <div>
+                            <span className="crm-info-label">Source</span>
+                            <span className="crm-info-value">
+                              {selectedCustomer.source || (
+                                <span className="muted">Unknown</span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="crm-edit-btn"
+                          onClick={() => {
+                            editCustomer(selectedCustomer);
+                            setProfileEditMode(true);
+                          }}
+                        >
+                          ✏ Edit Contact Info
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Stats strip */}
+                    <div className="crm-stat-strip">
+                      <div className="crm-stat">
+                        <strong>{profileFinance.length}</strong>
+                        <span>Finance Apps</span>
+                      </div>
+                      <div className="crm-stat">
+                        <strong>{profileTrades.length}</strong>
+                        <span>Trade-Ins</span>
+                      </div>
+                      <div className="crm-stat">
+                        <strong>{profileActivities.length}</strong>
+                        <span>Activities</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="quick-activity-box">
-                    <p className="card-label">Log Activity</p>
+
+                  {/* ── Right: Activity Feed ── */}
+                  <div className="crm-activity-panel">
+                    <p className="card-label" style={{ marginBottom: 10 }}>
+                      Log Activity
+                    </p>
                     <div className="quick-act-row">
                       <select
                         value={quickActivityType}
@@ -1805,7 +2142,7 @@ function App() {
                       </button>
                     </div>
                     <div className="activity-timeline">
-                      {profileActivities.slice(0, 6).map((act) => (
+                      {profileActivities.slice(0, 10).map((act) => (
                         <div className="timeline-item" key={act.id}>
                           <span
                             className={`timeline-dot dot-${act.type.toLowerCase()}`}
@@ -3308,6 +3645,16 @@ function App() {
                         setCustomerForm({
                           ...customerForm,
                           assignedTo: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Address (123 Main St, City, ST 12345)"
+                      value={customerForm.address}
+                      onChange={(e) =>
+                        setCustomerForm({
+                          ...customerForm,
+                          address: e.target.value,
                         })
                       }
                     />

@@ -2883,6 +2883,234 @@ button.danger:hover {
 }
 
 /* ── Duplicate Customer Modal ───────────────────────────────────────────────── */
+/* ── CRM Profile Overview ────────────────────────────────────────────────── */
+.crm-overview {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .crm-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crm-contact-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.crm-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.crm-name-block {
+  text-align: center;
+  margin-bottom: 12px;
+}
+.crm-name-block h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+.crm-badges {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.crm-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: center;
+  margin: 14px 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 14px 0;
+  width: 100%;
+}
+.quick-action-btn {
+  padding: 6px 13px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.13s;
+  white-space: nowrap;
+}
+.quick-action-btn:hover {
+  background: #e0e7ff;
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+
+.crm-contact-info {
+  width: 100%;
+}
+.crm-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+.crm-info-row:last-of-type {
+  border-bottom: none;
+}
+.crm-info-icon {
+  font-size: 15px;
+  width: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.crm-info-label {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.crm-info-value {
+  display: block;
+  font-size: 13.5px;
+  color: #0f172a;
+  font-weight: 500;
+}
+a.crm-info-value {
+  color: #6366f1;
+  text-decoration: none;
+}
+a.crm-info-value:hover {
+  text-decoration: underline;
+}
+
+.crm-edit-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 9px;
+  border-radius: 10px;
+  border: 1.5px solid #6366f1;
+  background: transparent;
+  color: #6366f1;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.crm-edit-btn:hover {
+  background: #6366f1;
+  color: #fff;
+}
+
+.crm-edit-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+.crm-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.crm-edit-form input,
+.crm-edit-form select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  font-size: 13px;
+  color: #0f172a;
+  background: #fff;
+  width: 100%;
+}
+.crm-edit-form input:focus,
+.crm-edit-form select:focus {
+  border-color: #6366f1;
+  outline: none;
+}
+.crm-edit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.crm-edit-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.crm-edit-actions .search-go-btn {
+  flex: 1;
+}
+.crm-edit-actions .ghost-button {
+  flex: 1;
+  text-align: center;
+}
+
+.crm-stat-strip {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 18px;
+  padding-top: 16px;
+  width: 100%;
+  justify-content: space-around;
+}
+.crm-stat {
+  text-align: center;
+}
+.crm-stat strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.crm-stat span {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.crm-activity-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+/* ── Duplicate Customer Modal ───────────────────────────────────────────────── */
 .dup-backdrop {
   position: fixed;
   inset: 0;
