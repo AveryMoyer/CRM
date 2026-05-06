@@ -571,6 +571,261 @@ app.get("/api/vin/:vin", async (req, res) => {
   }
 });
 
+app.get("/api/book-value", async (req, res) => {
+  const year = String(req.query.year || "").trim();
+  const make = String(req.query.make || "").trim();
+  const model = String(req.query.model || "").trim();
+  const mileage = parseInt(String(req.query.mileage || "0")) || 0;
+
+  if (!year || !make || !model) {
+    res.status(400).json({ message: "year, make, and model are required" });
+    return;
+  }
+
+  const mcKey = process.env.MARKETCHECK_API_KEY;
+
+  if (mcKey) {
+    try {
+      const params = new URLSearchParams({
+        api_key: mcKey,
+        year,
+        make,
+        model,
+        car_type: "used",
+      });
+      const mcRes = await fetch(
+        `https://mc-api.marketcheck.com/v2/stats/car?${params}`,
+      );
+      if (mcRes.ok) {
+        const mc = (await mcRes.json()) as {
+          mean?: number;
+          median?: number;
+          price_stats?: { mean?: number; median?: number; std_dev?: number };
+        };
+        const median = mc.price_stats?.median ?? mc.median ?? mc.mean ?? 0;
+        const stdDev = mc.price_stats?.std_dev ?? 0;
+        if (median > 0) {
+          // Mileage adjustment: $110 per 1k miles above/below 12k*age average
+          const currentYear = new Date().getFullYear();
+          const age = Math.max(0, currentYear - parseInt(year));
+          const expectedMiles = age * 12000;
+          const mileAdj =
+            mileage > 0 ? ((expectedMiles - mileage) / 1000) * 110 : 0;
+          const adjusted = Math.max(800, median + mileAdj);
+          res.json({
+            source: "marketcheck",
+            low: Math.round((adjusted - stdDev * 0.5) / 100) * 100,
+            avg: Math.round(adjusted / 100) * 100,
+            high: Math.round((adjusted + stdDev * 0.5) / 100) * 100,
+            listings: (mc as Record<string, unknown>).count ?? null,
+          });
+          return;
+        }
+      }
+    } catch {
+      /* fall through to estimation */
+    }
+  }
+
+  // ── Estimation fallback (mirrors frontend estimateBookValue logic) ──────────
+  const currentYear = new Date().getFullYear();
+  const age = Math.max(0, currentYear - parseInt(year));
+  const makeU = make.toUpperCase();
+  const modelU = model.toUpperCase();
+
+  const isHalfTon = [
+    "F-150",
+    "F150",
+    "SILVERADO",
+    "SIERRA",
+    "RAM 1500",
+    "RANGER",
+    "COLORADO",
+    "TACOMA",
+    "MAVERICK",
+    "RIDGELINE",
+    "FRONTIER",
+  ].some((t) => modelU.includes(t));
+  const isHeavy = [
+    "F-250",
+    "F-350",
+    "SILVERADO HD",
+    "SIERRA HD",
+    "RAM 2500",
+    "RAM 3500",
+  ].some((t) => modelU.includes(t));
+  const isFullSUV = [
+    "TAHOE",
+    "SUBURBAN",
+    "YUKON",
+    "EXPEDITION",
+    "NAVIGATOR",
+    "ARMADA",
+    "SEQUOIA",
+  ].some((t) => modelU.includes(t));
+  const isMidSUV = [
+    "EXPLORER",
+    "PILOT",
+    "HIGHLANDER",
+    "PATHFINDER",
+    "4RUNNER",
+    "DURANGO",
+    "TRAVERSE",
+    "ATLAS",
+    "ENCLAVE",
+    "ASCENT",
+  ].some((t) => modelU.includes(t));
+  const isCompSUV = [
+    "RAV4",
+    "CR-V",
+    "EQUINOX",
+    "ROGUE",
+    "ESCAPE",
+    "TUCSON",
+    "SANTA FE",
+    "FORESTER",
+    "OUTBACK",
+    "COMPASS",
+    "CHEROKEE",
+    "TIGUAN",
+    "SPORTAGE",
+    "EDGE",
+    "MURANO",
+    "CX-5",
+    "CX-50",
+  ].some((t) => modelU.includes(t));
+  const isUltra = [
+    "PORSCHE",
+    "BENTLEY",
+    "ROLLS-ROYCE",
+    "FERRARI",
+    "LAMBORGHINI",
+  ].includes(makeU);
+  const isLuxSUV =
+    !isUltra &&
+    [
+      "X3",
+      "X5",
+      "X7",
+      "GLE",
+      "GLC",
+      "GLS",
+      "Q5",
+      "Q7",
+      "Q8",
+      "RX",
+      "GX",
+      "LX",
+      "XT5",
+      "MDX",
+      "QX60",
+      "RANGE ROVER",
+      "DISCOVERY",
+      "XC60",
+      "XC90",
+      "CAYENNE",
+    ].some((t) => modelU.includes(t));
+  const isLuxCar =
+    !isUltra &&
+    !isLuxSUV &&
+    [
+      "BMW",
+      "MERCEDES-BENZ",
+      "MERCEDES",
+      "AUDI",
+      "LEXUS",
+      "CADILLAC",
+      "INFINITI",
+      "ACURA",
+      "LINCOLN",
+      "VOLVO",
+      "GENESIS",
+      "JAGUAR",
+    ].includes(makeU);
+  const tierA = ["TOYOTA", "HONDA", "SUBARU", "LEXUS"];
+  const tierC = [
+    "CHRYSLER",
+    "DODGE",
+    "FIAT",
+    "MITSUBISHI",
+    "LINCOLN",
+    "BUICK",
+    "CADILLAC",
+    "LAND ROVER",
+    "JAGUAR",
+    "VOLVO",
+  ];
+
+  let base = isUltra
+    ? 130000
+    : isLuxSUV
+      ? 82000
+      : isLuxCar
+        ? 62000
+        : isHeavy
+          ? 72000
+          : isHalfTon
+            ? 60000
+            : isFullSUV
+              ? 68000
+              : isMidSUV
+                ? 52000
+                : isCompSUV
+                  ? 38000
+                  : [
+                        "FORD",
+                        "CHEVROLET",
+                        "DODGE",
+                        "CHRYSLER",
+                        "JEEP",
+                        "BUICK",
+                        "GMC",
+                      ].includes(makeU)
+                    ? 32000
+                    : ["TOYOTA", "HONDA", "SUBARU"].includes(makeU)
+                      ? 33000
+                      : [
+                            "KIA",
+                            "HYUNDAI",
+                            "MAZDA",
+                            "NISSAN",
+                            "VOLKSWAGEN",
+                          ].includes(makeU)
+                        ? 29000
+                        : 30000;
+
+  const retA = [1, 0.85, 0.75, 0.65, 0.57, 0.5, 0.44, 0.39, 0.35, 0.31, 0.28];
+  const retB = [1, 0.8, 0.68, 0.58, 0.49, 0.42, 0.36, 0.31, 0.27, 0.24, 0.21];
+  const retC = [1, 0.74, 0.61, 0.51, 0.43, 0.36, 0.3, 0.26, 0.22, 0.19, 0.17];
+  const tbl =
+    isHalfTon || isHeavy
+      ? retA
+      : tierA.includes(makeU)
+        ? retA
+        : tierC.includes(makeU)
+          ? retC
+          : retB;
+  const ret =
+    tbl[Math.min(age, 10)] ??
+    Math.max(0.1, (tbl[10] ?? 0.18) - (age - 10) * 0.015);
+  let avg = base * ret;
+
+  if (mileage > 0) {
+    const expMiles = Math.max(1000, age * 12000);
+    const perK = avg > 40000 ? 140 : avg > 20000 ? 110 : 75;
+    avg -= ((mileage - expMiles) / 1000) * perK;
+  }
+  avg = Math.max(800, avg);
+
+  res.json({
+    source: "estimate",
+    low: Math.round((avg * 0.87) / 100) * 100,
+    avg: Math.round(avg / 100) * 100,
+    high: Math.round((avg * 1.13) / 100) * 100,
+    note: "Depreciation estimate — set MARKETCHECK_API_KEY for live market data",
+  });
+});
+
 app.post("/api/signup", (req, res) => {
   const name = String(req.body.name || "").trim();
   const email = String(req.body.email || "")

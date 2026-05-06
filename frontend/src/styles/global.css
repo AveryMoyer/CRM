@@ -2883,6 +2883,92 @@ button.danger:hover {
 }
 
 /* ── Duplicate Customer Modal ───────────────────────────────────────────────── */
+/* ── Book Value Panel ────────────────────────────────────────────────────── */
+.book-value-panel {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-top: 14px;
+}
+.bv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bv-title {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #166534;
+}
+.bv-age {
+  font-size: 12px;
+  color: #4ade80;
+  background: #dcfce7;
+  padding: 2px 10px;
+  border-radius: 99px;
+}
+.bv-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  text-align: center;
+}
+.bv-col {
+  padding: 10px 6px;
+  border-radius: 8px;
+}
+.bv-col span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.bv-col strong {
+  font-size: 17px;
+  font-weight: 800;
+}
+.bv-col.low {
+  background: #fef2f2;
+}
+.bv-col.low strong {
+  color: #dc2626;
+}
+.bv-col.avg {
+  background: #eff6ff;
+}
+.bv-col.avg strong {
+  color: #1d4ed8;
+}
+.bv-col.high {
+  background: #f0fdf4;
+}
+.bv-col.high strong {
+  color: #16a34a;
+}
+.bv-disclaimer {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 10px;
+}
+
+/* ── Tax Zip Note ────────────────────────────────────────────────────────── */
+.tax-zip-note {
+  display: block;
+  font-size: 11.5px;
+  color: #16a34a;
+  margin-top: 4px;
+}
+.tax-zip-note.warn {
+  color: #dc2626;
+}
+
 /* ── CRM Profile Overview ────────────────────────────────────────────────── */
 .crm-overview {
   display: grid;

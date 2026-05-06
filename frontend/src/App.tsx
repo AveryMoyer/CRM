@@ -536,6 +536,402 @@ const initialVehicleSales: VehicleSale[] = [
   },
 ];
 
+// ── Tax helpers ────────────────────────────────────────────────────────────────
+
+function zipToState(zip: string): string | null {
+  if (!/^\d{5}$/.test(zip)) return null;
+  const n = parseInt(zip.slice(0, 3));
+  if (n >= 10 && n <= 27) return "MA";
+  if (n >= 28 && n <= 29) return "RI";
+  if (n >= 30 && n <= 38) return "NH";
+  if (n >= 39 && n <= 49) return "ME";
+  if (n >= 50 && n <= 59) return "VT";
+  if (n >= 60 && n <= 69) return "CT";
+  if (n >= 70 && n <= 89) return "NJ";
+  if (n >= 100 && n <= 149) return "NY";
+  if (n >= 150 && n <= 196) return "PA";
+  if (n >= 197 && n <= 199) return "DE";
+  if (n >= 200 && n <= 205) return "DC";
+  if (n >= 206 && n <= 219) return "MD";
+  if (n >= 220 && n <= 246) return "VA";
+  if (n >= 247 && n <= 268) return "WV";
+  if (n >= 270 && n <= 289) return "NC";
+  if (n >= 290 && n <= 299) return "SC";
+  if (n >= 300 && n <= 319) return "GA";
+  if (n >= 320 && n <= 349) return "FL";
+  if (n >= 350 && n <= 369) return "AL";
+  if (n >= 370 && n <= 385) return "TN";
+  if (n >= 386 && n <= 397) return "MS";
+  if (n >= 400 && n <= 427) return "KY";
+  if (n >= 430 && n <= 459) return "OH";
+  if (n >= 460 && n <= 479) return "IN";
+  if (n >= 480 && n <= 499) return "MI";
+  if (n >= 500 && n <= 528) return "IA";
+  if (n >= 530 && n <= 549) return "WI";
+  if (n >= 550 && n <= 567) return "MN";
+  if (n >= 570 && n <= 577) return "SD";
+  if (n >= 580 && n <= 588) return "ND";
+  if (n >= 590 && n <= 599) return "MT";
+  if (n >= 600 && n <= 629) return "IL";
+  if (n >= 630 && n <= 658) return "MO";
+  if (n >= 660 && n <= 679) return "KS";
+  if (n >= 680 && n <= 693) return "NE";
+  if (n >= 700 && n <= 714) return "LA";
+  if (n >= 716 && n <= 729) return "AR";
+  if (n >= 730 && n <= 749) return "OK";
+  if (n >= 750 && n <= 799) return "TX";
+  if (n >= 800 && n <= 816) return "CO";
+  if (n >= 820 && n <= 831) return "WY";
+  if (n >= 832 && n <= 838) return "ID";
+  if (n >= 840 && n <= 847) return "UT";
+  if (n >= 850 && n <= 865) return "AZ";
+  if (n >= 870 && n <= 884) return "NM";
+  if (n >= 889 && n <= 899) return "NV";
+  if (n >= 900 && n <= 961) return "CA";
+  if (n >= 967 && n <= 968) return "HI";
+  if (n >= 970 && n <= 979) return "OR";
+  if (n >= 980 && n <= 994) return "WA";
+  if (n >= 995 && n <= 999) return "AK";
+  return null;
+}
+
+// Combined state + weighted-average local rates (2024 Tax Foundation data)
+// These are AVERAGES — exact city/county rates vary; use the local override field in the desk tool
+const STATE_AUTO_TAX: Record<string, { rate: number; note: string }> = {
+  AL: { rate: 9.29, note: "State 2% + avg county/city 7.29%" },
+  AK: { rate: 1.76, note: "No state tax; local-only avg 1.76%" },
+  AZ: { rate: 8.37, note: "State 5.6% + avg local 2.77%" },
+  AR: { rate: 9.47, note: "State 6.5% + avg local 2.97%" },
+  CA: { rate: 8.85, note: "State 7.25% + avg district 1.60%" },
+  CO: { rate: 7.81, note: "State 2.9% + avg local 4.91%" },
+  CT: { rate: 6.35, note: "State-only; no local vehicle tax" },
+  DE: { rate: 0.0, note: "No sales tax" },
+  FL: { rate: 7.02, note: "State 6% + avg county surtax 1.02%" },
+  GA: { rate: 7.0, note: "Flat 7% Title Ad Valorem Tax (TAVT)" },
+  HI: { rate: 4.44, note: "General excise tax avg 4.44%" },
+  ID: { rate: 6.03, note: "State 6% + avg local 0.03%" },
+  IL: { rate: 8.86, note: "State 6.25% + avg local 2.61%" },
+  IN: { rate: 7.0, note: "State-only; no local vehicle tax" },
+  IA: { rate: 6.94, note: "State 6% + avg local 0.94%" },
+  KS: { rate: 8.7, note: "State 6.5% + avg local 2.20%" },
+  KY: { rate: 6.0, note: "State-only; no local vehicle tax" },
+  LA: { rate: 9.55, note: "State 4.45% + avg local 5.10%" },
+  ME: { rate: 5.5, note: "State-only; no local vehicle tax" },
+  MD: { rate: 6.0, note: "State-only; no local vehicle tax" },
+  MA: { rate: 6.25, note: "State-only; no local vehicle tax" },
+  MI: { rate: 6.0, note: "State-only; no local vehicle tax" },
+  MN: { rate: 7.49, note: "State 6.5% + avg local 0.99%" },
+  MS: { rate: 7.07, note: "State 5% + avg local 2.07%" },
+  MO: { rate: 8.3, note: "State 4.225% + avg local 4.07%" },
+  MT: { rate: 0.0, note: "No sales tax" },
+  NE: { rate: 6.94, note: "State 5.5% + avg local 1.44%" },
+  NV: { rate: 8.23, note: "State 6.85% + avg local 1.38%" },
+  NH: { rate: 0.0, note: "No sales tax" },
+  NJ: { rate: 6.63, note: "State-only; uniform rate" },
+  NM: { rate: 7.59, note: "State 4.875% + avg local 2.71%" },
+  NY: { rate: 8.52, note: "State 4% + avg county/city 4.52%" },
+  NC: { rate: 3.0, note: "3% Highway Use Tax — capped at $450/vehicle" },
+  ND: { rate: 5.97, note: "State 5% + avg local 0.97%" },
+  OH: { rate: 7.23, note: "State 5.75% + avg county 1.48%" },
+  OK: {
+    rate: 8.98,
+    note: "State 4.5% + avg local 4.48%; excise tax also applies",
+  },
+  OR: { rate: 0.0, note: "No sales tax" },
+  PA: {
+    rate: 6.34,
+    note: "State 6% + local avg 0.34% (Phila/Allegheny add ~2%)",
+  },
+  RI: { rate: 7.0, note: "State-only; no local vehicle tax" },
+  SC: { rate: 5.0, note: "5% capped at $500 per vehicle" },
+  SD: { rate: 6.4, note: "State 4.5% + avg local 1.90%" },
+  TN: { rate: 9.55, note: "State 7% + avg local 2.55%" },
+  TX: { rate: 8.2, note: "State 6.25% + avg local 1.95%" },
+  UT: { rate: 7.19, note: "State 4.85% + avg local 2.34%" },
+  VT: { rate: 6.3, note: "State 6% + avg local 0.30%" },
+  VA: { rate: 5.77, note: "State 4.15% + avg local 1.62%" },
+  WA: { rate: 9.38, note: "State 6.5% + avg local 2.88%" },
+  WV: { rate: 6.57, note: "State 6% + avg local 0.57%" },
+  WI: { rate: 5.43, note: "State 5% + avg county 0.43%" },
+  WY: { rate: 5.39, note: "State 4% + avg local 1.39%" },
+  DC: { rate: 6.0, note: "District-only rate" },
+};
+
+// ── Book value estimator ───────────────────────────────────────────────────────
+
+type BookValueResult = {
+  low: number;
+  avg: number;
+  high: number;
+  state: string;
+  ageYears: number;
+};
+
+function estimateBookValue(
+  year: string | number,
+  make: string,
+  model: string,
+  mileage?: number,
+): BookValueResult {
+  const currentYear = new Date().getFullYear();
+  const vehicleYear = typeof year === "string" ? parseInt(year) : year;
+  if (!vehicleYear || isNaN(vehicleYear))
+    return { low: 0, avg: 0, high: 0, state: "unknown", ageYears: 0 };
+  const age = Math.max(0, currentYear - vehicleYear);
+  const makeU = make.toUpperCase().trim();
+  const modelU = model.toUpperCase().trim();
+
+  // ── 2023-24 Average Transaction Prices by segment ──────────────────────────
+  // Segment detection (most specific first)
+  const isHeavyTruck = [
+    "F-250",
+    "F-350",
+    "SILVERADO HD",
+    "SIERRA HD",
+    "RAM 2500",
+    "RAM 3500",
+    "TUNDRA",
+  ].some((t) => modelU.includes(t));
+  const isHalfTonTruck = [
+    "F-150",
+    "F150",
+    "SILVERADO",
+    "SIERRA",
+    "RAM 1500",
+    "RANGER",
+    "COLORADO",
+    "TACOMA",
+    "MAVERICK",
+    "RIDGELINE",
+    "FRONTIER",
+  ].some((t) => modelU.includes(t));
+  const isFullSizeSUV = [
+    "TAHOE",
+    "SUBURBAN",
+    "YUKON",
+    "EXPEDITION",
+    "NAVIGATOR",
+    "ARMADA",
+    "SEQUOIA",
+  ].some((t) => modelU.includes(t));
+  const isMidSizeSUV = [
+    "EXPLORER",
+    "PILOT",
+    "HIGHLANDER",
+    "PATHFINDER",
+    "4RUNNER",
+    "DURANGO",
+    "TRAVERSE",
+    "ATLAS",
+    "ENCLAVE",
+    "ASCENT",
+  ].some((t) => modelU.includes(t));
+  const isCompactSUV = [
+    "RAV4",
+    "CR-V",
+    "EQUINOX",
+    "ROGUE",
+    "ESCAPE",
+    "TUCSON",
+    "SANTA FE",
+    "FORESTER",
+    "OUTBACK",
+    "COMPASS",
+    "CHEROKEE",
+    "TIGUAN",
+    "SPORTAGE",
+    "EDGE",
+    "MURANO",
+    "PASSPORT",
+    "CX-5",
+    "CX-50",
+    "BRONCO SPORT",
+    "TRAILBLAZER",
+  ].some((t) => modelU.includes(t));
+  const isUltraLuxury = [
+    "PORSCHE",
+    "BENTLEY",
+    "ROLLS-ROYCE",
+    "MASERATI",
+    "FERRARI",
+    "LAMBORGHINI",
+    "ASTON MARTIN",
+  ].includes(makeU);
+  const isLuxurySUV = isUltraLuxury
+    ? false
+    : [
+        "X3",
+        "X5",
+        "X7",
+        "GLE",
+        "GLC",
+        "GLS",
+        "Q5",
+        "Q7",
+        "Q8",
+        "RX",
+        "GX",
+        "LX",
+        "XT5",
+        "XT6",
+        "MDX",
+        "QX60",
+        "QX80",
+        "RANGE ROVER",
+        "DISCOVERY",
+        "DEFENDER",
+        "XC60",
+        "XC90",
+        "CAYENNE",
+        "MACAN",
+      ].some((t) => modelU.includes(t));
+  const isLuxuryCar =
+    !isUltraLuxury &&
+    [
+      "BMW",
+      "MERCEDES-BENZ",
+      "MERCEDES",
+      "AUDI",
+      "LEXUS",
+      "CADILLAC",
+      "INFINITI",
+      "ACURA",
+      "LINCOLN",
+      "VOLVO",
+      "GENESIS",
+      "ALFA ROMEO",
+      "JAGUAR",
+    ].includes(makeU) &&
+    !isLuxurySUV &&
+    !isFullSizeSUV &&
+    !isMidSizeSUV;
+
+  let base: number;
+  if (isUltraLuxury) base = 130000;
+  else if (isLuxurySUV) base = 82000;
+  else if (isLuxuryCar) base = 62000;
+  else if (isHeavyTruck) base = 72000;
+  else if (isHalfTonTruck) base = 60000;
+  else if (isFullSizeSUV) base = 68000;
+  else if (isMidSizeSUV) base = 52000;
+  else if (isCompactSUV) base = 38000;
+  else if (
+    ["FORD", "CHEVROLET", "DODGE", "CHRYSLER", "JEEP", "BUICK", "GMC"].includes(
+      makeU,
+    )
+  )
+    base = 32000;
+  else if (["TOYOTA", "HONDA", "SUBARU"].includes(makeU)) base = 33000;
+  else if (
+    ["KIA", "HYUNDAI", "MAZDA", "NISSAN", "VOLKSWAGEN", "MITSUBISHI"].includes(
+      makeU,
+    )
+  )
+    base = 29000;
+  else base = 30000;
+
+  // ── Brand-tier depreciation retention tables ───────────────────────────────
+  // Tier A: Toyota, Honda, Subaru, domestic trucks (strong retention)
+  const tierA = ["TOYOTA", "HONDA", "SUBARU", "LEXUS"];
+  // Tier C: Higher depreciation brands
+  const tierC = [
+    "CHRYSLER",
+    "DODGE",
+    "FIAT",
+    "ALFA ROMEO",
+    "MITSUBISHI",
+    "LINCOLN",
+    "BUICK",
+    "CADILLAC",
+    "LAND ROVER",
+    "JAGUAR",
+    "VOLVO",
+    "MASERATI",
+  ];
+
+  const retA: Record<number, number> = {
+    0: 1,
+    1: 0.85,
+    2: 0.75,
+    3: 0.65,
+    4: 0.57,
+    5: 0.5,
+    6: 0.44,
+    7: 0.39,
+    8: 0.35,
+    9: 0.31,
+    10: 0.28,
+  };
+  const retB: Record<number, number> = {
+    0: 1,
+    1: 0.8,
+    2: 0.68,
+    3: 0.58,
+    4: 0.49,
+    5: 0.42,
+    6: 0.36,
+    7: 0.31,
+    8: 0.27,
+    9: 0.24,
+    10: 0.21,
+  };
+  const retC: Record<number, number> = {
+    0: 1,
+    1: 0.74,
+    2: 0.61,
+    3: 0.51,
+    4: 0.43,
+    5: 0.36,
+    6: 0.3,
+    7: 0.26,
+    8: 0.22,
+    9: 0.19,
+    10: 0.17,
+  };
+
+  const retTable = tierA.includes(makeU)
+    ? retA
+    : tierC.includes(makeU)
+      ? retC
+      : retB;
+  // Trucks hold value like Tier A regardless of make
+  const effectiveTable = isHalfTonTruck || isHeavyTruck ? retA : retTable;
+
+  const idx = Math.min(age, 10);
+  const ret =
+    effectiveTable[idx] ??
+    Math.max(0.1, (effectiveTable[10] ?? 0.18) - (age - 10) * 0.015);
+  let avg = base * ret;
+
+  // ── Mileage adjustment ─────────────────────────────────────────────────────
+  // Industry standard: ~$100-150 per 1,000 miles above/below 12k/yr average
+  if (mileage && mileage > 0) {
+    const expectedMiles = Math.max(1000, age * 12000);
+    const diffK = (mileage - expectedMiles) / 1000;
+    const perKAdj = avg > 40000 ? 140 : avg > 20000 ? 110 : 75;
+    avg -= diffK * perKAdj;
+  }
+
+  avg = Math.max(800, avg);
+  const label =
+    age <= 1
+      ? "Near-New"
+      : age <= 3
+        ? "Low-Miles"
+        : age <= 6
+          ? "Average"
+          : age <= 10
+            ? "High-Miles"
+            : "High-Age";
+  return {
+    low: Math.round((avg * 0.87) / 100) * 100,
+    avg: Math.round(avg / 100) * 100,
+    high: Math.round((avg * 1.13) / 100) * 100,
+    state: label,
+    ageYears: age,
+  };
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -670,6 +1066,7 @@ function App() {
   });
   const [tradeForm, setTradeForm] = useState({
     customerId: "1",
+    vin: "",
     year: "",
     make: "",
     model: "",
@@ -677,6 +1074,10 @@ function App() {
     payoff: "",
     estimatedValue: "",
   });
+  const [tradeVinLoading, setTradeVinLoading] = useState(false);
+  const [tradeBookValue, setTradeBookValue] = useState<BookValueResult | null>(
+    null,
+  );
   const [saleForm, setSaleForm] = useState({
     customerId: "1",
     stockNumber: "",
@@ -740,6 +1141,7 @@ function App() {
     apr: "7.9",
     termMonths: "72",
     lender: "",
+    buyerZip: "",
   });
 
   const deskNumbers = useMemo(() => {
@@ -1512,6 +1914,59 @@ function App() {
       setVinError("Could not reach VIN lookup service.");
     } finally {
       setVinLoading(false);
+    }
+  }
+
+  async function lookupTradeVin(vinStr: string) {
+    if (vinStr.length !== 17) return;
+    setTradeVinLoading(true);
+    setTradeBookValue(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/vin/${vinStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTradeForm((f) => ({
+          ...f,
+          year: data.year || f.year,
+          make: data.make || f.make,
+          model: data.model || f.model,
+        }));
+        const miles = parseInt(tradeForm.mileage) || 0;
+        const bvParams = new URLSearchParams({
+          year: data.year,
+          make: data.make,
+          model: data.model,
+          mileage: String(miles),
+        });
+        const bvRes = await fetch(`${API_BASE}/api/book-value?${bvParams}`);
+        if (bvRes.ok) {
+          const bv = await bvRes.json();
+          setTradeBookValue({
+            low: bv.low,
+            avg: bv.avg,
+            high: bv.high,
+            state: bv.source === "marketcheck" ? "Live Market" : "Estimate",
+            ageYears: Math.max(
+              0,
+              new Date().getFullYear() - parseInt(data.year),
+            ),
+          });
+          setTradeForm((f) => ({ ...f, estimatedValue: String(bv.avg) }));
+        } else {
+          const fallback = estimateBookValue(
+            data.year,
+            data.make,
+            data.model,
+            miles || undefined,
+          );
+          setTradeBookValue(fallback);
+          setTradeForm((f) => ({ ...f, estimatedValue: String(fallback.avg) }));
+        }
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setTradeVinLoading(false);
     }
   }
 
@@ -4381,6 +4836,30 @@ function App() {
                       </option>
                     ))}
                   </select>
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <input
+                      placeholder="VIN (17 chars) — auto-fills year/make/model + ACV"
+                      value={tradeForm.vin}
+                      maxLength={17}
+                      style={{
+                        fontFamily: "monospace",
+                        letterSpacing: 1,
+                        flex: 1,
+                      }}
+                      onChange={(e) => {
+                        const v = e.target.value.toUpperCase();
+                        setTradeForm({ ...tradeForm, vin: v });
+                        if (v.length === 17) lookupTradeVin(v);
+                      }}
+                    />
+                    {tradeVinLoading && (
+                      <span className="muted" style={{ whiteSpace: "nowrap" }}>
+                        Decoding…
+                      </span>
+                    )}
+                  </div>
                   <input
                     placeholder="Year"
                     value={tradeForm.year}
@@ -4405,9 +4884,23 @@ function App() {
                   <input
                     placeholder="Mileage"
                     value={tradeForm.mileage}
-                    onChange={(e) =>
-                      setTradeForm({ ...tradeForm, mileage: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setTradeForm({ ...tradeForm, mileage: e.target.value });
+                      if (tradeForm.year && tradeForm.make && tradeForm.model) {
+                        const bv = estimateBookValue(
+                          tradeForm.year,
+                          tradeForm.make,
+                          tradeForm.model,
+                          parseInt(e.target.value) || undefined,
+                        );
+                        setTradeBookValue(bv);
+                        setTradeForm((f) => ({
+                          ...f,
+                          mileage: e.target.value,
+                          estimatedValue: String(bv.avg),
+                        }));
+                      }
+                    }}
                   />
                   <input
                     placeholder="Payoff amount ($)"
@@ -4426,6 +4919,39 @@ function App() {
                       })
                     }
                   />
+                  {tradeBookValue && tradeBookValue.avg > 0 && (
+                    <div
+                      className="book-value-panel"
+                      style={{ margin: "4px 0" }}
+                    >
+                      <div className="bv-header">
+                        <span className="bv-title">📊 Estimated ACV Range</span>
+                        <span className="bv-age">
+                          {tradeBookValue.ageYears} yr · {tradeBookValue.state}
+                        </span>
+                      </div>
+                      <div className="bv-range">
+                        <div className="bv-col low">
+                          <span>Low</span>
+                          <strong>
+                            ${tradeBookValue.low.toLocaleString()}
+                          </strong>
+                        </div>
+                        <div className="bv-col avg">
+                          <span>Avg ACV</span>
+                          <strong>
+                            ${tradeBookValue.avg.toLocaleString()}
+                          </strong>
+                        </div>
+                        <div className="bv-col high">
+                          <span>Retail</span>
+                          <strong>
+                            ${tradeBookValue.high.toLocaleString()}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <button type="submit">Add Trade</button>
                 </form>
               </article>
@@ -4543,6 +5069,63 @@ function App() {
                         <b>{vinResult.country}</b>
                       </div>
                     </div>
+                    {(() => {
+                      const bv = estimateBookValue(
+                        vinResult.year,
+                        vinResult.make,
+                        vinResult.model,
+                      );
+                      if (!bv.avg) return null;
+                      return (
+                        <div className="book-value-panel">
+                          <div className="bv-header">
+                            <span className="bv-title">
+                              📊 Estimated Trade / Book Value
+                            </span>
+                            <span className="bv-age">
+                              {bv.ageYears} yr old · {bv.state} vehicle
+                            </span>
+                          </div>
+                          <div className="bv-range">
+                            <div className="bv-col low">
+                              <span>Trade-In Low</span>
+                              <strong>${bv.low.toLocaleString()}</strong>
+                            </div>
+                            <div className="bv-col avg">
+                              <span>Avg ACV</span>
+                              <strong>${bv.avg.toLocaleString()}</strong>
+                            </div>
+                            <div className="bv-col high">
+                              <span>Retail High</span>
+                              <strong>${bv.high.toLocaleString()}</strong>
+                            </div>
+                          </div>
+                          <p className="bv-disclaimer">
+                            Estimate based on depreciation model. For certified
+                            book values use KBB, NADA, or Black Book.
+                          </p>
+                          <button
+                            type="button"
+                            className="search-go-btn"
+                            style={{ marginTop: 8, width: "100%" }}
+                            onClick={() => {
+                              setTradeForm((f) => ({
+                                ...f,
+                                vin: vinResult.vin,
+                                year: vinResult.year,
+                                make: vinResult.make,
+                                model: vinResult.model,
+                                estimatedValue: String(bv.avg),
+                              }));
+                              setTradeBookValue(bv);
+                              setCurrentPage("trades");
+                            }}
+                          >
+                            Use as Trade-In →
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </article>
@@ -4599,6 +5182,7 @@ function App() {
                       apr: "7.9",
                       termMonths: "72",
                       lender: "",
+                      buyerZip: "",
                     })
                   }
                 >
@@ -4901,13 +5485,58 @@ function App() {
                     <p className="desk-section-title">Taxes & Fees</p>
                     <div className="desk-row">
                       <div className="desk-field">
-                        <label>Sales Tax Rate (%)</label>
+                        <label>Buyer Zip Code</label>
+                        <input
+                          placeholder="e.g. 77001"
+                          maxLength={5}
+                          value={desk.buyerZip}
+                          onChange={(e) => {
+                            const z = e.target.value.replace(/\D/g, "");
+                            const state = zipToState(z);
+                            const taxInfo = state
+                              ? STATE_AUTO_TAX[state]
+                              : null;
+                            setDesk({
+                              ...desk,
+                              buyerZip: z,
+                              taxRate: taxInfo
+                                ? String(taxInfo.rate)
+                                : desk.taxRate,
+                            });
+                          }}
+                        />
+                        {desk.buyerZip.length === 5 &&
+                          (() => {
+                            const st = zipToState(desk.buyerZip);
+                            const info = st ? STATE_AUTO_TAX[st] : null;
+                            return st ? (
+                              <small className="tax-zip-note">
+                                {st} — {info?.note}
+                              </small>
+                            ) : (
+                              <small className="tax-zip-note warn">
+                                Zip not recognized
+                              </small>
+                            );
+                          })()}
+                      </div>
+                      <div className="desk-field">
+                        <label>
+                          Tax Rate %{" "}
+                          <span style={{ fontWeight: 400, color: "#94a3b8" }}>
+                            (edit if needed)
+                          </span>
+                        </label>
                         <input
                           value={desk.taxRate}
                           onChange={(e) =>
                             setDesk({ ...desk, taxRate: e.target.value })
                           }
                         />
+                        <small className="tax-zip-note">
+                          Zip auto-fills avg combined rate. Adjust for your
+                          exact city/county.
+                        </small>
                       </div>
                       <div className="desk-field">
                         <label>Doc Fee ($)</label>
