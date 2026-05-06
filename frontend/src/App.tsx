@@ -1,4 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  LayoutDashboard,
+  Inbox,
+  Users,
+  CreditCard,
+  TrendingUp,
+  ArrowLeftRight,
+  Search,
+  Activity,
+  Calculator,
+  LogOut,
+  ChevronRight,
+  FileText,
+} from "lucide-react";
 import "./styles/global.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1136,13 +1150,45 @@ function App() {
     return (
       <main className="app-shell">
         <aside className="sidebar">
-          <div className="brand-mark">AS</div>
+          <div className="sidebar-brand">
+            <div className="brand-mark">AS</div>
+            <div className="brand-name">
+              <strong>AutoSuite</strong>
+              <span>CRM</span>
+            </div>
+          </div>
           <nav>
-            <a href="#/dashboard">Dashboard</a>
-            <a href="#/leads">Leads</a>
-            <a href="#/customers">Customers</a>
+            <a href="#/dashboard">
+              <span className="nav-item-inner">
+                <span className="nav-icon">
+                  <LayoutDashboard size={16} />
+                </span>
+                <span className="nav-label">Dashboard</span>
+              </span>
+            </a>
+            <a href="#/leads">
+              <span className="nav-item-inner">
+                <span className="nav-icon">
+                  <Inbox size={16} />
+                </span>
+                <span className="nav-label">Lead Inbox</span>
+              </span>
+            </a>
+            <a href="#/customers">
+              <span className="nav-item-inner">
+                <span className="nav-icon">
+                  <Users size={16} />
+                </span>
+                <span className="nav-label">Customers</span>
+              </span>
+            </a>
             <a className="active" href={`#/customers/${selectedCustomerId}`}>
-              Deal Jacket
+              <span className="nav-item-inner">
+                <span className="nav-icon">
+                  <FileText size={16} />
+                </span>
+                <span className="nav-label">Deal Jacket</span>
+              </span>
             </a>
           </nav>
           <div className="sidebar-footer">
@@ -1153,6 +1199,7 @@ function App() {
                 setIsLoggedIn(false);
               }}
             >
+              <LogOut size={14} />
               Log Out
             </button>
           </div>
@@ -1932,22 +1979,47 @@ function App() {
 
   // ── Main CRM Shell ────────────────────────────────────────────────────────
 
-  const navItems: { page: AppPage; label: string; badge?: number }[] = [
-    { page: "dashboard", label: "Dashboard" },
-    { page: "leads", label: "Leads", badge: urgentLeads.length || undefined },
-    { page: "customers", label: "Customers" },
-    { page: "finance", label: "Finance", badge: pendingFinance || undefined },
-    { page: "pipeline", label: "Pipeline" },
-    { page: "trades", label: "Trades" },
-    { page: "vin", label: "VIN Lookup" },
-    { page: "activities", label: "Activities" },
-    { page: "desk", label: "Desk Tool" },
+  const navItems: {
+    page: AppPage;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }[] = [
+    {
+      page: "dashboard",
+      label: "Dashboard",
+      icon: <LayoutDashboard size={16} />,
+    },
+    {
+      page: "leads",
+      label: "Lead Inbox",
+      icon: <Inbox size={16} />,
+      badge: urgentLeads.length || undefined,
+    },
+    { page: "customers", label: "Customers", icon: <Users size={16} /> },
+    {
+      page: "finance",
+      label: "Finance",
+      icon: <CreditCard size={16} />,
+      badge: pendingFinance || undefined,
+    },
+    { page: "pipeline", label: "Pipeline", icon: <TrendingUp size={16} /> },
+    { page: "trades", label: "Trade-Ins", icon: <ArrowLeftRight size={16} /> },
+    { page: "vin", label: "VIN Lookup", icon: <Search size={16} /> },
+    { page: "activities", label: "Activities", icon: <Activity size={16} /> },
+    { page: "desk", label: "Desk Tool", icon: <Calculator size={16} /> },
   ];
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-mark">AS</div>
+        <div className="sidebar-brand">
+          <div className="brand-mark">AS</div>
+          <div className="brand-name">
+            <strong>AutoSuite</strong>
+            <span>CRM</span>
+          </div>
+        </div>
         <nav>
           {navItems.map((item) => (
             <a
@@ -1955,7 +2027,10 @@ function App() {
               className={currentPage === item.page ? "active" : ""}
               href={`#/${item.page}`}
             >
-              {item.label}
+              <span className="nav-item-inner">
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+              </span>
               {item.badge ? (
                 <span className="nav-badge">{item.badge}</span>
               ) : null}
@@ -1970,6 +2045,7 @@ function App() {
               setIsLoggedIn(false);
             }}
           >
+            <LogOut size={14} />
             Log Out
           </button>
         </div>
