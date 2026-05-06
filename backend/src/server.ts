@@ -486,8 +486,8 @@ function addActivity(customerId: number, type: Activity["type"], note: string) {
   ];
 }
 
-app.use(helmet());
-app.use(cors());
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
