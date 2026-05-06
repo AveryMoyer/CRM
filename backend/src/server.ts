@@ -125,6 +125,49 @@ type User = {
   role: string;
 };
 
+type RoStatus =
+  | "Check-In"
+  | "In Progress"
+  | "On Hold - Parts"
+  | "Multi-Point"
+  | "Ready"
+  | "Closed";
+
+type ServiceLine = {
+  id: number;
+  description: string;
+  type: "Maintenance" | "Repair" | "Recall" | "Concern";
+  laborHours: number;
+  laborTotal: number;
+  partsTotal: number;
+  tech?: string;
+  status: "Open" | "In Progress" | "Complete";
+};
+
+type RepairOrder = {
+  id: number;
+  roNumber: string;
+  customerId?: number;
+  customerName: string;
+  customerPhone?: string;
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleMileageIn: number;
+  vehicleVin?: string;
+  advisor: string;
+  technician: string;
+  status: RoStatus;
+  promisedTime?: string;
+  lines: ServiceLine[];
+  laborTotal: number;
+  partsTotal: number;
+  total: number;
+  notes?: string;
+  createdAt: string;
+  closedAt?: string;
+};
+
 type VinDecodedVehicle = {
   vin: string;
   year: string;
@@ -149,6 +192,7 @@ type Database = {
   tradeIns: TradeIn[];
   vehicleSales: VehicleSale[];
   activities: Activity[];
+  repairOrders: RepairOrder[];
 };
 
 const defaultDatabase: Database = {
@@ -260,14 +304,166 @@ const defaultDatabase: Database = {
       createdAt: new Date().toISOString(),
     },
   ],
+  repairOrders: [
+    {
+      id: 1,
+      roNumber: "RO-240501",
+      customerId: 1,
+      customerName: "Jordan Lee",
+      customerPhone: "(555) 123-0148",
+      vehicleYear: "2021",
+      vehicleMake: "Toyota",
+      vehicleModel: "Camry",
+      vehicleMileageIn: 38200,
+      vehicleVin: "4T1B11HK0MU000001",
+      advisor: "Avery",
+      technician: "Mike T.",
+      status: "In Progress",
+      promisedTime: "3:00 PM Today",
+      lines: [
+        {
+          id: 1,
+          description: "Oil & Filter Change",
+          type: "Maintenance",
+          laborHours: 0.5,
+          laborTotal: 45,
+          partsTotal: 28,
+          tech: "Mike T.",
+          status: "Complete",
+        },
+        {
+          id: 2,
+          description: "Rotate & Balance Tires",
+          type: "Maintenance",
+          laborHours: 0.5,
+          laborTotal: 45,
+          partsTotal: 0,
+          tech: "Mike T.",
+          status: "In Progress",
+        },
+      ],
+      laborTotal: 90,
+      partsTotal: 28,
+      total: 118,
+      notes: "Customer waiting in lounge.",
+      createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    },
+    {
+      id: 2,
+      roNumber: "RO-240502",
+      customerName: "Walk-in Customer",
+      customerPhone: "(555) 000-1234",
+      vehicleYear: "2019",
+      vehicleMake: "Ford",
+      vehicleModel: "Explorer",
+      vehicleMileageIn: 61400,
+      advisor: "Sarah",
+      technician: "Dan W.",
+      status: "On Hold - Parts",
+      promisedTime: "Tomorrow AM",
+      lines: [
+        {
+          id: 1,
+          description: "Replace Front Brake Pads & Rotors",
+          type: "Repair",
+          laborHours: 1.5,
+          laborTotal: 135,
+          partsTotal: 210,
+          tech: "Dan W.",
+          status: "Open",
+        },
+      ],
+      laborTotal: 135,
+      partsTotal: 210,
+      total: 345,
+      notes: "Waiting on rotors — ordered from warehouse.",
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    },
+    {
+      id: 3,
+      roNumber: "RO-240503",
+      customerId: 5,
+      customerName: "Riley Wilson",
+      customerPhone: "(555) 456-7890",
+      vehicleYear: "2022",
+      vehicleMake: "Nissan",
+      vehicleModel: "Altima",
+      vehicleMileageIn: 14800,
+      advisor: "Avery",
+      technician: "Mike T.",
+      status: "Ready",
+      promisedTime: "12:00 PM",
+      lines: [
+        {
+          id: 1,
+          description: "Multi-Point Inspection",
+          type: "Maintenance",
+          laborHours: 0.5,
+          laborTotal: 0,
+          partsTotal: 0,
+          tech: "Mike T.",
+          status: "Complete",
+        },
+        {
+          id: 2,
+          description: "Cabin Air Filter Replacement",
+          type: "Maintenance",
+          laborHours: 0.3,
+          laborTotal: 27,
+          partsTotal: 22,
+          tech: "Mike T.",
+          status: "Complete",
+        },
+      ],
+      laborTotal: 27,
+      partsTotal: 22,
+      total: 49,
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+    },
+    {
+      id: 4,
+      roNumber: "RO-240504",
+      customerName: "Marcus Bell",
+      customerPhone: "(555) 321-7654",
+      vehicleYear: "2020",
+      vehicleMake: "Chevy",
+      vehicleModel: "Silverado",
+      vehicleMileageIn: 52300,
+      advisor: "Sarah",
+      technician: "Unassigned",
+      status: "Check-In",
+      promisedTime: "EOD",
+      lines: [
+        {
+          id: 1,
+          description: "Check Engine Light Diagnosis",
+          type: "Concern",
+          laborHours: 1.0,
+          laborTotal: 125,
+          partsTotal: 0,
+          tech: "",
+          status: "Open",
+        },
+      ],
+      laborTotal: 125,
+      partsTotal: 0,
+      total: 125,
+      notes: "P0420 code — needs catalyst evaluation.",
+      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    },
+  ],
 };
 
 function loadDatabase(): Database {
   if (!existsSync(dataFile)) {
     return defaultDatabase;
   }
-
-  return { ...defaultDatabase, ...JSON.parse(readFileSync(dataFile, "utf8")) };
+  const saved = JSON.parse(readFileSync(dataFile, "utf8"));
+  return {
+    ...defaultDatabase,
+    ...saved,
+    repairOrders: saved.repairOrders ?? defaultDatabase.repairOrders,
+  };
 }
 
 let db = loadDatabase();
@@ -480,6 +676,9 @@ app.get("/api/summary", (_req, res) => {
       customer.status === "Appt Set" || customer.status === "Appt Show",
   ).length;
 
+  const openROs = db.repairOrders.filter((ro) => ro.status !== "Closed").length;
+  const readyROs = db.repairOrders.filter((ro) => ro.status === "Ready").length;
+
   res.json({
     customers: db.customers.length,
     financeApplications: db.financeApplications.length,
@@ -489,6 +688,8 @@ app.get("/api/summary", (_req, res) => {
     deliveredValue,
     financePending,
     appointmentCount,
+    openROs,
+    readyROs,
   });
 });
 
@@ -630,6 +831,9 @@ app.get("/api/customers/:id/profile", (req, res) => {
       (item) => item.customerId === customerId,
     ),
     activities: db.activities.filter((item) => item.customerId === customerId),
+    repairOrders: db.repairOrders.filter(
+      (item) => item.customerId === customerId,
+    ),
   });
 });
 
@@ -750,6 +954,71 @@ app.patch("/api/vehicle-sales/:id/stage", (req, res) => {
     );
   saveDatabase();
   res.json(sale);
+});
+
+app.get("/api/repair-orders", (_req, res) => res.json(db.repairOrders));
+
+app.post("/api/repair-orders", (req, res) => {
+  const ro: RepairOrder = {
+    id: Date.now(),
+    roNumber: `RO-${String(Date.now()).slice(-6)}`,
+    customerId: req.body.customerId ? Number(req.body.customerId) : undefined,
+    customerName: req.body.customerName || "Walk-in",
+    customerPhone: req.body.customerPhone || "",
+    vehicleYear: req.body.vehicleYear || "",
+    vehicleMake: req.body.vehicleMake || "",
+    vehicleModel: req.body.vehicleModel || "",
+    vehicleMileageIn: Number(req.body.vehicleMileageIn || 0),
+    vehicleVin: req.body.vehicleVin || "",
+    advisor: req.body.advisor || "",
+    technician: req.body.technician || "",
+    status: "Check-In",
+    promisedTime: req.body.promisedTime || "",
+    lines: req.body.lines || [],
+    laborTotal: Number(req.body.laborTotal || 0),
+    partsTotal: Number(req.body.partsTotal || 0),
+    total: Number(req.body.total || 0),
+    notes: req.body.notes || "",
+    createdAt: new Date().toISOString(),
+  };
+  db.repairOrders = [ro, ...db.repairOrders];
+  if (ro.customerId)
+    addActivity(ro.customerId, "Note", `Service RO ${ro.roNumber} opened.`);
+  saveDatabase();
+  res.status(201).json(ro);
+});
+
+app.put("/api/repair-orders/:id", (req, res) => {
+  const roId = Number(req.params.id);
+  db.repairOrders = db.repairOrders.map((ro) =>
+    ro.id === roId ? { ...ro, ...req.body, id: roId } : ro,
+  );
+  saveDatabase();
+  res.json(db.repairOrders.find((ro) => ro.id === roId));
+});
+
+app.patch("/api/repair-orders/:id/status", (req, res) => {
+  const roId = Number(req.params.id);
+  const newStatus = req.body.status as RoStatus;
+  db.repairOrders = db.repairOrders.map((ro) =>
+    ro.id === roId
+      ? {
+          ...ro,
+          status: newStatus,
+          closedAt:
+            newStatus === "Closed" ? new Date().toISOString() : ro.closedAt,
+        }
+      : ro,
+  );
+  const ro = db.repairOrders.find((r) => r.id === roId);
+  if (ro?.customerId)
+    addActivity(
+      ro.customerId,
+      "Note",
+      `Service RO ${ro.roNumber} → ${newStatus}.`,
+    );
+  saveDatabase();
+  res.json(ro);
 });
 
 app.get("/api/activities", (_req, res) => res.json(db.activities));

@@ -2215,4 +2215,434 @@ button.danger:hover {
   .vin-grid {
     grid-template-columns: 1fr 1fr;
   }
+  .ro-board {
+    grid-template-columns: 1fr;
+  }
+  .ro-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SERVICE MODULE
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* RO Board ─────────────────────────────────────────────────────────────────── */
+.ro-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.ro-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ro-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.ro-col-count {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+
+/* RO Cards ─────────────────────────────────────────────────────────────────── */
+.ro-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 3px solid #e2e8f0;
+  transition: box-shadow 0.15s;
+}
+.ro-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+.ro-card.ro-checkin {
+  border-top-color: #94a3b8;
+}
+.ro-card.ro-inprogress {
+  border-top-color: #6366f1;
+}
+.ro-card.ro-hold {
+  border-top-color: #f97316;
+}
+.ro-card.ro-mpi {
+  border-top-color: #8b5cf6;
+}
+.ro-card.ro-ready {
+  border-top-color: #10b981;
+}
+.ro-card.ro-closed {
+  border-top-color: #94a3b8;
+  opacity: 0.7;
+}
+
+.ro-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ro-number {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  background: #f8fafc;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+}
+
+.ro-promise {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ro-customer {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ro-vehicle {
+  font-size: 12px;
+  color: #475569;
+}
+
+.ro-advisors {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+
+/* RO Service Lines ─────────────────────────────────────────────────────────── */
+.ro-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.ro-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.ro-line-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.line-done {
+  color: #10b981;
+}
+.line-wip {
+  color: #6366f1;
+}
+.line-open {
+  color: #f59e0b;
+}
+
+.ro-line-desc {
+  flex: 1;
+  color: #334155;
+}
+.ro-line-total {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 11px;
+}
+
+.ro-notes {
+  font-size: 11.5px;
+  color: #64748b;
+  font-style: italic;
+  margin: 0;
+  padding: 6px 8px;
+  background: #fffbeb;
+  border-radius: 6px;
+  border-left: 2px solid #fbbf24;
+}
+
+.ro-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+.ro-total-row strong {
+  font-size: 15px;
+  color: #0f172a;
+}
+
+/* RO Status-Move Buttons ────────────────────────────────────────────────────── */
+.ro-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+.ro-move-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+  cursor: pointer;
+  background: transparent;
+  transition: 0.12s;
+  opacity: 0.75;
+}
+.ro-move-btn:hover {
+  opacity: 1;
+}
+.ro-move-btn.ro-checkin {
+  color: #64748b;
+  border-color: #94a3b8;
+}
+.ro-move-btn.ro-inprogress {
+  color: #4f46e5;
+  border-color: #818cf8;
+}
+.ro-move-btn.ro-hold {
+  color: #ea580c;
+  border-color: #fb923c;
+}
+.ro-move-btn.ro-mpi {
+  color: #7c3aed;
+  border-color: #c084fc;
+}
+.ro-move-btn.ro-ready {
+  color: #059669;
+  border-color: #34d399;
+}
+.ro-move-btn.ro-closed {
+  color: #475569;
+  border-color: #94a3b8;
+}
+
+/* RO Status Badges ─────────────────────────────────────────────────────────── */
+.ro-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ro-checkin {
+  background: #f1f5f9;
+  color: #475569;
+}
+.ro-inprogress {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.ro-hold {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.ro-mpi {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+.ro-ready {
+  background: #dcfce7;
+  color: #166534;
+}
+.ro-closed {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+/* RO Form ──────────────────────────────────────────────────────────────────── */
+.ro-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.ro-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ro-form-group label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.ro-form-group input,
+.ro-form-group select {
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1.5px solid #e2e8f0;
+  font-size: 13px;
+  background: #f8fafc;
+  color: #0f172a;
+  transition: border-color 0.15s;
+}
+.ro-form-group input:focus,
+.ro-form-group select:focus {
+  border-color: #6366f1;
+  outline: none;
+  background: #fff;
+}
+
+.ro-form-wide {
+  grid-column: 1 / -1;
+}
+
+.ro-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+
+.ghost-button {
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.ghost-button:hover {
+  background: #f1f5f9;
+}
+
+/* RO Closed Table ──────────────────────────────────────────────────────────── */
+.ro-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ro-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 2px solid #f1f5f9;
+}
+.ro-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f8fafc;
+  color: #334155;
+}
+.ro-table tr:hover td {
+  background: #f8fafc;
+}
+
+/* Service History in Deal Jacket ───────────────────────────────────────────── */
+.service-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.service-history-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 3px solid #6366f1;
+}
+
+.sh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sh-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.sh-vehicle {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.sh-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.sh-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #475569;
+}
+
+.sh-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #64748b;
+  padding-top: 6px;
+  border-top: 1px solid #f1f5f9;
+}
+.sh-total strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.ro-badge-inline {
+  font-size: 10px;
+  padding: 2px 8px;
 }

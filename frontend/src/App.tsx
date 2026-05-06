@@ -12,10 +12,57 @@ import {
   LogOut,
   ChevronRight,
   FileText,
+  Wrench,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import "./styles/global.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type RoStatus =
+  | "Check-In"
+  | "In Progress"
+  | "On Hold - Parts"
+  | "Multi-Point"
+  | "Ready"
+  | "Closed";
+
+type ServiceLine = {
+  id: number;
+  description: string;
+  type: "Maintenance" | "Repair" | "Recall" | "Concern";
+  laborHours: number;
+  laborTotal: number;
+  partsTotal: number;
+  tech?: string;
+  status: "Open" | "In Progress" | "Complete";
+};
+
+type RepairOrder = {
+  id: number;
+  roNumber: string;
+  customerId?: number;
+  customerName: string;
+  customerPhone?: string;
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleMileageIn: number;
+  vehicleVin?: string;
+  advisor: string;
+  technician: string;
+  status: RoStatus;
+  promisedTime?: string;
+  lines: ServiceLine[];
+  laborTotal: number;
+  partsTotal: number;
+  total: number;
+  notes?: string;
+  createdAt: string;
+  closedAt?: string;
+};
 
 type CustomerStatus =
   | "New Lead"
@@ -150,9 +197,16 @@ type BootstrapData = {
   tradeIns: TradeIn[];
   vehicleSales: VehicleSale[];
   activities: Activity[];
+  repairOrders?: RepairOrder[];
 };
 
-type ProfileTab = "overview" | "finance" | "credit" | "deals" | "activity";
+type ProfileTab =
+  | "overview"
+  | "finance"
+  | "credit"
+  | "deals"
+  | "activity"
+  | "service";
 type AppPage =
   | "dashboard"
   | "leads"
@@ -162,11 +216,161 @@ type AppPage =
   | "trades"
   | "vin"
   | "activities"
-  | "desk";
+  | "desk"
+  | "service";
 
 const API_BASE = "http://localhost:4000";
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
+
+const initialRepairOrders: RepairOrder[] = [
+  {
+    id: 1,
+    roNumber: "RO-240501",
+    customerId: 1,
+    customerName: "Jordan Lee",
+    customerPhone: "(555) 123-0148",
+    vehicleYear: "2021",
+    vehicleMake: "Toyota",
+    vehicleModel: "Camry",
+    vehicleMileageIn: 38200,
+    vehicleVin: "4T1B11HK0MU000001",
+    advisor: "Avery",
+    technician: "Mike T.",
+    status: "In Progress",
+    promisedTime: "3:00 PM Today",
+    lines: [
+      {
+        id: 1,
+        description: "Oil & Filter Change",
+        type: "Maintenance",
+        laborHours: 0.5,
+        laborTotal: 45,
+        partsTotal: 28,
+        tech: "Mike T.",
+        status: "Complete",
+      },
+      {
+        id: 2,
+        description: "Rotate & Balance Tires",
+        type: "Maintenance",
+        laborHours: 0.5,
+        laborTotal: 45,
+        partsTotal: 0,
+        tech: "Mike T.",
+        status: "In Progress",
+      },
+    ],
+    laborTotal: 90,
+    partsTotal: 28,
+    total: 118,
+    notes: "Customer waiting in lounge.",
+    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+  },
+  {
+    id: 2,
+    roNumber: "RO-240502",
+    customerName: "Walk-in Customer",
+    customerPhone: "(555) 000-1234",
+    vehicleYear: "2019",
+    vehicleMake: "Ford",
+    vehicleModel: "Explorer",
+    vehicleMileageIn: 61400,
+    advisor: "Sarah",
+    technician: "Dan W.",
+    status: "On Hold - Parts",
+    promisedTime: "Tomorrow AM",
+    lines: [
+      {
+        id: 1,
+        description: "Replace Front Brake Pads & Rotors",
+        type: "Repair",
+        laborHours: 1.5,
+        laborTotal: 135,
+        partsTotal: 210,
+        tech: "Dan W.",
+        status: "Open",
+      },
+    ],
+    laborTotal: 135,
+    partsTotal: 210,
+    total: 345,
+    notes: "Waiting on rotors — ordered from warehouse.",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+  },
+  {
+    id: 3,
+    roNumber: "RO-240503",
+    customerId: 5,
+    customerName: "Riley Wilson",
+    customerPhone: "(555) 456-7890",
+    vehicleYear: "2022",
+    vehicleMake: "Nissan",
+    vehicleModel: "Altima",
+    vehicleMileageIn: 14800,
+    advisor: "Avery",
+    technician: "Mike T.",
+    status: "Ready",
+    promisedTime: "12:00 PM",
+    lines: [
+      {
+        id: 1,
+        description: "Multi-Point Inspection",
+        type: "Maintenance",
+        laborHours: 0.5,
+        laborTotal: 0,
+        partsTotal: 0,
+        tech: "Mike T.",
+        status: "Complete",
+      },
+      {
+        id: 2,
+        description: "Cabin Air Filter",
+        type: "Maintenance",
+        laborHours: 0.3,
+        laborTotal: 27,
+        partsTotal: 22,
+        tech: "Mike T.",
+        status: "Complete",
+      },
+    ],
+    laborTotal: 27,
+    partsTotal: 22,
+    total: 49,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+  },
+  {
+    id: 4,
+    roNumber: "RO-240504",
+    customerName: "Marcus Bell",
+    customerPhone: "(555) 321-7654",
+    vehicleYear: "2020",
+    vehicleMake: "Chevy",
+    vehicleModel: "Silverado",
+    vehicleMileageIn: 52300,
+    advisor: "Sarah",
+    technician: "Unassigned",
+    status: "Check-In",
+    promisedTime: "EOD",
+    lines: [
+      {
+        id: 1,
+        description: "Check Engine Light Diagnosis",
+        type: "Concern",
+        laborHours: 1.0,
+        laborTotal: 125,
+        partsTotal: 0,
+        tech: "",
+        status: "Open",
+      },
+    ],
+    laborTotal: 125,
+    partsTotal: 0,
+    total: 125,
+    notes: "P0420 code — needs catalyst evaluation.",
+    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+  },
+];
 
 const initialCustomers: Customer[] = [
   {
@@ -353,6 +557,23 @@ function App() {
   const [tradeIns, setTradeIns] = useState(initialTradeIns);
   const [vehicleSales, setVehicleSales] = useState(initialVehicleSales);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [repairOrders, setRepairOrders] =
+    useState<RepairOrder[]>(initialRepairOrders);
+  const [roForm, setRoForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    vehicleYear: "",
+    vehicleMake: "",
+    vehicleModel: "",
+    vehicleMileageIn: "",
+    vehicleVin: "",
+    advisor: "",
+    technician: "",
+    promisedTime: "",
+    concern: "",
+    notes: "",
+  });
+  const [showRoForm, setShowRoForm] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
@@ -778,12 +999,14 @@ function App() {
         "dashboard",
         "leads",
         "customers",
+        "service",
         "finance",
         "pipeline",
         "trades",
         "vin",
         "activities",
         "desk",
+        "service",
       ];
       setCurrentPage(valid.includes(page) ? page : "dashboard");
     }
@@ -803,6 +1026,7 @@ function App() {
         setTradeIns(d.tradeIns);
         setVehicleSales(d.vehicleSales);
         setActivities(d.activities);
+        if (d.repairOrders) setRepairOrders(d.repairOrders);
       })
       .catch(() => setAppMessage("Could not load data from backend."));
   }, [isLoggedIn]);
@@ -1383,6 +1607,7 @@ function App() {
                     "credit",
                     "deals",
                     "activity",
+                    "service",
                   ] as ProfileTab[]
                 ).map((tab) => (
                   <button
@@ -1399,6 +1624,13 @@ function App() {
                     {tab === "deals" && "Deals"}
                     {tab === "activity" &&
                       `Activity${profileActivities.length ? ` (${profileActivities.length})` : ""}`}
+                    {tab === "service" &&
+                      (() => {
+                        const cnt = repairOrders.filter(
+                          (r) => r.customerId === selectedCustomer.id,
+                        ).length;
+                        return `Service${cnt ? ` (${cnt})` : ""}`;
+                      })()}
                   </button>
                 ))}
               </div>
@@ -2042,6 +2274,72 @@ function App() {
                 </div>
               )}
 
+              {profileTab === "service" &&
+                (() => {
+                  const customerROs = repairOrders.filter(
+                    (r) => r.customerId === selectedCustomer.id,
+                  );
+                  return (
+                    <div>
+                      {customerROs.length === 0 ? (
+                        <p className="empty-state">
+                          No service history for this customer.
+                        </p>
+                      ) : (
+                        <div className="service-history-list">
+                          {customerROs.map((ro) => (
+                            <div className="service-history-card" key={ro.id}>
+                              <div className="sh-header">
+                                <div>
+                                  <code className="ro-number">
+                                    {ro.roNumber}
+                                  </code>
+                                  <span
+                                    className="ro-status-badge ro-badge-inline"
+                                    style={{ marginLeft: 8 }}
+                                  >
+                                    {ro.status}
+                                  </span>
+                                </div>
+                                <span className="sh-date">
+                                  {new Date(ro.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <strong className="sh-vehicle">
+                                {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                {ro.vehicleModel} —{" "}
+                                {ro.vehicleMileageIn.toLocaleString()} mi
+                              </strong>
+                              <div className="sh-lines">
+                                {ro.lines.map((line) => (
+                                  <div className="sh-line" key={line.id}>
+                                    <span>{line.description}</span>
+                                    <span>
+                                      $
+                                      {(
+                                        line.laborTotal + line.partsTotal
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="sh-total">
+                                <span>Advisor: {ro.advisor}</span>
+                                <strong>
+                                  Total: ${ro.total.toLocaleString()}
+                                </strong>
+                              </div>
+                              {ro.notes && (
+                                <p className="ro-notes">{ro.notes}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
               {profileTab === "activity" && (
                 <div>
                   <div className="quick-act-row" style={{ marginBottom: 18 }}>
@@ -2125,6 +2423,7 @@ function App() {
     { page: "vin", label: "VIN Lookup", icon: <Search size={16} /> },
     { page: "activities", label: "Activities", icon: <Activity size={16} /> },
     { page: "desk", label: "Desk Tool", icon: <Calculator size={16} /> },
+    { page: "service", label: "Service", icon: <Wrench size={16} /> },
   ];
 
   return (
@@ -4129,6 +4428,545 @@ function App() {
             </div>
           </>
         )}
+
+        {/* ── SERVICE ──────────────────────────────────────────── */}
+        {currentPage === "service" &&
+          (() => {
+            const roStatuses: RoStatus[] = [
+              "Check-In",
+              "In Progress",
+              "On Hold - Parts",
+              "Multi-Point",
+              "Ready",
+              "Closed",
+            ];
+            const openROs = repairOrders.filter((r) => r.status !== "Closed");
+            const readyROs = repairOrders.filter((r) => r.status === "Ready");
+            const inProgROs = repairOrders.filter(
+              (r) => r.status === "In Progress" || r.status === "Multi-Point",
+            );
+            const holdROs = repairOrders.filter(
+              (r) => r.status === "On Hold - Parts",
+            );
+            const serviceRev = openROs.reduce((t, r) => t + r.total, 0);
+
+            function roStatusClass(s: RoStatus) {
+              return (
+                {
+                  "Check-In": "ro-checkin",
+                  "In Progress": "ro-inprogress",
+                  "On Hold - Parts": "ro-hold",
+                  "Multi-Point": "ro-mpi",
+                  Ready: "ro-ready",
+                  Closed: "ro-closed",
+                }[s] ?? ""
+              );
+            }
+
+            async function updateRoStatus(id: number, status: RoStatus) {
+              try {
+                const res = await fetch(
+                  `${API_BASE}/api/repair-orders/${id}/status`,
+                  {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status }),
+                  },
+                );
+                const updated = await res.json();
+                setRepairOrders((prev) =>
+                  prev.map((r) => (r.id === id ? updated : r)),
+                );
+              } catch {
+                setRepairOrders((prev) =>
+                  prev.map((r) =>
+                    r.id === id
+                      ? {
+                          ...r,
+                          status,
+                          closedAt:
+                            status === "Closed"
+                              ? new Date().toISOString()
+                              : r.closedAt,
+                        }
+                      : r,
+                  ),
+                );
+              }
+            }
+
+            async function handleCreateRo(e: React.FormEvent) {
+              e.preventDefault();
+              const newRo: RepairOrder = {
+                id: Date.now(),
+                roNumber: `RO-${String(Date.now()).slice(-6)}`,
+                customerName: roForm.customerName || "Walk-in",
+                customerPhone: roForm.customerPhone,
+                vehicleYear: roForm.vehicleYear,
+                vehicleMake: roForm.vehicleMake,
+                vehicleModel: roForm.vehicleModel,
+                vehicleMileageIn: Number(roForm.vehicleMileageIn) || 0,
+                vehicleVin: roForm.vehicleVin,
+                advisor: roForm.advisor,
+                technician: roForm.technician,
+                status: "Check-In",
+                promisedTime: roForm.promisedTime,
+                lines: roForm.concern
+                  ? [
+                      {
+                        id: 1,
+                        description: roForm.concern,
+                        type: "Concern",
+                        laborHours: 0,
+                        laborTotal: 0,
+                        partsTotal: 0,
+                        tech: "",
+                        status: "Open",
+                      },
+                    ]
+                  : [],
+                laborTotal: 0,
+                partsTotal: 0,
+                total: 0,
+                notes: roForm.notes,
+                createdAt: new Date().toISOString(),
+              };
+              try {
+                const res = await fetch(`${API_BASE}/api/repair-orders`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(newRo),
+                });
+                const saved = await res.json();
+                setRepairOrders((prev) => [saved, ...prev]);
+              } catch {
+                setRepairOrders((prev) => [newRo, ...prev]);
+              }
+              setRoForm({
+                customerName: "",
+                customerPhone: "",
+                vehicleYear: "",
+                vehicleMake: "",
+                vehicleModel: "",
+                vehicleMileageIn: "",
+                vehicleVin: "",
+                advisor: "",
+                technician: "",
+                promisedTime: "",
+                concern: "",
+                notes: "",
+              });
+              setShowRoForm(false);
+              setAppMessage(`RO ${newRo.roNumber} opened.`);
+            }
+
+            return (
+              <>
+                <header className="page-header">
+                  <div>
+                    <p className="eyebrow">Service Department</p>
+                    <h1>Open Repair Orders</h1>
+                    <p className="page-subtitle">
+                      Live view of every vehicle in service. Update status as
+                      work progresses.
+                    </p>
+                  </div>
+                  <div className="header-actions">
+                    <button
+                      type="button"
+                      onClick={() => setShowRoForm((v) => !v)}
+                    >
+                      + New RO
+                    </button>
+                  </div>
+                </header>
+
+                {/* Service KPIs */}
+                <div
+                  className="kpi-grid"
+                  style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+                >
+                  <div className="kpi-card kpi-blue">
+                    <span>Open ROs</span>
+                    <strong>{openROs.length}</strong>
+                    <small>Active vehicles</small>
+                  </div>
+                  <div className="kpi-card kpi-yellow">
+                    <span>In Progress</span>
+                    <strong>{inProgROs.length}</strong>
+                    <small>Tech working now</small>
+                  </div>
+                  <div
+                    className="kpi-card"
+                    style={{
+                      background: "linear-gradient(135deg,#f97316,#ef4444)",
+                      color: "#fff",
+                    }}
+                  >
+                    <span>On Hold — Parts</span>
+                    <strong>{holdROs.length}</strong>
+                    <small>Waiting on parts</small>
+                  </div>
+                  <div className="kpi-card kpi-green">
+                    <span>Ready for Pickup</span>
+                    <strong>{readyROs.length}</strong>
+                    <small>${serviceRev.toLocaleString()} est. rev</small>
+                  </div>
+                </div>
+
+                {/* New RO Form */}
+                {showRoForm && (
+                  <article className="panel" style={{ marginBottom: 18 }}>
+                    <p className="eyebrow">Open New Repair Order</p>
+                    <h2>Vehicle Check-In</h2>
+                    <form className="ro-form" onSubmit={handleCreateRo}>
+                      <div className="ro-form-group">
+                        <label>Customer Name</label>
+                        <input
+                          placeholder="John Smith"
+                          value={roForm.customerName}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              customerName: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Phone</label>
+                        <input
+                          placeholder="(555) 000-0000"
+                          value={roForm.customerPhone}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              customerPhone: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Year</label>
+                        <input
+                          placeholder="2021"
+                          value={roForm.vehicleYear}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              vehicleYear: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Make</label>
+                        <input
+                          placeholder="Toyota"
+                          value={roForm.vehicleMake}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              vehicleMake: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Model</label>
+                        <input
+                          placeholder="Camry"
+                          value={roForm.vehicleModel}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              vehicleModel: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Mileage In</label>
+                        <input
+                          placeholder="38200"
+                          value={roForm.vehicleMileageIn}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              vehicleMileageIn: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>VIN (optional)</label>
+                        <input
+                          placeholder="1HGBH41JXMN109186"
+                          value={roForm.vehicleVin}
+                          onChange={(e) =>
+                            setRoForm({ ...roForm, vehicleVin: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Service Advisor</label>
+                        <select
+                          value={roForm.advisor}
+                          onChange={(e) =>
+                            setRoForm({ ...roForm, advisor: e.target.value })
+                          }
+                        >
+                          <option value="">Select advisor</option>
+                          {["Avery", "Mike", "Sarah", "Dan"].map((a) => (
+                            <option key={a}>{a}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Technician</label>
+                        <select
+                          value={roForm.technician}
+                          onChange={(e) =>
+                            setRoForm({ ...roForm, technician: e.target.value })
+                          }
+                        >
+                          <option value="">Unassigned</option>
+                          {["Mike T.", "Dan W.", "Chris R.", "Sam L."].map(
+                            (t) => (
+                              <option key={t}>{t}</option>
+                            ),
+                          )}
+                        </select>
+                      </div>
+                      <div className="ro-form-group">
+                        <label>Promised Time</label>
+                        <input
+                          placeholder="3:00 PM Today"
+                          value={roForm.promisedTime}
+                          onChange={(e) =>
+                            setRoForm({
+                              ...roForm,
+                              promisedTime: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group ro-form-wide">
+                        <label>Customer Concern</label>
+                        <input
+                          placeholder="Describe the concern or service needed..."
+                          value={roForm.concern}
+                          onChange={(e) =>
+                            setRoForm({ ...roForm, concern: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-group ro-form-wide">
+                        <label>Notes</label>
+                        <input
+                          placeholder="Internal notes..."
+                          value={roForm.notes}
+                          onChange={(e) =>
+                            setRoForm({ ...roForm, notes: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="ro-form-actions">
+                        <button type="submit">Open RO</button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => setShowRoForm(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </article>
+                )}
+
+                {/* RO Board — columns by status */}
+                <div className="ro-board">
+                  {roStatuses
+                    .filter((s) => s !== "Closed")
+                    .map((col) => {
+                      const colRos = repairOrders.filter(
+                        (r) => r.status === col,
+                      );
+                      return (
+                        <div className="ro-col" key={col}>
+                          <div className="ro-col-header">
+                            <span
+                              className={`ro-status-badge ${roStatusClass(col)}`}
+                            >
+                              {col}
+                            </span>
+                            <span className="ro-col-count">
+                              {colRos.length}
+                            </span>
+                          </div>
+                          {colRos.length === 0 && (
+                            <p
+                              className="empty-state"
+                              style={{ fontSize: 12, padding: "10px 0" }}
+                            >
+                              Empty
+                            </p>
+                          )}
+                          {colRos.map((ro) => (
+                            <div
+                              className={`ro-card ${roStatusClass(ro.status)}`}
+                              key={ro.id}
+                            >
+                              <div className="ro-card-header">
+                                <span className="ro-number">{ro.roNumber}</span>
+                                {ro.promisedTime && (
+                                  <span className="ro-promise">
+                                    <Clock size={11} /> {ro.promisedTime}
+                                  </span>
+                                )}
+                              </div>
+                              <strong className="ro-customer">
+                                {ro.customerName}
+                              </strong>
+                              <span className="ro-vehicle">
+                                {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                {ro.vehicleModel}
+                              </span>
+                              <span
+                                className="ro-vehicle"
+                                style={{ color: "#94a3b8" }}
+                              >
+                                {ro.vehicleMileageIn.toLocaleString()} mi ·{" "}
+                                {ro.vehicleVin || "No VIN"}
+                              </span>
+                              <div className="ro-advisors">
+                                <span>Adv: {ro.advisor || "—"}</span>
+                                <span>Tech: {ro.technician || "—"}</span>
+                              </div>
+                              {ro.lines.length > 0 && (
+                                <div className="ro-lines">
+                                  {ro.lines.map((line) => (
+                                    <div className="ro-line" key={line.id}>
+                                      <span
+                                        className={`ro-line-status ${line.status === "Complete" ? "line-done" : line.status === "In Progress" ? "line-wip" : "line-open"}`}
+                                      >
+                                        {line.status === "Complete" ? (
+                                          <CheckCircle size={10} />
+                                        ) : line.status === "In Progress" ? (
+                                          <Clock size={10} />
+                                        ) : (
+                                          <AlertTriangle size={10} />
+                                        )}
+                                      </span>
+                                      <span className="ro-line-desc">
+                                        {line.description}
+                                      </span>
+                                      <span className="ro-line-total">
+                                        $
+                                        {(
+                                          line.laborTotal + line.partsTotal
+                                        ).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {ro.notes && (
+                                <p className="ro-notes">{ro.notes}</p>
+                              )}
+                              <div className="ro-total-row">
+                                <span>Total</span>
+                                <strong>${ro.total.toLocaleString()}</strong>
+                              </div>
+                              <div className="ro-status-actions">
+                                {roStatuses
+                                  .filter((s) => s !== ro.status)
+                                  .map((s) => (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      className={`ro-move-btn ${roStatusClass(s)}`}
+                                      onClick={() => updateRoStatus(ro.id, s)}
+                                    >
+                                      → {s}
+                                    </button>
+                                  ))}
+                              </div>
+                              {ro.customerId && (
+                                <button
+                                  type="button"
+                                  className="open-btn"
+                                  style={{ marginTop: 6, width: "100%" }}
+                                  onClick={() => {
+                                    window.location.hash = `#/customers/${ro.customerId}`;
+                                  }}
+                                >
+                                  View Customer Profile
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Closed ROs */}
+                {repairOrders.filter((r) => r.status === "Closed").length >
+                  0 && (
+                  <article className="panel" style={{ marginTop: 18 }}>
+                    <p className="eyebrow">Closed Today</p>
+                    <h2>Completed Repair Orders</h2>
+                    <table className="ro-table">
+                      <thead>
+                        <tr>
+                          <th>RO #</th>
+                          <th>Customer</th>
+                          <th>Vehicle</th>
+                          <th>Advisor</th>
+                          <th>Tech</th>
+                          <th>Total</th>
+                          <th>Closed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {repairOrders
+                          .filter((r) => r.status === "Closed")
+                          .map((ro) => (
+                            <tr key={ro.id}>
+                              <td>
+                                <code>{ro.roNumber}</code>
+                              </td>
+                              <td>{ro.customerName}</td>
+                              <td>
+                                {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                {ro.vehicleModel}
+                              </td>
+                              <td>{ro.advisor}</td>
+                              <td>{ro.technician}</td>
+                              <td>
+                                <strong>${ro.total.toLocaleString()}</strong>
+                              </td>
+                              <td>
+                                <small>
+                                  {ro.closedAt
+                                    ? new Date(ro.closedAt).toLocaleTimeString(
+                                        [],
+                                        { hour: "2-digit", minute: "2-digit" },
+                                      )
+                                    : "—"}
+                                </small>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </article>
+                )}
+              </>
+            );
+          })()}
       </section>
     </main>
   );
