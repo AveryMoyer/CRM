@@ -581,6 +581,7 @@ function App() {
   const [profileTab, setProfileTab] = useState<ProfileTab>("overview");
 
   const [customerSearch, setCustomerSearch] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
   const [customerStatusFilter, setCustomerStatusFilter] = useState("All");
   const [customerSourceFilter, setCustomerSourceFilter] = useState("All");
   const [customerSortCol, setCustomerSortCol] = useState<
@@ -947,7 +948,7 @@ function App() {
   }));
 
   const filteredCustomers = useMemo(() => {
-    const q = customerSearch.toLowerCase().trim();
+    const q = activeSearch.toLowerCase().trim();
     const filtered = customers.filter((c) => {
       const name = `${c.firstName} ${c.lastName}`.toLowerCase();
       const matchSearch =
@@ -996,7 +997,7 @@ function App() {
     return filtered;
   }, [
     customers,
-    customerSearch,
+    activeSearch,
     customerStatusFilter,
     customerSourceFilter,
     customerSortCol,
@@ -3343,16 +3344,51 @@ function App() {
 
                   {/* Search + filter toolbar */}
                   <div className="cust-toolbar">
-                    <input
-                      className="cust-search"
-                      placeholder="🔍  Name, phone, email, or vehicle..."
-                      value={customerSearch}
-                      onChange={(e) => {
-                        setCustomerSearch(e.target.value);
+                    <div className="cust-search-wrap">
+                      <input
+                        className="cust-search"
+                        placeholder="Name, phone, or email — press Enter or click Search"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setActiveSearch(customerSearch.trim());
+                            setCustPage(0);
+                          }
+                          if (e.key === "Escape") {
+                            setCustomerSearch("");
+                            setActiveSearch("");
+                            setCustPage(0);
+                          }
+                        }}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      {customerSearch && (
+                        <button
+                          type="button"
+                          className="search-clear-btn"
+                          title="Clear search"
+                          onClick={() => {
+                            setCustomerSearch("");
+                            setActiveSearch("");
+                            setCustPage(0);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="search-go-btn"
+                      onClick={() => {
+                        setActiveSearch(customerSearch.trim());
                         setCustPage(0);
                       }}
-                      autoComplete="off"
-                    />
+                    >
+                      Search
+                    </button>
                     <select
                       className="filter-select"
                       value={customerStatusFilter}
@@ -3387,6 +3423,21 @@ function App() {
                       <option>Phone Call</option>
                     </select>
                     <div className="cust-toolbar-right">
+                      {activeSearch && (
+                        <span className="active-search-badge">
+                          "{activeSearch}"
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomerSearch("");
+                              setActiveSearch("");
+                              setCustPage(0);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      )}
                       <span className="result-count">
                         {filteredCustomers.length.toLocaleString()} of{" "}
                         {customers.length.toLocaleString()}
