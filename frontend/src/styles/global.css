@@ -2480,6 +2480,14 @@ button.danger:hover {
 
 /* ── Responsive: Mobile ─────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   /* Hide desktop sidebar entirely on mobile */
   .sidebar {
     display: none;
@@ -2552,7 +2560,7 @@ button.danger:hover {
   .workspace {
     padding: 16px 12px 90px;
     width: 100%;
-    max-width: 100vw;
+    max-width: 100%;
     min-width: 0;
     overflow-x: hidden;
   }
@@ -2560,8 +2568,26 @@ button.danger:hover {
   /* App shell: block layout since sidebar is gone */
   .app-shell {
     flex-direction: column;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
+  }
+
+  .workspace > *,
+  .panel,
+  .desk-section,
+  .desk-layout,
+  .dash-grid,
+  .overview-layout,
+  .deals-layout {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .panel {
+    padding: 16px 14px;
+    border-radius: 14px;
+    overflow: hidden;
   }
 
   /* Page headers */
@@ -2633,10 +2659,31 @@ button.danger:hover {
 
   /* Pipeline: single column with horizontal scroll */
   .pipeline-board {
-    grid-template-columns: repeat(7, 280px);
+    width: 100%;
+    max-width: 100%;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(238px, 82vw);
+    grid-template-columns: none;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 8px;
+    overscroll-behavior-x: contain;
+    padding: 2px 2px 10px;
+    scroll-snap-type: x proximity;
+  }
+  .pipeline-column {
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  .pipeline-card,
+  .pipeline-card-full {
+    min-width: 0;
+  }
+  .pipeline-card span,
+  .pipeline-card small,
+  .pipeline-card-full strong,
+  .pipeline-card-full span,
+  .pipeline-card-full small {
+    overflow-wrap: anywhere;
   }
 
   /* VIN grid: single column */
@@ -2646,10 +2693,20 @@ button.danger:hover {
 
   /* Service board: 2 columns scrollable */
   .ro-board {
-    grid-template-columns: repeat(5, 260px);
+    width: 100%;
+    max-width: 100%;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(238px, 82vw);
+    grid-template-columns: none;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 8px;
+    overscroll-behavior-x: contain;
+    padding: 2px 2px 10px;
+    scroll-snap-type: x proximity;
+  }
+  .ro-col {
+    min-width: 0;
+    scroll-snap-align: start;
   }
 
   /* Desk tool: full single column */
@@ -2705,7 +2762,13 @@ button.danger:hover {
 
   /* ── Dashboard phone fixes ─────────────────────────────────── */
   .eyebrow {
-    display: none; /* removes redundant subtitle, saves vertical space */
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.06em;
+    font-size: 10px;
   }
   .page-header h1 {
     font-size: 20px;
@@ -2737,6 +2800,56 @@ button.danger:hover {
   }
   .dash-grid {
     gap: 12px;
+  }
+
+  .funnel-panel {
+    margin: 14px 0;
+  }
+  .funnel-stages {
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .funnel-stage {
+    display: grid;
+    grid-template-columns: minmax(74px, 1fr) minmax(0, 1.25fr);
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+  }
+  .funnel-bar-wrap {
+    min-width: 0;
+  }
+  .funnel-label {
+    min-width: 0;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .funnel-label .status-badge {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+  .funnel-label strong {
+    min-width: 16px;
+    font-size: 13px;
+  }
+  .funnel-label small {
+    font-size: 10px;
+  }
+  .funnel-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .lead-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .lead-card button {
+    width: 100%;
   }
 
   /* ── Desk tool phone fixes ─────────────────────────────────── */
