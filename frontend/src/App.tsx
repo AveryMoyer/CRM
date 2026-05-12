@@ -17,6 +17,11 @@ import {
   CheckCircle,
   AlertTriangle,
 } from "lucide-react";
+import {
+  findDuplicateCustomers,
+  findDuplicateIds,
+  parseHashRoute,
+} from "./crmLogic";
 import "./styles/global.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1505,28 +1510,9 @@ function App() {
 
   useEffect(() => {
     function syncRoute() {
-      const hash = window.location.hash;
-      const match = hash.match(/^#\/customers\/(\d+)/);
-      if (match) {
-        setSelectedCustomerId(Number(match[1]));
-        return;
-      }
-      setSelectedCustomerId(null);
-      const page = hash.replace("#/", "") as AppPage;
-      const valid: AppPage[] = [
-        "dashboard",
-        "leads",
-        "customers",
-        "service",
-        "finance",
-        "pipeline",
-        "trades",
-        "vin",
-        "activities",
-        "desk",
-        "service",
-      ];
-      setCurrentPage(valid.includes(page) ? page : "dashboard");
+      const route = parseHashRoute(window.location.hash);
+      setSelectedCustomerId(route.selectedCustomerId);
+      setCurrentPage(route.page);
     }
     syncRoute();
     window.addEventListener("hashchange", syncRoute);
@@ -1538,6 +1524,13 @@ function App() {
     fetch(`${API_BASE}/api/bootstrap`)
       .then((r) => r.json())
       .then((d: BootstrapData) => {
+        const duplicateIds = findDuplicateIds(d.customers.map((c) => c.id));
+        if (duplicateIds.length > 0) {
+          console.warn(
+            "[CRM bootstrap] Duplicate customer ids found",
+            duplicateIds,
+          );
+        }
         setCustomers(d.customers);
         setFinanceApplications(d.financeApplications);
         setCreditApplications(d.creditApplications || []);
@@ -1704,20 +1697,7 @@ function App() {
   }
 
   function findDuplicates(form: typeof customerForm): Customer[] {
-    const fullName = `${form.firstName} ${form.lastName}`.toLowerCase().trim();
-    const phone = form.phone.replace(/\D/g, "");
-    const email = (form.email || "").toLowerCase().trim();
-    return customers.filter((c) => {
-      if (editingCustomerId && c.id === editingCustomerId) return false;
-      const nameHit =
-        fullName.length > 2 &&
-        `${c.firstName} ${c.lastName}`.toLowerCase() === fullName;
-      const phoneHit =
-        phone.length >= 7 && c.phone.replace(/\D/g, "").includes(phone);
-      const emailHit =
-        email.length > 3 && (c.email || "").toLowerCase() === email;
-      return nameHit || phoneHit || emailHit;
-    });
+    return findDuplicateCustomers(customers, form, editingCustomerId);
   }
 
   async function doSaveCustomer() {
