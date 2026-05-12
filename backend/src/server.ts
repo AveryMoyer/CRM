@@ -96,6 +96,7 @@ type TradeIn = {
   mileage: number;
   payoff: number;
   estimatedValue: number;
+  notes?: string;
 };
 
 type VehicleSale = {
@@ -232,6 +233,19 @@ const defaultDatabase: Database = {
       assignedTo: "Avery",
       nextFollowUp: "Tomorrow",
     },
+    {
+      id: 9,
+      firstName: "Ernesto",
+      lastName: "Alverez",
+      email: "ernesto.alverez@gmail.com",
+      phone: "(713) 555-0294",
+      status: "Working",
+      temperature: "Hot",
+      interestedVehicle: "2024 Ford Bronco Raptor",
+      source: "Walk-In",
+      assignedTo: "Avery",
+      nextFollowUp: "Tomorrow 2pm",
+    },
   ],
   financeApplications: [
     {
@@ -281,6 +295,17 @@ const defaultDatabase: Database = {
       mileage: 82000,
       payoff: 4200,
       estimatedValue: 12800,
+    },
+    {
+      id: 2,
+      customerId: 9,
+      year: "2023",
+      make: "Ford",
+      model: "Bronco Raptor",
+      mileage: 18400,
+      payoff: 52000,
+      estimatedValue: 68500,
+      notes: "this is my thunder buddy",
     },
   ],
   vehicleSales: [
@@ -459,9 +484,22 @@ function loadDatabase(): Database {
     return defaultDatabase;
   }
   const saved = JSON.parse(readFileSync(dataFile, "utf8"));
+  const mergeSeedRecords = <T extends { id: number }>(
+    savedRecords: T[] | undefined,
+    seedRecords: T[],
+  ) => {
+    const savedList = savedRecords ?? [];
+    const savedIds = new Set(savedList.map((record) => record.id));
+    return [
+      ...savedList,
+      ...seedRecords.filter((record) => !savedIds.has(record.id)),
+    ];
+  };
   return {
     ...defaultDatabase,
     ...saved,
+    customers: mergeSeedRecords(saved.customers, defaultDatabase.customers),
+    tradeIns: mergeSeedRecords(saved.tradeIns, defaultDatabase.tradeIns),
     repairOrders: saved.repairOrders ?? defaultDatabase.repairOrders,
   };
 }
@@ -1159,6 +1197,7 @@ app.post("/api/trade-ins", (req, res) => {
     mileage: Number(req.body.mileage || 0),
     payoff: Number(req.body.payoff || 0),
     estimatedValue: Number(req.body.estimatedValue || 0),
+    notes: req.body.notes || undefined,
   };
 
   db.tradeIns = [tradeIn, ...db.tradeIns];

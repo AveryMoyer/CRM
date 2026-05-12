@@ -2552,12 +2552,16 @@ button.danger:hover {
   .workspace {
     padding: 16px 12px 90px;
     width: 100%;
+    max-width: 100vw;
     min-width: 0;
+    overflow-x: hidden;
   }
 
   /* App shell: block layout since sidebar is gone */
   .app-shell {
     flex-direction: column;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   /* Page headers */
@@ -2593,8 +2597,10 @@ button.danger:hover {
   .crm-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
-  table {
+  .data-table-wrap table,
+  .crm-table-wrap table {
     min-width: 500px;
   }
   .ro-table {
@@ -2712,11 +2718,13 @@ button.danger:hover {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     margin-bottom: 16px;
+    width: 100%;
   }
   .kpi-card {
     padding: 12px 14px;
     border-radius: 12px;
     gap: 4px;
+    min-width: 0;
   }
   .kpi-card strong {
     font-size: 26px;
