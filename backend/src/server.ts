@@ -124,6 +124,8 @@ type User = {
   email: string;
   password: string;
   role: string;
+  phone?: string;
+  avatarUrl?: string;
 };
 
 type RoStatus =
@@ -204,6 +206,8 @@ const defaultDatabase: Database = {
       email: "avery@example.com",
       password: "password",
       role: "Sales Manager",
+      phone: "(713) 555-0188",
+      avatarUrl: "",
     },
   ],
   customers: [
@@ -889,6 +893,8 @@ app.post("/api/signup", (req, res) => {
     email,
     password,
     role: "Sales Consultant",
+    phone: "",
+    avatarUrl: "",
   };
   db.users = [user, ...db.users];
   saveDatabase();
@@ -900,6 +906,8 @@ app.post("/api/signup", (req, res) => {
       name: user.name,
       role: user.role,
       email: user.email,
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
     },
   });
 });
@@ -920,7 +928,51 @@ app.post("/api/login", (req, res) => {
 
   res.json({
     token: `demo-token-${user.id}`,
-    user: { id: user.id, name: user.name, role: user.role, email: user.email },
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      email: user.email,
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
+    },
+  });
+});
+
+app.put("/api/users/:id/profile", (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.users.find((user) => user.id === id);
+  if (!existing) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
+  const email = String(req.body.email || existing.email)
+    .trim()
+    .toLowerCase();
+  if (db.users.some((user) => user.id !== id && user.email === email)) {
+    res.status(409).json({ message: "That email is already in use" });
+    return;
+  }
+
+  const updated: User = {
+    ...existing,
+    name: String(req.body.name || existing.name).trim(),
+    email,
+    role: String(req.body.role || existing.role).trim(),
+    phone: String(req.body.phone || "").trim(),
+    avatarUrl: String(req.body.avatarUrl || "").trim(),
+  };
+  db.users = db.users.map((user) => (user.id === id ? updated : user));
+  saveDatabase();
+
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    role: updated.role,
+    email: updated.email,
+    phone: updated.phone,
+    avatarUrl: updated.avatarUrl,
   });
 });
 

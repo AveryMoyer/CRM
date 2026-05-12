@@ -227,6 +227,73 @@ button {
   color: #94a3b8;
 }
 
+.user-settings-btn {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.user-settings-btn > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.user-settings-btn strong {
+  color: #e5e7eb;
+  font-size: 12px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-settings-btn small {
+  color: #64748b;
+  font-size: 10px;
+}
+.mini-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  overflow: hidden;
+}
+.mini-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-social-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.sidebar-social-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.sidebar-social-links a:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: #c7d2fe;
+}
+
 /* ── Workspace ──────────────────────────────────────────────────────────────── */
 .workspace {
   flex: 1;
@@ -363,13 +430,12 @@ button {
 
 /* ── Panel ──────────────────────────────────────────────────────────────────── */
 .panel {
-  background: #ffffff;
+  background: #fff;
   border-radius: 18px;
-  padding: 22px 24px;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 22px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.75);
+  animation: panelRise 0.28s ease both;
 }
 
 .panel h2 {
@@ -568,11 +634,20 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #f1f5f9;
   border-radius: 12px;
   padding: 12px 14px;
+  background: #f8fafc;
   gap: 12px;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+.lead-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12);
+  transform: translateY(-1px);
 }
 
 .lead-card > div {
@@ -584,6 +659,15 @@ button {
 .lead-card strong {
   font-size: 14px;
   color: #0f172a;
+}
+.profile-link-name {
+  cursor: pointer;
+  width: fit-content;
+  transition: color 0.14s ease;
+}
+.profile-link-name:hover {
+  color: #4f46e5;
+  text-decoration: underline;
 }
 .lead-card span {
   font-size: 12px;
@@ -926,8 +1010,75 @@ button {
 .stalled-card {
   border-left: 3px solid #f59e0b !important;
 }
+.stalled-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.sold-btn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.2);
+}
+.sold-btn:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
 .equity-card {
   border-left: 3px solid #10b981 !important;
+}
+
+.sold-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(251, 191, 36, 0.2),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 70% 40%,
+      rgba(16, 185, 129, 0.18),
+      transparent 24%
+    ),
+    rgba(15, 23, 42, 0.22);
+  animation: celebrationFade 2.6s ease forwards;
+}
+.sold-burst {
+  min-width: min(320px, calc(100vw - 40px));
+  padding: 30px 26px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.3);
+  text-align: center;
+  animation: soldPop 0.7s cubic-bezier(0.2, 1.35, 0.34, 1) both;
+}
+.sold-burst span {
+  display: block;
+  font-size: 48px;
+  animation: soldSpin 1s ease both;
+}
+.sold-burst strong {
+  display: block;
+  color: #059669;
+  font-size: 38px;
+  font-weight: 1000;
+  letter-spacing: -0.04em;
+}
+.sold-burst p {
+  margin: 6px 0 0;
+  color: #334155;
+  font-weight: 800;
 }
 
 .source-tag {
@@ -2455,6 +2606,15 @@ button.danger:hover {
   .sidebar-footer button {
     justify-content: center;
   }
+  .sidebar-social-links {
+    grid-template-columns: 1fr;
+  }
+  .sidebar-social-links a {
+    font-size: 0;
+  }
+  .sidebar-social-links a::first-letter {
+    font-size: 11px;
+  }
   .workspace {
     padding: 20px 16px;
   }
@@ -2850,6 +3010,120 @@ button.danger:hover {
   }
   .lead-card button {
     width: 100%;
+  }
+
+  /* ── Modal / auth mobile polish ────────────────────────────── */
+  .login-page {
+    min-height: 100dvh;
+    padding: 18px 12px;
+    place-items: center;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    max-height: calc(100dvh - 36px);
+    overflow-y: auto;
+    padding: 28px 18px;
+    border-radius: 18px;
+  }
+  .login-card h1 {
+    font-size: 22px;
+  }
+
+  .dup-backdrop {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 12px;
+    overflow: hidden;
+  }
+  .dup-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 18px 18px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: dupSheetIn 0.18s ease;
+  }
+  .settings-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 14px 14px;
+    animation: dupSheetIn 0.18s ease;
+  }
+  .settings-header {
+    align-items: center;
+  }
+  .settings-avatar-preview {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+  .settings-actions {
+    flex-direction: column-reverse;
+  }
+  .settings-actions button {
+    width: 100%;
+  }
+  .bottom-nav-button {
+    border: 0;
+    background: transparent;
+  }
+  .dup-modal-header {
+    padding: 18px 16px 14px;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .dup-icon {
+    font-size: 20px;
+  }
+  .dup-modal-header h3 {
+    font-size: 15px;
+  }
+  .dup-modal-header p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .dup-list {
+    max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+  }
+  .dup-match {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+  .dup-match-info {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .dup-match-info strong,
+  .dup-match-info span {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .dup-match .cust-action-btn {
+    width: 100%;
+  }
+  .dup-modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    flex-shrink: 0;
+  }
+  .dup-modal-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+  .dup-add-anyway,
+  .ghost-button {
+    min-height: 44px;
   }
 
   /* ── Desk tool phone fixes ─────────────────────────────────── */
@@ -3674,6 +3948,80 @@ a.crm-info-value:hover {
   animation: dupIn 0.18s ease;
 }
 
+.settings-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: dupIn 0.18s ease;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.settings-header h3 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 20px;
+}
+.settings-avatar-preview {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  overflow: hidden;
+}
+.settings-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.settings-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.settings-modal input {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+}
+.settings-modal input:focus {
+  border-color: #6366f1;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  outline: none;
+}
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 @keyframes dupIn {
   from {
     opacity: 0;
@@ -3682,6 +4030,17 @@ a.crm-info-value:hover {
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dupSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -3778,4 +4137,91 @@ a.crm-info-value:hover {
 }
 .dup-add-anyway:hover {
   background: #dc2626;
+}
+
+@keyframes panelRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes celebrationFade {
+  0%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes soldPop {
+  from {
+    opacity: 0;
+    transform: scale(0.72) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes soldSpin {
+  from {
+    transform: rotate(-18deg) scale(0.7);
+  }
+  to {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@media (max-width: 640px) {
+  .stalled-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+  .stalled-actions .open-btn,
+  .stalled-actions .sold-btn {
+    flex: 1;
+    width: 100%;
+  }
+  .sold-burst {
+    padding: 24px 20px;
+  }
+  .sold-burst strong {
+    font-size: 32px;
+  }
+}
+
+.unsold-btn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #64748b, #334155);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(51, 65, 85, 0.16);
+}
+.unsold-btn:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.service-equity-eye {
+  color: #0ea5e9 !important;
+}
+.service-equity-card {
+  border-left: 3px solid #0ea5e9 !important;
+}
+
+@media (max-width: 640px) {
+  .stalled-actions .unsold-btn {
+    flex: 1;
+    width: 100%;
+  }
 }

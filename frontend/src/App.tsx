@@ -16,6 +16,7 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
+  Settings,
 } from "lucide-react";
 import {
   findDuplicateCustomers,
@@ -205,6 +206,15 @@ type BootstrapData = {
   vehicleSales: VehicleSale[];
   activities: Activity[];
   repairOrders?: RepairOrder[];
+};
+
+type CurrentUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  phone?: string;
+  avatarUrl?: string;
 };
 
 type ProfileTab =
@@ -971,6 +981,19 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
     () => localStorage.getItem("crm-authenticated") === "true",
   );
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
+    const saved = localStorage.getItem("crm-current-user");
+    return saved ? (JSON.parse(saved) as CurrentUser) : null;
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [soldCelebration, setSoldCelebration] = useState<string | null>(null);
+  const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    email: "",
+    role: "",
+    phone: "",
+    avatarUrl: "",
+  });
   const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">(
     "login",
   );
@@ -1323,11 +1346,68 @@ function App() {
     [customers, activities],
   );
 
-  // Equity mining: Sold customers (already bought — prime re-engagement targets)
-  const equityTargets = useMemo(
+  const activeLeads = useMemo(
+    () =>
+      customers.filter((c) => !["New Lead", "Sold", "Lost"].includes(c.status)),
+    [customers],
+  );
+
+  const soldReengagementTargets = useMemo(
     () => customers.filter((c) => c.status === "Sold"),
     [customers],
   );
+
+  const serviceEquityTargets = useMemo(() => {
+    const latestByCustomer = new Map<number, RepairOrder>();
+    repairOrders.forEach((ro) => {
+      if (!ro.customerId) return;
+      const current = latestByCustomer.get(ro.customerId);
+      if (
+        !current ||
+        new Date(ro.createdAt).getTime() > new Date(current.createdAt).getTime()
+      ) {
+        latestByCustomer.set(ro.customerId, ro);
+      }
+    });
+
+    return [...latestByCustomer.values()]
+      .map((ro) => {
+        const customer = customers.find((item) => item.id === ro.customerId);
+        if (!customer || customer.status === "Lost") return null;
+        const age = Math.max(
+          0,
+          new Date().getFullYear() -
+            Number(ro.vehicleYear || new Date().getFullYear()),
+        );
+        const estimatedValue = Math.max(
+          3500,
+          36000 - age * 3200 - ro.vehicleMileageIn * 0.09,
+        );
+        const serviceSpend = ro.total;
+        const equityScore = Math.round(
+          Math.max(0, estimatedValue - serviceSpend * 2),
+        );
+        if (equityScore < 12000) return null;
+        return {
+          customer,
+          ro,
+          estimatedValue: Math.round(estimatedValue),
+          equityScore,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          customer: Customer;
+          ro: RepairOrder;
+          estimatedValue: number;
+          equityScore: number;
+        } => Boolean(item),
+      )
+      .sort((a, b) => b.equityScore - a.equityScore)
+      .slice(0, 5);
+  }, [customers, repairOrders]);
 
   // Stalled: in-progress leads with no activity in 3+ days
   const stalledLeads = useMemo(() => {
@@ -1639,10 +1719,17 @@ function App() {
         setAuthMode("login");
         return;
       }
-      if (authMode === "signup") {
-        setAuthMessage("Account created. You can now log in.");
-        setAuthMode("login");
-        return;
+      const user = data.user as CurrentUser | undefined;
+      if (user) {
+        setCurrentUser(user);
+        setSettingsForm({
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone || "",
+          avatarUrl: user.avatarUrl || "",
+        });
+        localStorage.setItem("crm-current-user", JSON.stringify(user));
       }
       const boot = await fetch(`${API_BASE}/api/bootstrap`);
       const bd: BootstrapData = await boot.json();
@@ -1657,6 +1744,62 @@ function App() {
     } catch {
       setAuthError("Cannot connect to backend. Make sure it is running.");
     }
+  }
+
+  function logout() {
+    localStorage.removeItem("crm-authenticated");
+    localStorage.removeItem("crm-current-user");
+    setCurrentUser(null);
+    setIsLoggedIn(false);
+    setShowSettings(false);
+  }
+
+  function openSettings() {
+    if (currentUser) {
+      setSettingsForm({
+        name: currentUser.name,
+        email: currentUser.email,
+        role: currentUser.role,
+        phone: currentUser.phone || "",
+        avatarUrl: currentUser.avatarUrl || "",
+      });
+    }
+    setShowSettings(true);
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentUser) return;
+    const res = await fetch(`${API_BASE}/api/users/${currentUser.id}/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsForm),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setAppMessage(data.message || "Could not update profile.");
+      return;
+    }
+    setCurrentUser(data);
+    localStorage.setItem("crm-current-user", JSON.stringify(data));
+    setShowSettings(false);
+    setAppMessage("Profile updated.");
+  }
+
+  function uploadProfilePicture(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAppMessage("Please upload an image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSettingsForm((form) => ({
+        ...form,
+        avatarUrl: String(reader.result || ""),
+      }));
+    };
+    reader.readAsDataURL(file);
   }
 
   // ── Customer CRUD ─────────────────────────────────────────────────────────
@@ -1728,6 +1871,46 @@ function App() {
       resetCustomerForm();
       setShowAddForm(false);
       setAppMessage("Customer added.");
+    }
+  }
+
+  async function markCustomerSold(customer: Customer) {
+    const updatedCustomer: Customer = { ...customer, status: "Sold" };
+    setCustomers((list) =>
+      list.map((item) => (item.id === customer.id ? updatedCustomer : item)),
+    );
+    setSoldCelebration(`${customer.firstName} ${customer.lastName}`);
+    setTimeout(() => setSoldCelebration(null), 2600);
+    setAppMessage(`${customer.firstName} ${customer.lastName} marked sold!`);
+
+    try {
+      await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedCustomer),
+      });
+    } catch {
+      /* local demo state already updated */
+    }
+  }
+
+  async function markCustomerUnsold(customer: Customer) {
+    const updatedCustomer: Customer = { ...customer, status: "Working" };
+    setCustomers((list) =>
+      list.map((item) => (item.id === customer.id ? updatedCustomer : item)),
+    );
+    setAppMessage(
+      `${customer.firstName} ${customer.lastName} moved back to working.`,
+    );
+
+    try {
+      await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedCustomer),
+      });
+    } catch {
+      /* local demo state already updated */
     }
   }
 
@@ -3401,6 +3584,112 @@ function App() {
           </div>
         </div>
       )}
+      {showSettings && (
+        <div className="dup-backdrop" onClick={() => setShowSettings(false)}>
+          <form
+            className="settings-modal"
+            onSubmit={saveProfile}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="settings-header">
+              <div className="settings-avatar-preview">
+                {settingsForm.avatarUrl ? (
+                  <img src={settingsForm.avatarUrl} alt="Profile" />
+                ) : (
+                  <span>
+                    {(settingsForm.name || "AS").slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="eyebrow">User Settings</p>
+                <h3>Edit your profile</h3>
+              </div>
+            </div>
+            <label>
+              Full Name
+              <input
+                value={settingsForm.name}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, name: e.target.value })
+                }
+                placeholder="Your name"
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={settingsForm.email}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, email: e.target.value })
+                }
+                placeholder="you@example.com"
+              />
+            </label>
+            <label>
+              Role / Title
+              <input
+                value={settingsForm.role}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, role: e.target.value })
+                }
+                placeholder="Sales Manager"
+              />
+            </label>
+            <label>
+              Profile Picture
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => uploadProfilePicture(e.target.files?.[0])}
+              />
+            </label>
+            {settingsForm.avatarUrl && (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() =>
+                  setSettingsForm({ ...settingsForm, avatarUrl: "" })
+                }
+              >
+                Remove Photo
+              </button>
+            )}
+            <label>
+              Phone
+              <input
+                value={settingsForm.phone}
+                onChange={(e) =>
+                  setSettingsForm({ ...settingsForm, phone: e.target.value })
+                }
+                placeholder="(555) 123-4567"
+              />
+            </label>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setShowSettings(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="dup-add-anyway">
+                Save Profile
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {soldCelebration && (
+        <div className="sold-celebration" aria-live="polite">
+          <div className="sold-burst">
+            <span>🎉</span>
+            <strong>Sold!</strong>
+            <p>{soldCelebration}</p>
+          </div>
+        </div>
+      )}
       <main className="app-shell">
         <aside className="sidebar">
           <div className="sidebar-brand">
@@ -3430,11 +3719,39 @@ function App() {
           <div className="sidebar-footer">
             <button
               type="button"
-              onClick={() => {
-                localStorage.removeItem("crm-authenticated");
-                setIsLoggedIn(false);
-              }}
+              className="user-settings-btn"
+              onClick={openSettings}
             >
+              <span className="mini-avatar">
+                {currentUser?.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} alt="" />
+                ) : (
+                  (currentUser?.name || "AS").slice(0, 2).toUpperCase()
+                )}
+              </span>
+              <span>
+                <strong>{currentUser?.name || "Demo User"}</strong>
+                <small>{currentUser?.role || "Sales Manager"}</small>
+              </span>
+              <Settings size={14} />
+            </button>
+            <div className="sidebar-social-links">
+              <a
+                href="https://github.com/AveryMoyer"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub
+              </a>
+              <a
+                href="https://www.linkedin.com/in/avery-moyer-44770134b"
+                target="_blank"
+                rel="noreferrer"
+              >
+                LinkedIn
+              </a>
+            </div>
+            <button type="button" onClick={logout}>
               <LogOut size={14} />
               Log Out
             </button>
@@ -3443,6 +3760,16 @@ function App() {
 
         {/* ── Mobile Bottom Navigation ─────────────────────────── */}
         <nav className="bottom-nav">
+          <button
+            type="button"
+            className="bottom-nav-item bottom-nav-button"
+            onClick={openSettings}
+          >
+            <span className="bottom-nav-icon">
+              <Settings size={16} />
+            </span>
+            <span className="bottom-nav-label">Settings</span>
+          </button>
           {navItems.map((item) => (
             <a
               key={item.page}
@@ -3593,9 +3920,43 @@ function App() {
                 </div>
               </article>
 
-              {/* ── Stalled Deals + Equity Mining row ── */}
-              {(stalledLeads.length > 0 || equityTargets.length > 0) && (
+              {/* ── Active Leads + Re-engagement row ── */}
+              {(activeLeads.length > 0 ||
+                stalledLeads.length > 0 ||
+                soldReengagementTargets.length > 0 ||
+                serviceEquityTargets.length > 0) && (
                 <div className="dash-grid" style={{ marginTop: 18 }}>
+                  {activeLeads.length > 0 && (
+                    <article className="panel">
+                      <p className="eyebrow">Active Leads</p>
+                      <h2>Working opportunities</h2>
+                      <div className="lead-list">
+                        {activeLeads.slice(0, 5).map((c) => (
+                          <div className="lead-card" key={c.id}>
+                            <div>
+                              <strong
+                                className="profile-link-name"
+                                onClick={() => openProfile(c)}
+                              >
+                                {c.firstName} {c.lastName}
+                              </strong>
+                              <span>{c.interestedVehicle}</span>
+                              <small>
+                                {c.status} · {c.assignedTo || "Unassigned"}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              className="open-btn"
+                              onClick={() => openProfile(c)}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  )}
                   {stalledLeads.length > 0 && (
                     <article className="panel">
                       <p className="eyebrow stalled-eye">Stalled Deals</p>
@@ -3604,7 +3965,10 @@ function App() {
                         {stalledLeads.map((c) => (
                           <div className="lead-card stalled-card" key={c.id}>
                             <div>
-                              <strong>
+                              <strong
+                                className="profile-link-name"
+                                onClick={() => openProfile(c)}
+                              >
                                 {c.firstName} {c.lastName}
                               </strong>
                               <span>{c.interestedVehicle}</span>
@@ -3618,30 +3982,42 @@ function App() {
                                 {c.assignedTo || "Unassigned"}
                               </small>
                             </div>
-                            <button
-                              type="button"
-                              className="open-btn"
-                              onClick={() => openProfile(c)}
-                            >
-                              Log Activity
-                            </button>
+                            <div className="stalled-actions">
+                              <button
+                                type="button"
+                                className="open-btn"
+                                onClick={() => openProfile(c)}
+                              >
+                                Profile
+                              </button>
+                              <button
+                                type="button"
+                                className="sold-btn"
+                                onClick={() => markCustomerSold(c)}
+                              >
+                                Mark Sold
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </article>
                   )}
-                  {equityTargets.length > 0 && (
+                  {soldReengagementTargets.length > 0 && (
                     <article className="panel">
-                      <p className="eyebrow equity-eye">Equity Mining</p>
-                      <h2>Re-engagement targets</h2>
+                      <p className="eyebrow equity-eye">Sold Re-engagement</p>
+                      <h2>Past buyers</h2>
                       <p className="panel-note">
-                        Past buyers — potential trade-up or repeat purchase
+                        Sold customers — repeat purchase and referral follow-up
                       </p>
                       <div className="lead-list">
-                        {equityTargets.map((c) => (
+                        {soldReengagementTargets.map((c) => (
                           <div className="lead-card equity-card" key={c.id}>
                             <div>
-                              <strong>
+                              <strong
+                                className="profile-link-name"
+                                onClick={() => openProfile(c)}
+                              >
                                 {c.firstName} {c.lastName}
                               </strong>
                               <span>{c.interestedVehicle}</span>
@@ -3649,15 +4025,69 @@ function App() {
                                 Purchased · Rep: {c.assignedTo || "—"}
                               </small>
                             </div>
-                            <button
-                              type="button"
-                              className="open-btn"
-                              onClick={() => openProfile(c)}
-                            >
-                              Re-engage
-                            </button>
+                            <div className="stalled-actions">
+                              <button
+                                type="button"
+                                className="open-btn"
+                                onClick={() => openProfile(c)}
+                              >
+                                Re-engage
+                              </button>
+                              <button
+                                type="button"
+                                className="unsold-btn"
+                                onClick={() => markCustomerUnsold(c)}
+                              >
+                                Mark Unsold
+                              </button>
+                            </div>
                           </div>
                         ))}
+                      </div>
+                    </article>
+                  )}
+                  {serviceEquityTargets.length > 0 && (
+                    <article className="panel">
+                      <p className="eyebrow service-equity-eye">
+                        Service Equity
+                      </p>
+                      <h2>Equity Mining</h2>
+                      <p className="panel-note">
+                        Service customers with likely positive trade equity
+                      </p>
+                      <div className="lead-list">
+                        {serviceEquityTargets.map(
+                          ({ customer, ro, estimatedValue, equityScore }) => (
+                            <div
+                              className="lead-card service-equity-card"
+                              key={customer.id}
+                            >
+                              <div>
+                                <strong
+                                  className="profile-link-name"
+                                  onClick={() => openProfile(customer)}
+                                >
+                                  {customer.firstName} {customer.lastName}
+                                </strong>
+                                <span>
+                                  {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                  {ro.vehicleModel}
+                                </span>
+                                <small>
+                                  Est. ${estimatedValue.toLocaleString()} ·
+                                  Equity signal ${equityScore.toLocaleString()}
+                                </small>
+                              </div>
+                              <button
+                                type="button"
+                                className="open-btn"
+                                onClick={() => openProfile(customer)}
+                              >
+                                Work Equity
+                              </button>
+                            </div>
+                          ),
+                        )}
                       </div>
                     </article>
                   )}
