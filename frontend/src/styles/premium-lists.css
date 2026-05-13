@@ -276,6 +276,108 @@
   gap: 18px;
 }
 
+.activity-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.activity-stat-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(14, 165, 233, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.activity-stat-card span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activity-stat-card strong {
+  color: #0f172a;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.activity-report-table {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 26px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(79, 70, 229, 0.08),
+      transparent 34%
+    ),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.activity-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 20px;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.activity-report-row:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: linear-gradient(135deg, #ffffff, #eef2ff);
+  transform: translateY(-1px);
+}
+
+.activity-report-row strong {
+  display: block;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.activity-report-row span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.activity-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.activity-counts span {
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 950;
+}
+
 .activity-log-panel {
   display: grid;
   grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
@@ -411,5 +513,14 @@
 
   .activity-log-panel {
     grid-template-columns: 1fr;
+  }
+
+  .activity-stat-grid,
+  .activity-report-row {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-counts {
+    justify-content: flex-start;
   }
 }

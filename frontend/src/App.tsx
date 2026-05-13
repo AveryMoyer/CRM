@@ -1746,6 +1746,89 @@ function App() {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         )
     : [];
+  const activityReportRows = useMemo(() => {
+    const start =
+      Date.now() -
+      (activityReportRange === "day"
+        ? 1000 * 60 * 60 * 24
+        : 1000 * 60 * 60 * 24 * 7);
+    const rowMap = new Map<
+      number,
+      {
+        customer: Customer;
+        lastInteraction: string;
+        calls: number;
+        texts: number;
+        emails: number;
+        appointments: number;
+        leads: number;
+      }
+    >();
+
+    customers.forEach((customer) => {
+      const createdAt = customer.createdAt
+        ? new Date(customer.createdAt).getTime()
+        : 0;
+      if (createdAt >= start) {
+        rowMap.set(customer.id, {
+          customer,
+          lastInteraction: customer.createdAt || new Date().toISOString(),
+          calls: 0,
+          texts: 0,
+          emails: 0,
+          appointments: 0,
+          leads: 1,
+        });
+      }
+    });
+
+    activities
+      .filter((activity) => activity.type !== "Note")
+      .forEach((activity) => {
+        const createdAt = new Date(activity.createdAt).getTime();
+        if (createdAt < start) return;
+        const customer = customers.find(
+          (item) => item.id === activity.customerId,
+        );
+        if (!customer) return;
+        const current = rowMap.get(customer.id) || {
+          customer,
+          lastInteraction: activity.createdAt,
+          calls: 0,
+          texts: 0,
+          emails: 0,
+          appointments: 0,
+          leads: 0,
+        };
+        if (
+          new Date(activity.createdAt).getTime() >
+          new Date(current.lastInteraction).getTime()
+        ) {
+          current.lastInteraction = activity.createdAt;
+        }
+        if (activity.type === "Call") current.calls += 1;
+        if (activity.type === "Text") current.texts += 1;
+        if (activity.type === "Email") current.emails += 1;
+        if (activity.type === "Appointment") current.appointments += 1;
+        rowMap.set(customer.id, current);
+      });
+
+    return [...rowMap.values()].sort(
+      (a, b) =>
+        new Date(b.lastInteraction).getTime() -
+        new Date(a.lastInteraction).getTime(),
+    );
+  }, [activities, activityReportRange, customers]);
+  const activityReportTotals = activityReportRows.reduce(
+    (totals, row) => ({
+      calls: totals.calls + row.calls,
+      texts: totals.texts + row.texts,
+      emails: totals.emails + row.emails,
+      appointments: totals.appointments + row.appointments,
+      leads: totals.leads + row.leads,
+    }),
+    { calls: 0, texts: 0, emails: 0, appointments: 0, leads: 0 },
+  );
   const openTasks = tasks.filter((task) => task.status === "Open");
   const allAppointmentTasks = tasks
     .filter((task) => task.type === "Appointment")
@@ -7642,81 +7725,86 @@ function App() {
               <header className="page-header">
                 <div>
                   <p className="eyebrow">Activity Log</p>
-                  <h1>Calls, Texts, Emails & Notes</h1>
+                  <h1>Activity Summary</h1>
                   <p className="page-subtitle">
-                    All customer interactions across every rep and deal. Use a
-                    customer's Deal Jacket to log activities tied to that
-                    specific deal.
+                    See who was worked and how many calls, texts, emails,
+                    appointments, and leads came in for the selected period.
+                    Notes stay inside each customer's profile.
                   </p>
+                </div>
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    className={
+                      activityReportRange === "day" ? "" : "ghost-button"
+                    }
+                    onClick={() => setActivityReportRange("day")}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      activityReportRange === "week" ? "" : "ghost-button"
+                    }
+                    onClick={() => setActivityReportRange("week")}
+                  >
+                    This Week
+                  </button>
                 </div>
               </header>
-              <article className="panel activity-log-panel">
-                <div>
-                  <p className="eyebrow">Log Activity</p>
-                  <h2>Record a customer touchpoint</h2>
-                  <p className="panel-note">
-                    Capture calls, texts, emails, appointments, and notes in one
-                    clean timeline.
-                  </p>
+              <div className="activity-stat-grid">
+                <div className="activity-stat-card">
+                  <span>New Leads</span>
+                  <strong>{activityReportTotals.leads}</strong>
                 </div>
-                <form className="contact-form" onSubmit={addActivity}>
-                  <select
-                    value={activityForm.customerId}
-                    onChange={(e) =>
-                      setActivityForm({
-                        ...activityForm,
-                        customerId: e.target.value,
-                      })
-                    }
-                  >
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.firstName} {c.lastName}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={activityForm.type}
-                    onChange={(e) =>
-                      setActivityForm({
-                        ...activityForm,
-                        type: e.target.value as Activity["type"],
-                      })
-                    }
-                  >
-                    <option>Call</option>
-                    <option>Text</option>
-                    <option>Email</option>
-                    <option>Appointment</option>
-                    <option>Note</option>
-                  </select>
-                  <input
-                    placeholder="Notes or outcome..."
-                    value={activityForm.note}
-                    onChange={(e) =>
-                      setActivityForm({ ...activityForm, note: e.target.value })
-                    }
-                  />
-                  <button type="submit">Log Activity</button>
-                </form>
-              </article>
-              <div className="activity-timeline full-timeline">
-                {activities.length === 0 && (
-                  <p className="empty-state large">No activities logged yet.</p>
+                <div className="activity-stat-card">
+                  <span>Calls</span>
+                  <strong>{activityReportTotals.calls}</strong>
+                </div>
+                <div className="activity-stat-card">
+                  <span>Texts</span>
+                  <strong>{activityReportTotals.texts}</strong>
+                </div>
+                <div className="activity-stat-card">
+                  <span>Emails</span>
+                  <strong>{activityReportTotals.emails}</strong>
+                </div>
+                <div className="activity-stat-card">
+                  <span>Appointments</span>
+                  <strong>{activityReportTotals.appointments}</strong>
+                </div>
+              </div>
+              <div className="activity-report-table">
+                {activityReportRows.length === 0 && (
+                  <p className="empty-state large">
+                    No customer interactions for this period.
+                  </p>
                 )}
-                {activities.slice(0, 30).map((act) => (
-                  <div className="timeline-item" key={act.id}>
-                    <span
-                      className={`timeline-dot dot-${act.type.toLowerCase()}`}
-                    />
+                {activityReportRows.map((row) => (
+                  <button
+                    className="activity-report-row"
+                    key={row.customer.id}
+                    onClick={() => openProfile(row.customer)}
+                    type="button"
+                  >
                     <div>
                       <strong>
-                        {act.type} — {getCustomerName(act.customerId)}
+                        {row.customer.firstName} {row.customer.lastName}
                       </strong>
-                      <span>{act.note}</span>
-                      <small>{new Date(act.createdAt).toLocaleString()}</small>
+                      <span>
+                        Last interaction:{" "}
+                        {new Date(row.lastInteraction).toLocaleString()}
+                      </span>
                     </div>
-                  </div>
+                    <div className="activity-counts">
+                      <span>Leads {row.leads}</span>
+                      <span>Calls {row.calls}</span>
+                      <span>Texts {row.texts}</span>
+                      <span>Emails {row.emails}</span>
+                      <span>Appts {row.appointments}</span>
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
