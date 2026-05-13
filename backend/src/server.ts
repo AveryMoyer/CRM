@@ -67,6 +67,9 @@ type CreditApplication = {
   applicantName: string;
   dateOfBirth: string;
   ssnLast4: string;
+  driverLicenseNumber: string;
+  driverLicenseState: string;
+  driverLicenseExpiration: string;
   address: string;
   city: string;
   state: string;
@@ -74,6 +77,7 @@ type CreditApplication = {
   residenceType: string;
   timeAtAddress: string;
   employerName: string;
+  employerAddress: string;
   jobTitle: string;
   employmentStatus: string;
   timeOnJob: string;
@@ -82,6 +86,18 @@ type CreditApplication = {
   bankName: string;
   downPayment: number;
   requestedVehicle: string;
+  vehicleVin: string;
+  vehicleMileage: string;
+  insuranceProvider: string;
+  insurancePolicyNumber: string;
+  tradeTitleStatus: string;
+  tradeRegistrationStatus: string;
+  incomeDocsReceived: boolean;
+  identityDocsReceived: boolean;
+  residenceDocsReceived: boolean;
+  insuranceDocsReceived: boolean;
+  tradeDocsReceived: boolean;
+  submissionPlatform: string;
   consentToPullCredit: boolean;
   status: "Draft" | "Submitted" | "Manager Review" | "Approved" | "Declined";
   submittedAt: string;
@@ -295,6 +311,9 @@ const defaultDatabase: Database = {
       applicantName: "Taylor Smith",
       dateOfBirth: "1991-06-12",
       ssnLast4: "1234",
+      driverLicenseNumber: "",
+      driverLicenseState: "OH",
+      driverLicenseExpiration: "",
       address: "100 Main Street",
       city: "Columbus",
       state: "OH",
@@ -302,6 +321,7 @@ const defaultDatabase: Database = {
       residenceType: "Rent",
       timeAtAddress: "2 years",
       employerName: "Smith Logistics",
+      employerAddress: "",
       jobTitle: "Operations Lead",
       employmentStatus: "Full-time",
       timeOnJob: "4 years",
@@ -310,6 +330,18 @@ const defaultDatabase: Database = {
       bankName: "Local Credit Union",
       downPayment: 3500,
       requestedVehicle: "2023 Ford F-150",
+      vehicleVin: "",
+      vehicleMileage: "",
+      insuranceProvider: "",
+      insurancePolicyNumber: "",
+      tradeTitleStatus: "Not Applicable",
+      tradeRegistrationStatus: "Not Applicable",
+      incomeDocsReceived: true,
+      identityDocsReceived: true,
+      residenceDocsReceived: false,
+      insuranceDocsReceived: false,
+      tradeDocsReceived: false,
+      submissionPlatform: "Internal CRM",
       consentToPullCredit: true,
       status: "Submitted",
       submittedAt: new Date().toISOString(),
@@ -1261,6 +1293,9 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
       req.body.applicantName || `${customer.firstName} ${customer.lastName}`,
     dateOfBirth: req.body.dateOfBirth || "",
     ssnLast4: req.body.ssnLast4 || "",
+    driverLicenseNumber: req.body.driverLicenseNumber || "",
+    driverLicenseState: req.body.driverLicenseState || "",
+    driverLicenseExpiration: req.body.driverLicenseExpiration || "",
     address: req.body.address || "",
     city: req.body.city || "",
     state: req.body.state || "",
@@ -1268,6 +1303,7 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
     residenceType: req.body.residenceType || "",
     timeAtAddress: req.body.timeAtAddress || "",
     employerName: req.body.employerName || "",
+    employerAddress: req.body.employerAddress || "",
     jobTitle: req.body.jobTitle || "",
     employmentStatus: req.body.employmentStatus || "",
     timeOnJob: req.body.timeOnJob || "",
@@ -1276,6 +1312,19 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
     bankName: req.body.bankName || "",
     downPayment: Number(req.body.downPayment || 0),
     requestedVehicle: req.body.requestedVehicle || customer.interestedVehicle,
+    vehicleVin: req.body.vehicleVin || "",
+    vehicleMileage: req.body.vehicleMileage || "",
+    insuranceProvider: req.body.insuranceProvider || "",
+    insurancePolicyNumber: req.body.insurancePolicyNumber || "",
+    tradeTitleStatus: req.body.tradeTitleStatus || "Not Applicable",
+    tradeRegistrationStatus:
+      req.body.tradeRegistrationStatus || "Not Applicable",
+    incomeDocsReceived: Boolean(req.body.incomeDocsReceived),
+    identityDocsReceived: Boolean(req.body.identityDocsReceived),
+    residenceDocsReceived: Boolean(req.body.residenceDocsReceived),
+    insuranceDocsReceived: Boolean(req.body.insuranceDocsReceived),
+    tradeDocsReceived: Boolean(req.body.tradeDocsReceived),
+    submissionPlatform: req.body.submissionPlatform || "Internal CRM",
     consentToPullCredit: Boolean(req.body.consentToPullCredit),
     status: req.body.status || "Draft",
     submittedAt: new Date().toISOString(),

@@ -3927,6 +3927,204 @@ button.danger:hover {
   color: #dc2626;
 }
 
+/* ── Finance Portal ───────────────────────────────────────────────────────── */
+.finance-portal-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.finance-step-card,
+.finance-portal-panel,
+.finance-product-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
+}
+
+.finance-step-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  padding: 14px;
+}
+
+.finance-step-card strong {
+  grid-row: span 2;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0ea5e9, #4f46e5);
+  color: #fff;
+}
+
+.finance-step-card span,
+.finance-tool-list strong,
+.finance-product-card strong {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.finance-step-card small,
+.finance-tool-list span,
+.finance-product-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.finance-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.finance-portal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  gap: 16px;
+}
+
+.finance-portal-panel {
+  padding: 18px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-heading-row h2 {
+  margin: 4px 0 0;
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.finance-secure-badge {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.finance-app-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+}
+
+.finance-tool-list {
+  display: grid;
+  gap: 10px;
+}
+
+.finance-tool-list div {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.finance-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finance-product-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  box-shadow: none;
+}
+
+.finance-tool-list button,
+.finance-product-card button,
+.finance-portal-panel .deal-card button {
+  width: fit-content;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0ea5e9, #4f46e5);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.app-shell.theme-dark .finance-step-card,
+.app-shell.theme-dark .finance-portal-panel,
+.app-shell.theme-dark .finance-product-card {
+  border-color: rgba(96, 165, 250, 0.2);
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(14, 165, 233, 0.12),
+      transparent 34%
+    ),
+    rgba(15, 23, 42, 0.92);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.app-shell.theme-dark .finance-step-card span,
+.app-shell.theme-dark .finance-tool-list strong,
+.app-shell.theme-dark .finance-product-card strong,
+.app-shell.theme-dark .section-heading-row h2 {
+  color: #f8fafc;
+}
+
+.app-shell.theme-dark .finance-step-card small,
+.app-shell.theme-dark .finance-tool-list span,
+.app-shell.theme-dark .finance-product-card span {
+  color: #cbd5e1;
+}
+
+.app-shell.theme-dark .finance-tool-list div {
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.app-shell.theme-dark .finance-secure-badge {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+.app-shell.theme-dark .finance-app-card select {
+  border-color: rgba(96, 165, 250, 0.3);
+  background: rgba(2, 6, 23, 0.8);
+  color: #f8fafc;
+}
+
+@media (max-width: 980px) {
+  .finance-portal-steps,
+  .finance-kpi-grid,
+  .finance-portal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-app-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .finance-product-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── CRM Profile Overview ────────────────────────────────────────────────── */
 .crm-overview {
   display: grid;

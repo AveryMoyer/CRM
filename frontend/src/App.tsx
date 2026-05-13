@@ -136,6 +136,9 @@ type CreditApplication = {
   applicantName: string;
   dateOfBirth: string;
   ssnLast4: string;
+  driverLicenseNumber: string;
+  driverLicenseState: string;
+  driverLicenseExpiration: string;
   address: string;
   city: string;
   state: string;
@@ -143,6 +146,7 @@ type CreditApplication = {
   residenceType: string;
   timeAtAddress: string;
   employerName: string;
+  employerAddress: string;
   jobTitle: string;
   employmentStatus: string;
   timeOnJob: string;
@@ -151,6 +155,18 @@ type CreditApplication = {
   bankName: string;
   downPayment: number;
   requestedVehicle: string;
+  vehicleVin: string;
+  vehicleMileage: string;
+  insuranceProvider: string;
+  insurancePolicyNumber: string;
+  tradeTitleStatus: string;
+  tradeRegistrationStatus: string;
+  incomeDocsReceived: boolean;
+  identityDocsReceived: boolean;
+  residenceDocsReceived: boolean;
+  insuranceDocsReceived: boolean;
+  tradeDocsReceived: boolean;
+  submissionPlatform: string;
   consentToPullCredit: boolean;
   status: "Draft" | "Submitted" | "Manager Review" | "Approved" | "Declined";
   submittedAt: string;
@@ -1175,6 +1191,9 @@ function App() {
     applicantName: "",
     dateOfBirth: "",
     ssnLast4: "",
+    driverLicenseNumber: "",
+    driverLicenseState: "",
+    driverLicenseExpiration: "",
     address: "",
     city: "",
     state: "",
@@ -1182,6 +1201,7 @@ function App() {
     residenceType: "Rent",
     timeAtAddress: "",
     employerName: "",
+    employerAddress: "",
     jobTitle: "",
     employmentStatus: "Full-time",
     timeOnJob: "",
@@ -1190,6 +1210,18 @@ function App() {
     bankName: "",
     downPayment: "",
     requestedVehicle: "",
+    vehicleVin: "",
+    vehicleMileage: "",
+    insuranceProvider: "",
+    insurancePolicyNumber: "",
+    tradeTitleStatus: "Not Applicable",
+    tradeRegistrationStatus: "Not Applicable",
+    incomeDocsReceived: false,
+    identityDocsReceived: false,
+    residenceDocsReceived: false,
+    insuranceDocsReceived: false,
+    tradeDocsReceived: false,
+    submissionPlatform: "Internal CRM",
     consentToPullCredit: false,
     status: "Draft" as CreditApplication["status"],
   });
@@ -4266,6 +4298,37 @@ function App() {
                         }
                       />
                       <input
+                        placeholder="Driver license / ID number"
+                        value={creditForm.driverLicenseNumber}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            driverLicenseNumber: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Driver license state"
+                        value={creditForm.driverLicenseState}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            driverLicenseState: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Driver license expiration"
+                        value={creditForm.driverLicenseExpiration}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            driverLicenseExpiration: e.target.value,
+                          })
+                        }
+                      />
+                      <h3 className="form-section-title">Residence</h3>
+                      <input
                         placeholder="Address"
                         value={creditForm.address}
                         onChange={(e) =>
@@ -4334,6 +4397,16 @@ function App() {
                         }
                       />
                       <input
+                        placeholder="Employer address"
+                        value={creditForm.employerAddress}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            employerAddress: e.target.value,
+                          })
+                        }
+                      />
+                      <input
                         placeholder="Job title"
                         value={creditForm.jobTitle}
                         onChange={(e) =>
@@ -4393,6 +4466,115 @@ function App() {
                           })
                         }
                       />
+                      <input
+                        placeholder="Vehicle VIN"
+                        value={creditForm.vehicleVin}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            vehicleVin: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Vehicle mileage"
+                        value={creditForm.vehicleMileage}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            vehicleMileage: e.target.value,
+                          })
+                        }
+                      />
+                      <h3 className="form-section-title">Insurance & Trade</h3>
+                      <input
+                        placeholder="Insurance provider"
+                        value={creditForm.insuranceProvider}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            insuranceProvider: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Insurance policy / binder number"
+                        value={creditForm.insurancePolicyNumber}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            insurancePolicyNumber: e.target.value,
+                          })
+                        }
+                      />
+                      <select
+                        value={creditForm.tradeTitleStatus}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            tradeTitleStatus: e.target.value,
+                          })
+                        }
+                      >
+                        <option>Not Applicable</option>
+                        <option>Needed</option>
+                        <option>Received</option>
+                      </select>
+                      <select
+                        value={creditForm.tradeRegistrationStatus}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            tradeRegistrationStatus: e.target.value,
+                          })
+                        }
+                      >
+                        <option>Not Applicable</option>
+                        <option>Needed</option>
+                        <option>Received</option>
+                      </select>
+                      <select
+                        value={creditForm.submissionPlatform}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            submissionPlatform: e.target.value,
+                          })
+                        }
+                      >
+                        <option>Internal CRM</option>
+                        <option>Dealertrack</option>
+                        <option>RouteOne</option>
+                        <option>CUDL</option>
+                        <option>FEX DMS</option>
+                      </select>
+                      <h3 className="form-section-title">Required Docs</h3>
+                      {[
+                        ["identityDocsReceived", "Photo ID received"],
+                        ["incomeDocsReceived", "Income docs received"],
+                        ["residenceDocsReceived", "Residence docs received"],
+                        ["insuranceDocsReceived", "Insurance binder received"],
+                        [
+                          "tradeDocsReceived",
+                          "Trade title/registration received",
+                        ],
+                      ].map(([field, label]) => (
+                        <label className="checkbox-field" key={field}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(
+                              creditForm[field as keyof typeof creditForm],
+                            )}
+                            onChange={(e) =>
+                              setCreditForm({
+                                ...creditForm,
+                                [field]: e.target.checked,
+                              })
+                            }
+                          />
+                          {label}
+                        </label>
+                      ))}
                       <select
                         value={creditForm.status}
                         onChange={(e) =>
@@ -4437,6 +4619,23 @@ function App() {
                             {app.employerName || "No employer"} — $
                             {app.monthlyIncome.toLocaleString()}/mo
                           </span>
+                          <small>
+                            {app.submissionPlatform || "Internal CRM"} ·{" "}
+                            {app.requestedVehicle || "No vehicle selected"}
+                            {app.vehicleVin ? ` · VIN ${app.vehicleVin}` : ""}
+                          </small>
+                          <small>
+                            Insurance: {app.insuranceProvider || "Needed"} ·
+                            Trade title: {app.tradeTitleStatus || "N/A"} ·
+                            Registration: {app.tradeRegistrationStatus || "N/A"}
+                          </small>
+                          <small>
+                            Docs: ID {app.identityDocsReceived ? "✓" : "—"} ·
+                            Income {app.incomeDocsReceived ? "✓" : "—"} ·
+                            Residence {app.residenceDocsReceived ? "✓" : "—"} ·
+                            Insurance {app.insuranceDocsReceived ? "✓" : "—"} ·
+                            Trade {app.tradeDocsReceived ? "✓" : "—"}
+                          </small>
                           <div className="card-row">
                             <span
                               className={`status-badge ${app.status === "Approved" ? "badge-sold" : app.status === "Declined" ? "badge-danger" : "badge-finance"}`}
@@ -6666,22 +6865,53 @@ function App() {
             <>
               <header className="page-header">
                 <div>
-                  <p className="eyebrow">F&I Manager</p>
-                  <h1>Finance Applications</h1>
+                  <p className="eyebrow">F&I Portal</p>
+                  <h1>Finance Command Center</h1>
                   <p className="page-subtitle">
-                    Review and update status on all finance and credit
-                    applications across every deal. Open a customer deal jacket
-                    to submit a new one.
+                    Track credit apps, lender submissions, documents, trade
+                    equity, desking scenarios, and F&I product opportunities in
+                    one mobile-first workflow.
                   </p>
                 </div>
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const customer = customers[0];
+                      if (customer) {
+                        openProfile(customer);
+                        setProfileTab("credit");
+                      }
+                    }}
+                  >
+                    Start Credit App
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      window.location.hash = "#/desk";
+                    }}
+                  >
+                    Open Desk Tool
+                  </button>
+                </div>
               </header>
-              <div
-                className="kpi-grid"
-                style={{
-                  gridTemplateColumns: "repeat(3,1fr)",
-                  marginBottom: 18,
-                }}
-              >
+              <div className="finance-portal-steps">
+                {[
+                  ["1", "Info", "Credit app + identity"],
+                  ["2", "Trade", "Equity + payoff"],
+                  ["3", "Finance", "Lender decisioning"],
+                  ["4", "Sign", "Docs + delivery"],
+                ].map(([step, title, detail]) => (
+                  <div className="finance-step-card" key={step}>
+                    <strong>{step}</strong>
+                    <span>{title}</span>
+                    <small>{detail}</small>
+                  </div>
+                ))}
+              </div>
+              <div className="kpi-grid finance-kpi-grid">
                 <div className="kpi-card kpi-blue">
                   <span>Total Apps</span>
                   <strong>{financeApplications.length}</strong>
@@ -6699,55 +6929,211 @@ function App() {
                     }
                   </strong>
                 </div>
+                <div className="kpi-card kpi-purple">
+                  <span>Credit Packets</span>
+                  <strong>{creditApplications.length}</strong>
+                </div>
               </div>
-              <div className="deal-list">
-                {financeApplications.length === 0 && (
-                  <p className="empty-state">
-                    No finance applications yet. Open a customer deal jacket to
-                    submit one.
-                  </p>
-                )}
-                {financeApplications.map((app) => (
-                  <div
-                    className="deal-card clickable"
-                    key={app.id}
-                    onClick={() => {
-                      const c = customers.find((x) => x.id === app.customerId);
-                      if (c) openProfile(c);
-                    }}
-                  >
-                    <div className="deal-card-main">
-                      <strong>
-                        {app.applicantName || getCustomerName(app.customerId)}
-                      </strong>
-                      <span>
-                        {app.requestedVehicle ||
-                          getCustomerName(app.customerId)}
-                      </span>
-                      <span>
-                        ${app.monthlyIncome.toLocaleString()}/mo · $
-                        {app.downPayment.toLocaleString()} down ·{" "}
-                        {app.creditRange}
-                      </span>
-                      {app.lender && <small>Lender: {app.lender}</small>}
+              <div className="finance-portal-grid">
+                <section className="finance-portal-panel">
+                  <div className="section-heading-row">
+                    <div>
+                      <p className="card-label">Lender Queue</p>
+                      <h2>Applications Awaiting Decision</h2>
                     </div>
-                    <select
-                      value={app.status}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        updateFinanceStatus(
-                          app.id,
-                          e.target.value as FinanceApplication["status"],
-                        )
-                      }
-                    >
-                      <option>New</option>
-                      <option>Submitted</option>
-                      <option>Approved</option>
-                      <option>Needs Review</option>
-                    </select>
+                    <span className="finance-secure-badge">Secure F&I</span>
                   </div>
-                ))}
+                  <div className="deal-list">
+                    {financeApplications.length === 0 && (
+                      <p className="empty-state">
+                        No finance applications yet. Open a customer deal jacket
+                        to submit one.
+                      </p>
+                    )}
+                    {financeApplications.map((app) => (
+                      <div
+                        className="deal-card clickable finance-app-card"
+                        key={app.id}
+                        onClick={() => {
+                          const c = customers.find(
+                            (x) => x.id === app.customerId,
+                          );
+                          if (c) openProfile(c);
+                        }}
+                      >
+                        <div className="deal-card-main">
+                          <strong>
+                            {app.applicantName ||
+                              getCustomerName(app.customerId)}
+                          </strong>
+                          <span>
+                            {app.requestedVehicle || "Vehicle not selected"} ·{" "}
+                            {app.creditRange || "Pending bureau"}
+                          </span>
+                          <span>
+                            ${app.monthlyIncome.toLocaleString()}/mo income · $
+                            {app.downPayment.toLocaleString()} down
+                          </span>
+                          <small>
+                            Lender: {app.lender || "Not routed"} · Platform:
+                            Internal CRM
+                          </small>
+                        </div>
+                        <select
+                          value={app.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            updateFinanceStatus(
+                              app.id,
+                              e.target.value as FinanceApplication["status"],
+                            )
+                          }
+                        >
+                          <option>New</option>
+                          <option>Submitted</option>
+                          <option>Approved</option>
+                          <option>Needs Review</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                <aside className="finance-portal-panel">
+                  <p className="card-label">Portal Tools</p>
+                  <div className="finance-tool-list">
+                    <div>
+                      <strong>Instant Credit App</strong>
+                      <span>
+                        Capture identity, income, residence, and consent.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customer = customers[0];
+                          if (customer) {
+                            openProfile(customer);
+                            setProfileTab("credit");
+                          }
+                        }}
+                      >
+                        Launch App
+                      </button>
+                    </div>
+                    <div>
+                      <strong>Digital Docs</strong>
+                      <span>
+                        ID, pay stubs, proof of insurance, residence docs.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customer = customers[0];
+                          if (customer) {
+                            openProfile(customer);
+                            setProfileTab("credit");
+                          }
+                        }}
+                      >
+                        Review Docs
+                      </button>
+                    </div>
+                    <div>
+                      <strong>Desking + What-Ifs</strong>
+                      <span>
+                        Use Desk Tool for rates, terms, down, taxes, and F&I.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.hash = "#/desk";
+                        }}
+                      >
+                        Desk Deal
+                      </button>
+                    </div>
+                    <div>
+                      <strong>Trade Equity</strong>
+                      <span>
+                        VIN decode, value estimate, payoff, equity applied.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customer = customers[0];
+                          if (customer) {
+                            openProfile(customer);
+                            setProfileTab("deals");
+                          }
+                        }}
+                      >
+                        View Trades
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+                <section className="finance-portal-panel">
+                  <p className="card-label">Credit Packets</p>
+                  <div className="deal-list">
+                    {creditApplications.length === 0 ? (
+                      <p className="empty-state">
+                        No full credit packets submitted yet.
+                      </p>
+                    ) : (
+                      creditApplications.slice(0, 5).map((app) => (
+                        <div className="deal-card" key={app.id}>
+                          <strong>{app.applicantName}</strong>
+                          <span>
+                            {app.submissionPlatform || "Internal CRM"} ·{" "}
+                            {app.requestedVehicle || "No vehicle"}
+                          </span>
+                          <small>
+                            Docs: ID {app.identityDocsReceived ? "✓" : "—"} ·
+                            Income {app.incomeDocsReceived ? "✓" : "—"} ·
+                            Insurance {app.insuranceDocsReceived ? "✓" : "—"}
+                          </small>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const c = customers.find(
+                                (item) => item.id === app.customerId,
+                              );
+                              if (c) {
+                                openProfile(c);
+                                setProfileTab("credit");
+                              }
+                            }}
+                          >
+                            Open Packet
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </section>
+                <section className="finance-portal-panel">
+                  <p className="card-label">Menu Selling</p>
+                  <div className="finance-product-grid">
+                    {[
+                      "GAP",
+                      "Warranty",
+                      "Tire & Wheel",
+                      "Paint Protection",
+                    ].map((product) => (
+                      <div className="finance-product-card" key={product}>
+                        <strong>{product}</strong>
+                        <span>Show payment impact in Desk Tool</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.hash = "#/desk";
+                          }}
+                        >
+                          Add in Desk
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               </div>
             </>
           )}
