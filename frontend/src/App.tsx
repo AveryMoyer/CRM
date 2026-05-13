@@ -2350,15 +2350,35 @@ function App() {
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                window.location.hash = "#/customers";
-              }}
-            >
-              ← All Customers
-            </button>
+            <div className="page-header-actions">
+              {selectedCustomer &&
+                (selectedCustomer.status === "Sold" ? (
+                  <button
+                    type="button"
+                    className="unsold-btn"
+                    onClick={() => markCustomerUnsold(selectedCustomer)}
+                  >
+                    Mark Unsold
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="sold-btn"
+                    onClick={() => markCustomerSold(selectedCustomer)}
+                  >
+                    Mark Sold
+                  </button>
+                ))}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  window.location.hash = "#/customers";
+                }}
+              >
+                ← All Customers
+              </button>
+            </div>
           </header>
 
           {!selectedCustomer ? (
