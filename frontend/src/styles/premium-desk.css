@@ -314,16 +314,18 @@
 .payment-grid-down-editor {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin: 14px 0 16px;
   max-width: 100%;
 }
 
 .payment-scenario-card {
+  position: relative;
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
+  padding: 34px 12px 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 18px;
   background:
@@ -356,6 +358,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
   color: #64748b;
   font-size: 10px;
   font-weight: 900;
@@ -364,8 +367,10 @@
 }
 
 .payment-scenario-card input {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   padding: 8px 9px;
   border: 1px solid #dbe3ef;
   border-radius: 12px;
@@ -373,6 +378,36 @@
   color: #0f172a;
   font-size: 13px;
   font-weight: 900;
+}
+
+.payment-scenario-card label + label {
+  margin-top: 2px;
+}
+
+.payment-scenario-card .print-option-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 !important;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(238, 242, 255, 0.72);
+  color: #4338ca;
+  z-index: 2;
+}
+
+.payment-scenario-card .print-option-toggle input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  border-radius: 4px;
+  accent-color: #4f46e5;
 }
 
 .app-shell.theme-dark .payment-scenario-card {
@@ -435,6 +470,16 @@
   color: #f8fafc;
 }
 
+.app-shell.theme-dark .payment-scenario-card .print-option-toggle {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(14, 165, 233, 0.12);
+  color: #bfdbfe;
+}
+
+.app-shell.theme-dark .payment-scenario-card .print-option-toggle input {
+  accent-color: #38bdf8;
+}
+
 .payment-grid-table tbody tr {
   cursor: pointer;
 }
@@ -481,12 +526,22 @@
   }
 
   .payment-grid-down-editor {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .payment-grid-down-editor {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 520px) {
   .payment-grid-down-editor {
     grid-template-columns: 1fr;
+  }
+
+  .payment-scenario-card {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

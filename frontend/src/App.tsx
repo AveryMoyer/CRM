@@ -746,6 +746,23 @@ const STATE_AUTO_TAX: Record<string, { rate: number; note: string }> = {
   DC: { rate: 6.0, note: "District-only rate" },
 };
 
+const ZIP_AUTO_TAX: Record<string, { rate: number; note: string }> = {
+  "86315": {
+    rate: 9.18,
+    note: "Prescott Valley, AZ exact combined TPT estimate: state 5.6% + county 0.75% + city 2.83%",
+  },
+};
+
+function getAutoTaxInfo(
+  zip: string,
+): { rate: number; note: string; label: string; exact: boolean } | null {
+  const exact = ZIP_AUTO_TAX[zip];
+  if (exact) return { ...exact, label: zip, exact: true };
+  const state = zipToState(zip);
+  const fallback = state ? STATE_AUTO_TAX[state] : null;
+  return fallback ? { ...fallback, label: state || zip, exact: false } : null;
+}
+
 // ── Book value estimator ───────────────────────────────────────────────────────
 
 type BookValueResult = {
@@ -1286,6 +1303,16 @@ function App() {
     "1000",
     "3000",
   ]);
+  const [paymentGridScenarios, setPaymentGridScenarios] = useState([
+    { apr: "7.9", term: "72" },
+    { apr: "7.9", term: "72" },
+    { apr: "7.9", term: "72" },
+  ]);
+  const [selectedPrintOptions, setSelectedPrintOptions] = useState([
+    true,
+    true,
+    true,
+  ]);
   const [savedDeskDeals, setSavedDeskDeals] = useState<SavedDeskDeal[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("crmSavedDeskDeals") || "[]");
@@ -1359,7 +1386,6 @@ function App() {
   }, [desk]);
 
   const paymentGrid = useMemo(() => {
-    const terms = [36, 48, 60, 72, 84];
     const downs = paymentGridDowns.map((down) => parseFloat(down) || 0);
     const selling = parseFloat(desk.sellingPrice) || 0;
     const acv = parseFloat(desk.tradeACV) || 0;
@@ -1371,18 +1397,24 @@ function App() {
     const salesTax = (selling + fiTotal) * taxRate;
     const fees = deskNumbers.totalFees;
     const base = selling + fiTotal + salesTax + fees - equity - rebate;
-    const aprM = parseFloat(desk.apr) / 100 / 12;
-    return terms.map((term) => ({
-      term,
-      payments: downs.map((down) => {
-        const amt = base - down;
-        if (amt <= 0) return 0;
-        if (aprM === 0) return amt / term;
-        return (amt * aprM) / (1 - Math.pow(1 + aprM, -term));
-      }),
-    }));
+    return paymentGridScenarios.map((scenario, index) => {
+      const term = parseInt(scenario.term) || 72;
+      const aprM = (parseFloat(scenario.apr) || 0) / 100 / 12;
+      const amt = base - downs[index];
+      const payment =
+        amt <= 0
+          ? 0
+          : aprM === 0
+            ? amt / term
+            : (amt * aprM) / (1 - Math.pow(1 + aprM, -term));
+      return {
+        apr: parseFloat(scenario.apr) || 0,
+        down: downs[index],
+        term,
+        payment,
+      };
+    });
   }, [
-    desk.apr,
     desk.rebate,
     desk.sellingPrice,
     desk.taxRate,
@@ -1391,6 +1423,7 @@ function App() {
     deskNumbers.fiTotal,
     deskNumbers.totalFees,
     paymentGridDowns,
+    paymentGridScenarios,
   ]);
 
   const targetPaymentResult = useMemo(() => {
@@ -1417,6 +1450,8 @@ function App() {
     deskNumbers.financed,
     targetPayment,
   ]);
+  const hasDeskAmountToCalculate =
+    deskNumbers.financed + (parseFloat(desk.downPayment) || 0) > 0;
 
   const deskPayment = useMemo(() => {
     const price = parseFloat(deskCalc.salePrice) || 0;
@@ -1979,6 +2014,248 @@ function App() {
     setSavedDeskDeals(nextDeals);
     localStorage.setItem("crmSavedDeskDeals", JSON.stringify(nextDeals));
     setAppMessage("Desk deal saved to customer profile.");
+  }
+  function printDeskPaymentOptions() {
+    const customerName = desk.customerId
+      ? getCustomerName(Number(desk.customerId))
+      : "Customer";
+    const vehicleName =
+      [desk.year, desk.make, desk.model, desk.trim].filter(Boolean).join(" ") ||
+      "Selected Vehicle";
+    const printWindow = window.open("", "_blank", "width=900,height=1100");
+    if (!printWindow) {
+      setAppMessage("Allow popups to print payment options.");
+      return;
+    }
+    const selectedPaymentGrid = paymentGrid.filter(
+      (_row, index) => selectedPrintOptions[index],
+    );
+    const printRows =
+      selectedPaymentGrid.length > 0 ? selectedPaymentGrid : paymentGrid;
+    const scenarioRows = printRows
+      .map(
+        (row) => `
+          <tr>
+            <td>Option ${paymentGrid.findIndex((item) => item === row) + 1}</td>
+            <td>$${row.down.toLocaleString()}</td>
+            <td>${row.apr}%</td>
+            <td>${row.term} mo</td>
+            <td><strong>$${row.payment.toFixed(0)}</strong></td>
+          </tr>
+        `,
+      )
+      .join("");
+    const fiRows = deskNumbers.fiItems
+      .map(
+        (item) => `
+          <tr>
+            <td>${item.name}</td>
+            <td>$${item.price.toLocaleString()}</td>
+          </tr>
+        `,
+      )
+      .join("");
+    const feeRows = [
+      ["Sales Tax", deskNumbers.salesTax],
+      ["Doc Fee", parseFloat(desk.docFee) || 0],
+      ["Title Fee", parseFloat(desk.titleFee) || 0],
+      ["Registration Fee", parseFloat(desk.regFee) || 0],
+    ]
+      .map(
+        ([label, amount]) => `
+          <tr>
+            <td>${label}</td>
+            <td>$${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+          </tr>
+        `,
+      )
+      .join("");
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Payment Options - ${customerName}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 32px;
+              background: #f8fafc;
+              color: #0f172a;
+              font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+            .sheet {
+              max-width: 860px;
+              margin: 0 auto;
+              padding: 34px;
+              border: 1px solid #dbe3ef;
+              border-radius: 28px;
+              background: #fff;
+              box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+            }
+            .header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 18px;
+              padding-bottom: 22px;
+              border-bottom: 2px solid #e2e8f0;
+            }
+            .eyebrow {
+              margin: 0 0 6px;
+              color: #4f46e5;
+              font-size: 12px;
+              font-weight: 900;
+              letter-spacing: 0.12em;
+              text-transform: uppercase;
+            }
+            h1 {
+              margin: 0;
+              color: #0f172a;
+              font-size: 30px;
+              letter-spacing: -0.04em;
+            }
+            .date {
+              color: #64748b;
+              font-size: 13px;
+              font-weight: 700;
+              text-align: right;
+            }
+            .summary {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 12px;
+              margin: 22px 0;
+            }
+            .card {
+              padding: 16px;
+              border: 1px solid #e2e8f0;
+              border-radius: 18px;
+              background: linear-gradient(180deg, #ffffff, #f8fafc);
+            }
+            .card span {
+              display: block;
+              color: #64748b;
+              font-size: 11px;
+              font-weight: 900;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+            }
+            .card strong {
+              display: block;
+              margin-top: 5px;
+              color: #0f172a;
+              font-size: 19px;
+            }
+            h2 {
+              margin: 28px 0 12px;
+              color: #1e293b;
+              font-size: 17px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              overflow: hidden;
+              border: 1px solid #e2e8f0;
+              border-radius: 16px;
+            }
+            th, td {
+              padding: 13px 14px;
+              border-bottom: 1px solid #e2e8f0;
+              text-align: left;
+              font-size: 14px;
+            }
+            th {
+              background: #eef2ff;
+              color: #4338ca;
+              font-size: 12px;
+              font-weight: 900;
+              letter-spacing: 0.07em;
+              text-transform: uppercase;
+            }
+            tr:last-child td { border-bottom: 0; }
+            .disclaimer {
+              margin-top: 24px;
+              color: #64748b;
+              font-size: 11px;
+              line-height: 1.55;
+            }
+            .actions {
+              margin-top: 24px;
+              text-align: right;
+            }
+            button {
+              padding: 12px 18px;
+              border: 0;
+              border-radius: 999px;
+              background: linear-gradient(135deg, #0ea5e9, #4f46e5);
+              color: #fff;
+              font-weight: 900;
+              cursor: pointer;
+            }
+            @media print {
+              body { padding: 0; background: #fff; }
+              .sheet { box-shadow: none; border: 0; border-radius: 0; }
+              .actions { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="sheet">
+            <section class="header">
+              <div>
+                <p class="eyebrow">Payment Options</p>
+                <h1>${customerName}</h1>
+                <p>${vehicleName}</p>
+              </div>
+              <div class="date">${new Date().toLocaleDateString()}</div>
+            </section>
+            <section class="summary">
+              <div class="card"><span>Selling Price</span><strong>$${deskNumbers.selling.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
+              <div class="card"><span>Trade Equity</span><strong>$${deskNumbers.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
+              <div class="card"><span>Amount Financed</span><strong>$${Math.max(0, deskNumbers.financed).toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
+            </section>
+            <h2>Payment Options</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Down</th>
+                  <th>APR</th>
+                  <th>Term</th>
+                  <th>Estimated Payment</th>
+                </tr>
+              </thead>
+              <tbody>${scenarioRows}</tbody>
+            </table>
+            <h2>Taxes & Fees</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>${feeRows}</tbody>
+            </table>
+            ${
+              fiRows
+                ? `<h2>Selected Protection Products</h2><table><thead><tr><th>Product</th><th>Price</th></tr></thead><tbody>${fiRows}</tbody></table>`
+                : ""
+            }
+            <p class="disclaimer">
+              Payment options are estimates for review only and may vary based on lender approval, taxes, fees, title, registration,
+              selected products, and final vehicle pricing. APR and terms are subject to credit approval.
+            </p>
+            <div class="actions">
+              <button onclick="window.print()">Print / Save PDF</button>
+            </div>
+          </main>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
   }
   function reopenDeskDeal(savedDeal: SavedDeskDeal) {
     setDesk({ ...desk, ...savedDeal.desk });
@@ -7182,6 +7459,9 @@ function App() {
                   <button type="button" onClick={saveDeskDeal}>
                     Save Deal
                   </button>
+                  <button type="button" onClick={printDeskPaymentOptions}>
+                    Print Options
+                  </button>
                   <button
                     type="button"
                     className="ghost-button"
@@ -7528,10 +7808,7 @@ function App() {
                           value={desk.buyerZip}
                           onChange={(e) => {
                             const z = e.target.value.replace(/\D/g, "");
-                            const state = zipToState(z);
-                            const taxInfo = state
-                              ? STATE_AUTO_TAX[state]
-                              : null;
+                            const taxInfo = getAutoTaxInfo(z);
                             setDesk({
                               ...desk,
                               buyerZip: z,
@@ -7543,11 +7820,12 @@ function App() {
                         />
                         {desk.buyerZip.length === 5 &&
                           (() => {
-                            const st = zipToState(desk.buyerZip);
-                            const info = st ? STATE_AUTO_TAX[st] : null;
-                            return st ? (
+                            const info = getAutoTaxInfo(desk.buyerZip);
+                            return info ? (
                               <small className="tax-zip-note">
-                                {st} — {info?.note}
+                                {info.label} —{" "}
+                                {info.exact ? "Exact local rate" : "State avg"}:{" "}
+                                {info.note}
                               </small>
                             ) : (
                               <small className="tax-zip-note warn">
@@ -7570,8 +7848,8 @@ function App() {
                           }
                         />
                         <small className="tax-zip-note">
-                          Zip auto-fills avg combined rate. Adjust for your
-                          exact city/county.
+                          Exact ZIP rates are used when available; otherwise ZIP
+                          falls back to a state-average estimate.
                         </small>
                       </div>
                       <div className="desk-field">
@@ -7769,7 +8047,7 @@ function App() {
                     </div>
                   </div>
 
-                  {deskNumbers.financed > 0 && (
+                  {hasDeskAmountToCalculate && (
                     <div className="desk-target-card">
                       <div className="desk-target-head">
                         <p className="desk-section-title">Payment Target</p>
@@ -7835,21 +8113,25 @@ function App() {
                   )}
 
                   {/* Payment Grid */}
-                  {deskNumbers.financed > 0 && (
+                  {hasDeskAmountToCalculate && (
                     <div className="payment-grid-wrap">
                       <p className="desk-section-title">Payment Grid</p>
                       <p className="payment-grid-note">
-                        {desk.apr}% APR — payments at different terms and down
-                        payments
+                        Compare 3 custom down payment, APR, and term scenarios
                       </p>
                       <div className="payment-grid-down-editor">
                         {paymentGridDowns.map((down, index) => {
                           const downAmount = parseFloat(down) || 0;
+                          const scenario = paymentGridScenarios[index];
                           return (
                             <div
                               className={`payment-scenario-card ${
                                 downAmount ===
-                                (parseFloat(desk.downPayment) || 0)
+                                  (parseFloat(desk.downPayment) || 0) &&
+                                Number(scenario.term) ===
+                                  (parseInt(desk.termMonths) || 72) &&
+                                Number(scenario.apr) ===
+                                  (parseFloat(desk.apr) || 0)
                                   ? "active"
                                   : ""
                               }`}
@@ -7857,12 +8139,29 @@ function App() {
                               onClick={() =>
                                 setDesk({
                                   ...desk,
+                                  apr: scenario.apr,
+                                  termMonths: scenario.term,
                                   downPayment: String(downAmount),
                                 })
                               }
                             >
+                              <label
+                                className="print-option-toggle"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Print option ${index + 1}`}
+                                  checked={selectedPrintOptions[index]}
+                                  onChange={(e) => {
+                                    const next = [...selectedPrintOptions];
+                                    next[index] = e.target.checked;
+                                    setSelectedPrintOptions(next);
+                                  }}
+                                />
+                              </label>
                               <label onClick={(e) => e.stopPropagation()}>
-                                Down Option {index + 1}
+                                Down {index + 1}
                                 <input
                                   value={down}
                                   onChange={(e) => {
@@ -7875,6 +8174,40 @@ function App() {
                                   }}
                                 />
                               </label>
+                              <label onClick={(e) => e.stopPropagation()}>
+                                APR %
+                                <input
+                                  value={scenario.apr}
+                                  onChange={(e) => {
+                                    const next = [...paymentGridScenarios];
+                                    next[index] = {
+                                      ...next[index],
+                                      apr: e.target.value.replace(
+                                        /[^\d.]/g,
+                                        "",
+                                      ),
+                                    };
+                                    setPaymentGridScenarios(next);
+                                  }}
+                                />
+                              </label>
+                              <label onClick={(e) => e.stopPropagation()}>
+                                Term
+                                <input
+                                  value={scenario.term}
+                                  onChange={(e) => {
+                                    const next = [...paymentGridScenarios];
+                                    next[index] = {
+                                      ...next[index],
+                                      term: e.target.value.replace(
+                                        /[^\d]/g,
+                                        "",
+                                      ),
+                                    };
+                                    setPaymentGridScenarios(next);
+                                  }}
+                                />
+                              </label>
                             </div>
                           );
                         })}
@@ -7883,54 +8216,46 @@ function App() {
                         <table className="payment-grid-table">
                           <thead>
                             <tr>
+                              <th>Scenario</th>
+                              <th>Down</th>
+                              <th>APR</th>
                               <th>Term</th>
-                              {paymentGridDowns.map((down, index) => {
-                                const d = parseFloat(down) || 0;
-                                return (
-                                  <th key={index}>
-                                    ${d.toLocaleString()} down
-                                  </th>
-                                );
-                              })}
+                              <th>Payment</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {paymentGrid.map((row) => (
+                            {paymentGrid.map((row, index) => (
                               <tr
-                                key={row.term}
+                                key={index}
                                 onClick={() =>
                                   setDesk({
                                     ...desk,
+                                    apr: String(row.apr),
                                     termMonths: String(row.term),
+                                    downPayment: String(row.down),
                                   })
                                 }
                                 className={
-                                  row.term === parseInt(desk.termMonths)
+                                  row.term ===
+                                    (parseInt(desk.termMonths) || 72) &&
+                                  row.down ===
+                                    (parseFloat(desk.downPayment) || 0) &&
+                                  row.apr === (parseFloat(desk.apr) || 0)
                                     ? "grid-row-active"
                                     : ""
                                 }
                               >
                                 <td>
-                                  <strong>{row.term} mo</strong>
+                                  <strong>Option {index + 1}</strong>
                                 </td>
-                                {row.payments.map((pmt, i) => (
-                                  <td
-                                    key={i}
-                                    className={pmt > 0 ? "" : "grid-zero"}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDesk({
-                                        ...desk,
-                                        termMonths: String(row.term),
-                                        downPayment: String(
-                                          parseFloat(paymentGridDowns[i]) || 0,
-                                        ),
-                                      });
-                                    }}
-                                  >
-                                    ${pmt.toFixed(0)}
-                                  </td>
-                                ))}
+                                <td>${row.down.toLocaleString()}</td>
+                                <td>{row.apr}%</td>
+                                <td>{row.term} mo</td>
+                                <td
+                                  className={row.payment > 0 ? "" : "grid-zero"}
+                                >
+                                  ${row.payment.toFixed(0)}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
