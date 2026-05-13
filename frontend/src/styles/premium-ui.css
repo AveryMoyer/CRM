@@ -75,6 +75,75 @@ body {
   color: #e0e7ff;
 }
 
+.sidebar nav a {
+  color: #dbeafe;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.sidebar nav a .nav-label {
+  color: #e5edff;
+  text-shadow: 0 1px 10px rgba(15, 23, 42, 0.55);
+}
+
+.sidebar nav a .nav-icon {
+  color: #bfdbfe;
+}
+
+.sidebar nav a:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #ffffff;
+}
+
+.sidebar nav a:hover .nav-label,
+.sidebar nav a:hover .nav-icon {
+  color: #ffffff;
+}
+
+.sidebar nav a.active {
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.38), rgba(79, 70, 229, 0.3)),
+    rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow:
+    0 14px 32px rgba(37, 99, 235, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.sidebar nav a.active .nav-label,
+.sidebar nav a.active .nav-icon {
+  color: #ffffff;
+}
+
+.sidebar nav a.active::before {
+  left: 3px;
+  top: 9px;
+  bottom: 9px;
+  width: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #67e8f9, #60a5fa, #818cf8);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35),
+    0 0 18px rgba(96, 165, 250, 0.95),
+    0 0 34px rgba(103, 232, 249, 0.55);
+  opacity: 1;
+  z-index: 2;
+}
+
+.sidebar nav::before {
+  color: #f8fafc;
+  opacity: 1;
+  text-shadow:
+    0 0 10px rgba(96, 165, 250, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.nav-badge {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  color: #ffffff;
+  font-weight: 950;
+}
+
 .workspace {
   position: relative;
 }
