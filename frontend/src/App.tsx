@@ -2015,6 +2015,15 @@ function App() {
     return `${Math.floor(hrs / 24)}d ago`;
   }
 
+  async function readApiError(res: Response, fallback: string) {
+    try {
+      const data = await res.json();
+      return data.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -2060,6 +2069,15 @@ function App() {
         localStorage.setItem("crm-current-user", JSON.stringify(user));
       }
       const boot = await fetch(`${API_BASE}/api/bootstrap`);
+      if (!boot.ok) {
+        setAuthError(
+          await readApiError(
+            boot,
+            "Login worked, but CRM data could not load.",
+          ),
+        );
+        return;
+      }
       const bd: BootstrapData = await boot.json();
       setCustomers(bd.customers);
       setFinanceApplications(bd.financeApplications);
@@ -2100,20 +2118,27 @@ function App() {
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser) return;
-    const res = await fetch(`${API_BASE}/api/users/${currentUser.id}/profile`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settingsForm),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setAppMessage(data.message || "Could not update profile.");
-      return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/users/${currentUser.id}/profile`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settingsForm),
+        },
+      );
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not update profile."));
+        return;
+      }
+      const data = await res.json();
+      setCurrentUser(data);
+      localStorage.setItem("crm-current-user", JSON.stringify(data));
+      setShowSettings(false);
+      setAppMessage("Profile updated.");
+    } catch {
+      setAppMessage("Could not connect to backend to update profile.");
     }
-    setCurrentUser(data);
-    localStorage.setItem("crm-current-user", JSON.stringify(data));
-    setShowSettings(false);
-    setAppMessage("Profile updated.");
   }
 
   function uploadProfilePicture(file?: File) {
@@ -2174,33 +2199,45 @@ function App() {
   }
 
   async function doSaveCustomer() {
-    if (editingCustomerId) {
-      const res = await fetch(
-        `${API_BASE}/api/customers/${editingCustomerId}`,
-        {
-          method: "PUT",
+    try {
+      if (editingCustomerId) {
+        const res = await fetch(
+          `${API_BASE}/api/customers/${editingCustomerId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(customerForm),
+          },
+        );
+        if (!res.ok) {
+          setAppMessage(await readApiError(res, "Could not update customer."));
+          return;
+        }
+        const updated = await res.json();
+        setCustomers(
+          customers.map((c) => (c.id === editingCustomerId ? updated : c)),
+        );
+        resetCustomerForm();
+        setShowAddForm(false);
+        setAppMessage("Customer updated.");
+      } else {
+        const res = await fetch(`${API_BASE}/api/customers`, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(customerForm),
-        },
-      );
-      const updated = await res.json();
-      setCustomers(
-        customers.map((c) => (c.id === editingCustomerId ? updated : c)),
-      );
-      resetCustomerForm();
-      setShowAddForm(false);
-      setAppMessage("Customer updated.");
-    } else {
-      const res = await fetch(`${API_BASE}/api/customers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(customerForm),
-      });
-      const created = await res.json();
-      setCustomers([created, ...customers]);
-      resetCustomerForm();
-      setShowAddForm(false);
-      setAppMessage("Customer added.");
+        });
+        if (!res.ok) {
+          setAppMessage(await readApiError(res, "Could not add customer."));
+          return;
+        }
+        const created = await res.json();
+        setCustomers([created, ...customers]);
+        resetCustomerForm();
+        setShowAddForm(false);
+        setAppMessage("Customer added.");
+      }
+    } catch {
+      setAppMessage("Could not connect to backend to save customer.");
     }
   }
 
@@ -2257,35 +2294,65 @@ function App() {
   }
 
   async function deleteCustomer(id: number) {
-    await fetch(`${API_BASE}/api/customers/${id}`, { method: "DELETE" });
-    setCustomers(customers.filter((c) => c.id !== id));
-    setAppMessage("Customer removed.");
+    try {
+      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not remove customer."));
+        return;
+      }
+      setCustomers(customers.filter((c) => c.id !== id));
+      setAppMessage("Customer removed.");
+    } catch {
+      setAppMessage("Could not connect to backend to remove customer.");
+    }
   }
 
   async function assignLead(customer: Customer, assignedTo: string) {
-    const res = await fetch(`${API_BASE}/api/customers/${customer.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...customer, assignedTo, status: "Appt Set" }),
-    });
-    const updated = await res.json();
-    setCustomers(customers.map((c) => (c.id === customer.id ? updated : c)));
-    setAppMessage(`Lead assigned to ${assignedTo}.`);
+    try {
+      const res = await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...customer, assignedTo, status: "Appt Set" }),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not assign lead."));
+        return;
+      }
+      const updated = await res.json();
+      setCustomers(customers.map((c) => (c.id === customer.id ? updated : c)));
+      setAppMessage(`Lead assigned to ${assignedTo}.`);
+    } catch {
+      setAppMessage("Could not connect to backend to assign lead.");
+    }
   }
 
   // ── Finance ───────────────────────────────────────────────────────────────
 
   async function addFinanceApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const res = await fetch(`${API_BASE}/api/finance-applications`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(financeForm),
-    });
-    const app = await res.json();
-    setFinanceApplications([app, ...financeApplications]);
-    setAppMessage("Finance application submitted.");
-    setProfileTab("deals");
+    try {
+      const res = await fetch(`${API_BASE}/api/finance-applications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(financeForm),
+      });
+      if (!res.ok) {
+        setAppMessage(
+          await readApiError(res, "Could not submit finance application."),
+        );
+        return;
+      }
+      const app = await res.json();
+      setFinanceApplications([app, ...financeApplications]);
+      setAppMessage("Finance application submitted.");
+      setProfileTab("deals");
+    } catch {
+      setAppMessage(
+        "Could not connect to backend to submit finance application.",
+      );
+    }
   }
 
   async function updateFinanceStatus(
@@ -2321,44 +2388,70 @@ function App() {
   async function addCreditApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer) return;
-    const res = await fetch(
-      `${API_BASE}/api/customers/${selectedCustomer.id}/credit-applications`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(creditForm),
-      },
-    );
-    const app = await res.json();
-    setCreditApplications([app, ...creditApplications]);
-    setProfileTab("deals");
-    setAppMessage("Credit application saved.");
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/customers/${selectedCustomer.id}/credit-applications`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(creditForm),
+        },
+      );
+      if (!res.ok) {
+        setAppMessage(
+          await readApiError(res, "Could not save credit application."),
+        );
+        return;
+      }
+      const app = await res.json();
+      setCreditApplications([app, ...creditApplications]);
+      setProfileTab("deals");
+      setAppMessage("Credit application saved.");
+    } catch {
+      setAppMessage("Could not connect to backend to save credit application.");
+    }
   }
 
   // ── Trade / Sales ─────────────────────────────────────────────────────────
 
   async function addTradeIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const res = await fetch(`${API_BASE}/api/trade-ins`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tradeForm),
-    });
-    const trade = await res.json();
-    setTradeIns([trade, ...tradeIns]);
-    setAppMessage("Trade-in added.");
+    try {
+      const res = await fetch(`${API_BASE}/api/trade-ins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tradeForm),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not add trade-in."));
+        return;
+      }
+      const trade = await res.json();
+      setTradeIns([trade, ...tradeIns]);
+      setAppMessage("Trade-in added.");
+    } catch {
+      setAppMessage("Could not connect to backend to add trade-in.");
+    }
   }
 
   async function addVehicleSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const res = await fetch(`${API_BASE}/api/vehicle-sales`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(saleForm),
-    });
-    const sale = await res.json();
-    setVehicleSales([sale, ...vehicleSales]);
-    setAppMessage("Vehicle added to pipeline.");
+    try {
+      const res = await fetch(`${API_BASE}/api/vehicle-sales`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saleForm),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not add vehicle sale."));
+        return;
+      }
+      const sale = await res.json();
+      setVehicleSales([sale, ...vehicleSales]);
+      setAppMessage("Vehicle added to pipeline.");
+    } catch {
+      setAppMessage("Could not connect to backend to add vehicle sale.");
+    }
   }
 
   async function updateSaleStage(id: number, stage: VehicleSale["stage"]) {
@@ -2388,15 +2481,23 @@ function App() {
   async function addActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activityForm.note) return;
-    const res = await fetch(`${API_BASE}/api/activities`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(activityForm),
-    });
-    const act = await res.json();
-    setActivities([act, ...activities]);
-    setActivityForm({ ...activityForm, note: "" });
-    setAppMessage("Activity logged.");
+    try {
+      const res = await fetch(`${API_BASE}/api/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(activityForm),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not log activity."));
+        return;
+      }
+      const act = await res.json();
+      setActivities([act, ...activities]);
+      setActivityForm({ ...activityForm, note: "" });
+      setAppMessage("Activity logged.");
+    } catch {
+      setAppMessage("Could not connect to backend to log activity.");
+    }
   }
 
   async function addQuickActivity() {
@@ -2406,53 +2507,80 @@ function App() {
       type: quickActivityType,
       note: quickActivityNote,
     };
-    const res = await fetch(`${API_BASE}/api/activities`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const act = await res.json();
-    setActivities([act, ...activities]);
-    setQuickActivityNote("");
-    setAppMessage("Activity logged.");
+    try {
+      const res = await fetch(`${API_BASE}/api/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not log activity."));
+        return;
+      }
+      const act = await res.json();
+      setActivities([act, ...activities]);
+      setQuickActivityNote("");
+      setAppMessage("Activity logged.");
+    } catch {
+      setAppMessage("Could not connect to backend to log activity.");
+    }
   }
 
   async function saveQuickNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer || !noteModalText.trim()) return;
-    const res = await fetch(`${API_BASE}/api/activities`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: String(selectedCustomer.id),
-        type: "Note",
-        note: noteModalText.trim(),
-      }),
-    });
-    const act = await res.json();
-    setActivities([act, ...activities]);
-    setNoteModalText("");
-    setShowNoteModal(false);
-    setAppMessage("Note saved.");
+    try {
+      const res = await fetch(`${API_BASE}/api/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: String(selectedCustomer.id),
+          type: "Note",
+          note: noteModalText.trim(),
+        }),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not save note."));
+        return;
+      }
+      const act = await res.json();
+      setActivities([act, ...activities]);
+      setNoteModalText("");
+      setShowNoteModal(false);
+      setAppMessage("Note saved.");
+    } catch {
+      setAppMessage("Could not connect to backend to save note.");
+    }
   }
 
   async function addTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer || !taskForm.title) return;
-    const res = await fetch(`${API_BASE}/api/tasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...taskForm,
-        customerId: selectedCustomer.id,
-        assignedTo: selectedCustomer.assignedTo || currentUser?.name || "Avery",
-        dueAt: taskForm.dueAt || new Date().toISOString(),
-      }),
-    });
-    const task = await res.json();
-    setTasks([task, ...tasks]);
-    setTaskForm({ ...taskForm, title: "", dueAt: "" });
-    setAppMessage("Follow-up task created.");
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...taskForm,
+          customerId: selectedCustomer.id,
+          assignedTo:
+            selectedCustomer.assignedTo || currentUser?.name || "Avery",
+          dueAt: taskForm.dueAt || new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        setAppMessage(
+          await readApiError(res, "Could not create follow-up task."),
+        );
+        return;
+      }
+      const task = await res.json();
+      setTasks([task, ...tasks]);
+      setTaskForm({ ...taskForm, title: "", dueAt: "" });
+      setAppMessage("Follow-up task created.");
+    } catch {
+      setAppMessage("Could not connect to backend to create follow-up task.");
+    }
   }
 
   async function setAppointment(event: FormEvent<HTMLFormElement>) {
@@ -2521,48 +2649,75 @@ function App() {
   }
 
   async function updateTaskStatus(task: CrmTask, status: CrmTask["status"]) {
-    const res = await fetch(`${API_BASE}/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...task,
-        status,
-        completedAt:
-          status === "Complete" ? new Date().toISOString() : undefined,
-      }),
-    });
-    const updated = await res.json();
-    setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
-    setAppMessage(
-      status === "Showroom"
-        ? "Appointment marked in showroom."
-        : status === "Complete"
-          ? "Appointment completed."
-          : "Appointment updated.",
-    );
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...task,
+          status,
+          completedAt:
+            status === "Complete" ? new Date().toISOString() : undefined,
+        }),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not update appointment."));
+        return;
+      }
+      const updated = await res.json();
+      setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
+      setAppMessage(
+        status === "Showroom"
+          ? "Appointment marked in showroom."
+          : status === "Complete"
+            ? "Appointment completed."
+            : "Appointment updated.",
+      );
+    } catch {
+      setAppMessage("Could not connect to backend to update appointment.");
+    }
   }
 
   async function completeTask(task: CrmTask) {
-    const res = await fetch(`${API_BASE}/api/tasks/${task.id}/complete`, {
-      method: "PATCH",
-    });
-    const updated = await res.json();
-    setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
-    setAppMessage("Task completed.");
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${task.id}/complete`, {
+        method: "PATCH",
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not complete task."));
+        return;
+      }
+      const updated = await res.json();
+      setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
+      setAppMessage("Task completed.");
+    } catch {
+      setAppMessage("Could not connect to backend to complete task.");
+    }
   }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer || !messageForm.body) return;
-    const res = await fetch(`${API_BASE}/api/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...messageForm, customerId: selectedCustomer.id }),
-    });
-    const message = await res.json();
-    setMessages([message, ...messages]);
-    setMessageForm({ ...messageForm, body: "" });
-    setAppMessage(`${message.channel} sent.`);
+    try {
+      const res = await fetch(`${API_BASE}/api/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...messageForm,
+          customerId: selectedCustomer.id,
+        }),
+      });
+      if (!res.ok) {
+        setAppMessage(await readApiError(res, "Could not send message."));
+        return;
+      }
+      const message = await res.json();
+      setMessages([message, ...messages]);
+      setMessageForm({ ...messageForm, body: "" });
+      setAppMessage(`${message.channel} sent.`);
+    } catch {
+      setAppMessage("Could not connect to backend to send message.");
+    }
   }
 
   // ── VIN ───────────────────────────────────────────────────────────────────
