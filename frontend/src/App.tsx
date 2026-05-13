@@ -7789,11 +7789,23 @@ function App() {
                           disabled={!targetPaymentResult}
                           onClick={() => {
                             if (!targetPaymentResult) return;
+                            const requiredDown = String(
+                              Math.ceil(targetPaymentResult.requiredDown),
+                            );
                             setDesk({
                               ...desk,
-                              downPayment: String(
-                                Math.ceil(targetPaymentResult.requiredDown),
-                              ),
+                              downPayment: requiredDown,
+                            });
+                            setPaymentGridDowns((downs) => {
+                              const next = [...downs];
+                              const existingIndex = next.findIndex(
+                                (down) =>
+                                  (parseFloat(down) || 0) ===
+                                  Number(requiredDown),
+                              );
+                              if (existingIndex >= 0) return next;
+                              next[0] = requiredDown;
+                              return next;
                             });
                           }}
                         >
