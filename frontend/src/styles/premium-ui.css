@@ -991,6 +991,28 @@ body {
   color: #f8fafc;
 }
 
+.report-table {
+  overflow: visible;
+}
+
+.report-row {
+  grid-template-columns: minmax(96px, 0.8fr) minmax(92px, 1fr) auto;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.report-row span {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.25;
+}
+
+.report-row strong {
+  min-width: 24px;
+}
+
 .app-shell.theme-dark select,
 .app-shell.theme-dark .filter-select,
 .app-shell.theme-dark .cust-toolbar select,
@@ -1774,6 +1796,15 @@ textarea:focus,
     border-color: rgba(96, 165, 250, 0.3) !important;
     background: rgba(2, 6, 23, 0.72) !important;
     color: #f8fafc !important;
+  }
+
+  .report-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .report-row .report-bar-wrap {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 }
 
