@@ -5910,47 +5910,79 @@ function App() {
                   <button type="submit">Add Trade</button>
                 </form>
               </article>
-              <div className="customer-table">
+              <div className="trade-appraisal-grid">
                 {tradeIns.length === 0 && (
                   <p className="empty-state large">
                     No trade-ins recorded yet.
                   </p>
                 )}
-                {tradeIns.map((t) => (
-                  <div className="cust-row" key={t.id}>
-                    <div className="cust-main">
-                      <strong>
-                        {t.year} {t.make} {t.model}
-                      </strong>
-                      <span>{t.mileage.toLocaleString()} miles</span>
-                    </div>
-                    <span className="cust-contact">
-                      {getCustomerName(t.customerId)}
-                    </span>
-                    <span>ACV: ${t.estimatedValue.toLocaleString()}</span>
-                    <span>Payoff: ${t.payoff.toLocaleString()}</span>
-                    <span
-                      className={
-                        t.estimatedValue - t.payoff >= 0
-                          ? "kpi-green-text"
-                          : "badge-danger"
-                      }
-                    >
-                      Equity: ${(t.estimatedValue - t.payoff).toLocaleString()}
-                    </span>
-                    {t.notes && (
-                      <span
-                        style={{
-                          fontStyle: "italic",
-                          color: "#64748b",
-                          fontSize: 12,
-                        }}
-                      >
-                        📝 {t.notes}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {tradeIns.map((t) => {
+                  const equity = t.estimatedValue - t.payoff;
+                  const equityPositive = equity >= 0;
+                  return (
+                    <article className="trade-appraisal-card" key={t.id}>
+                      <div className="trade-card-top">
+                        <div className="trade-vehicle-icon">
+                          {t.make.slice(0, 1)}
+                        </div>
+                        <div>
+                          <p className="eyebrow">Vehicle Appraisal</p>
+                          <h3>
+                            {t.year} {t.make} {t.model}
+                          </h3>
+                          <span>{t.mileage.toLocaleString()} miles</span>
+                        </div>
+                      </div>
+                      <div className="trade-owner-row">
+                        <span>Customer</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const customer = customers.find(
+                              (item) => item.id === t.customerId,
+                            );
+                            if (customer) openProfile(customer);
+                          }}
+                        >
+                          {getCustomerName(t.customerId)}
+                        </button>
+                      </div>
+                      <div className="trade-value-grid">
+                        <div>
+                          <span>ACV</span>
+                          <strong>${t.estimatedValue.toLocaleString()}</strong>
+                        </div>
+                        <div>
+                          <span>Payoff</span>
+                          <strong>${t.payoff.toLocaleString()}</strong>
+                        </div>
+                        <div
+                          className={
+                            equityPositive
+                              ? "trade-equity-positive"
+                              : "trade-equity-negative"
+                          }
+                        >
+                          <span>Equity</span>
+                          <strong>${equity.toLocaleString()}</strong>
+                        </div>
+                      </div>
+                      <div className="trade-equity-meter">
+                        <span
+                          style={{
+                            width: `${Math.min(100, Math.max(8, (Math.abs(equity) / Math.max(t.estimatedValue, 1)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      {t.notes && (
+                        <p className="trade-note">
+                          <span>📝</span>
+                          {t.notes}
+                        </p>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </>
           )}

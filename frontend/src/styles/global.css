@@ -4829,3 +4829,214 @@ a.crm-info-value:hover {
     white-space: nowrap;
   }
 }
+
+/* ── Trade Appraisal Overhaul ─────────────────────────────────────────────── */
+.trade-appraisal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.trade-appraisal-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(16, 185, 129, 0.16),
+      transparent 32%
+    ),
+    linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.11);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.trade-appraisal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 30px 78px rgba(15, 23, 42, 0.15);
+}
+
+.trade-appraisal-card::after {
+  position: absolute;
+  right: -55px;
+  bottom: -70px;
+  width: 170px;
+  height: 170px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  content: "";
+}
+
+.trade-card-top,
+.trade-owner-row,
+.trade-value-grid,
+.trade-equity-meter,
+.trade-note {
+  position: relative;
+  z-index: 1;
+}
+
+.trade-card-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trade-vehicle-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #0f172a, #4f46e5);
+  color: #fff;
+  font-size: 25px;
+  font-weight: 1000;
+  box-shadow: 0 16px 34px rgba(79, 70, 229, 0.26);
+}
+
+.trade-card-top h3 {
+  margin: 3px 0 4px;
+  color: #0f172a;
+  font-size: 22px;
+  letter-spacing: -0.045em;
+}
+
+.trade-card-top span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trade-owner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #eef2ff;
+}
+
+.trade-owner-row span,
+.trade-value-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trade-owner-row button {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.14);
+}
+
+.trade-value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.trade-value-grid > div {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.trade-value-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: #0f172a;
+  font-size: 18px;
+  letter-spacing: -0.035em;
+}
+
+.trade-value-grid .trade-equity-positive {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.trade-value-grid .trade-equity-positive strong {
+  color: #059669;
+}
+
+.trade-value-grid .trade-equity-negative {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.trade-value-grid .trade-equity-negative strong {
+  color: #dc2626;
+}
+
+.trade-equity-meter {
+  height: 10px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.trade-equity-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #10b981, #22c55e);
+}
+
+.trade-note {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .trade-appraisal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .trade-appraisal-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .trade-card-top {
+    align-items: flex-start;
+  }
+  .trade-card-top h3 {
+    font-size: 19px;
+  }
+  .trade-owner-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .trade-owner-row button {
+    width: 100%;
+  }
+  .trade-value-grid {
+    grid-template-columns: 1fr;
+  }
+}
