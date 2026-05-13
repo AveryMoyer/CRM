@@ -1042,6 +1042,10 @@ function App() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profilePhotoLoading, setProfilePhotoLoading] = useState(false);
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(
+    () =>
+      (localStorage.getItem("crm-theme-mode") as "light" | "dark") || "light",
+  );
   const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">(
     "login",
   );
@@ -2116,6 +2120,11 @@ function App() {
     }
     setShowSettings(true);
   }
+  function toggleThemeMode() {
+    const next = themeMode === "light" ? "dark" : "light";
+    setThemeMode(next);
+    localStorage.setItem("crm-theme-mode", next);
+  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3048,7 +3057,7 @@ function App() {
       <>
         {appointmentModal}
         {noteModal}
-        <main className="app-shell">
+        <main className={`app-shell theme-${themeMode}`}>
           <aside className="sidebar">
             <div className="sidebar-brand">
               <div className="brand-mark">AS</div>
@@ -3092,6 +3101,16 @@ function App() {
               </a>
             </nav>
             <div className="sidebar-footer">
+              <button
+                type="button"
+                className="theme-toggle-btn"
+                onClick={toggleThemeMode}
+              >
+                <span className="theme-toggle-track">
+                  <span className="theme-toggle-thumb" />
+                </span>
+                <span>{themeMode === "dark" ? "Dark Mode" : "Light Mode"}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -4889,7 +4908,7 @@ function App() {
           </div>
         </div>
       )}
-      <main className="app-shell">
+      <main className={`app-shell theme-${themeMode}`}>
         <aside className="sidebar">
           <div className="sidebar-brand">
             <div className="brand-mark">AS</div>
@@ -4916,6 +4935,16 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-footer">
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={toggleThemeMode}
+            >
+              <span className="theme-toggle-track">
+                <span className="theme-toggle-thumb" />
+              </span>
+              <span>{themeMode === "dark" ? "Dark Mode" : "Light Mode"}</span>
+            </button>
             <button
               type="button"
               className="user-settings-btn"
