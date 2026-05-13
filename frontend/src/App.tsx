@@ -4987,17 +4987,17 @@ function App() {
         </aside>
 
         {/* ── Mobile Bottom Navigation ─────────────────────────── */}
-        <nav className="bottom-nav">
+        <div className="mobile-utility-bar">
           <button
             type="button"
-            className="bottom-nav-item bottom-nav-button"
-            onClick={openSettings}
+            className="mobile-utility-btn mobile-theme-btn"
+            onClick={toggleThemeMode}
           >
-            <span className="bottom-nav-icon">
-              <Settings size={16} />
-            </span>
-            <span className="bottom-nav-label">Settings</span>
+            <span>{themeMode === "dark" ? "☀" : "🌙"}</span>
+            <span>{themeMode === "dark" ? "Light" : "Dark"}</span>
           </button>
+        </div>
+        <nav className="bottom-nav">
           {navItems.map((item) => (
             <a
               key={item.page}

@@ -1328,6 +1328,247 @@ body {
   color: #94a3b8 !important;
 }
 
+.app-shell.theme-dark .profile-panel {
+  border-color: rgba(96, 165, 250, 0.22) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.14), transparent 34%),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(79, 70, 229, 0.16),
+      transparent 34%
+    ),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.94)) !important;
+}
+
+.app-shell.theme-dark .profile-panel > :not(.profile-tabs),
+.app-shell.theme-dark .crm-overview,
+.app-shell.theme-dark .crm-two-col,
+.app-shell.theme-dark .deals-layout,
+.app-shell.theme-dark .profile-form-stack,
+.app-shell.theme-dark .task-list,
+.app-shell.theme-dark .appointment-tab-list,
+.app-shell.theme-dark .message-thread {
+  color: #e5e7eb;
+}
+
+.app-shell.theme-dark .crm-contact-panel,
+.app-shell.theme-dark .crm-activity-panel,
+.app-shell.theme-dark .crm-details-panel,
+.app-shell.theme-dark .crm-next-step-card,
+.app-shell.theme-dark .crm-quick-actions,
+.app-shell.theme-dark .profile-card,
+.app-shell.theme-dark .detail-card,
+.app-shell.theme-dark .mini-form,
+.app-shell.theme-dark .credit-form,
+.app-shell.theme-dark .deal-card,
+.app-shell.theme-dark .service-history-card,
+.app-shell.theme-dark .message-thread,
+.app-shell.theme-dark .task-list,
+.app-shell.theme-dark .appointment-tab-list {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(14, 165, 233, 0.1),
+      transparent 34%
+    ),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.9)) !important;
+  color: #e5e7eb !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.3) !important;
+}
+
+.app-shell.theme-dark .crm-contact-panel h2,
+.app-shell.theme-dark .crm-name-block h2,
+.app-shell.theme-dark .crm-details-panel h3,
+.app-shell.theme-dark .crm-next-step-card strong,
+.app-shell.theme-dark .profile-card strong,
+.app-shell.theme-dark .detail-card h3,
+.app-shell.theme-dark .mini-form strong,
+.app-shell.theme-dark .appointment-tab-head h3,
+.app-shell.theme-dark .form-section-title,
+.app-shell.theme-dark .deal-card strong,
+.app-shell.theme-dark .timeline-item strong,
+.app-shell.theme-dark .message-bubble strong,
+.app-shell.theme-dark .sh-vehicle,
+.app-shell.theme-dark .sh-total strong {
+  color: #f8fafc !important;
+}
+
+.app-shell.theme-dark .card-label,
+.app-shell.theme-dark .crm-info-label,
+.app-shell.theme-dark .form-section-title {
+  color: #93c5fd !important;
+}
+
+.app-shell.theme-dark .crm-contact-panel p,
+.app-shell.theme-dark .crm-details-panel p,
+.app-shell.theme-dark .crm-next-step-card span,
+.app-shell.theme-dark .profile-card span,
+.app-shell.theme-dark .deal-card span,
+.app-shell.theme-dark .deal-card small,
+.app-shell.theme-dark .timeline-item span,
+.app-shell.theme-dark .timeline-item small,
+.app-shell.theme-dark .message-bubble span,
+.app-shell.theme-dark .message-bubble small,
+.app-shell.theme-dark .sh-date,
+.app-shell.theme-dark .sh-line span,
+.app-shell.theme-dark .sh-total span,
+.app-shell.theme-dark .mini-form span,
+.app-shell.theme-dark .empty-state {
+  color: #cbd5e1 !important;
+}
+
+.app-shell.theme-dark .crm-info-row,
+.app-shell.theme-dark .crm-stat,
+.app-shell.theme-dark .timeline-item,
+.app-shell.theme-dark .message-bubble,
+.app-shell.theme-dark .sh-line,
+.app-shell.theme-dark .sh-total {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: rgba(2, 6, 23, 0.38) !important;
+  color: #e5e7eb !important;
+}
+
+.app-shell.theme-dark .crm-info-icon {
+  background: rgba(14, 165, 233, 0.16) !important;
+  color: #7dd3fc !important;
+}
+
+.app-shell.theme-dark .crm-info-value,
+.app-shell.theme-dark .crm-info-value a,
+.app-shell.theme-dark .crm-stat strong {
+  color: #ffffff !important;
+}
+
+.app-shell.theme-dark .crm-stat-strip,
+.app-shell.theme-dark .activity-timeline,
+.app-shell.theme-dark .activity-timeline.full-timeline,
+.app-shell.theme-dark .service-history-list,
+.app-shell.theme-dark .deal-list,
+.app-shell.theme-dark .appointment-list,
+.app-shell.theme-dark .message-list {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: rgba(2, 6, 23, 0.34) !important;
+}
+
+.app-shell.theme-dark .quick-action-btn,
+.app-shell.theme-dark .crm-edit-btn,
+.app-shell.theme-dark
+  .profile-content
+  button:not(.deal-card):not(.theme-toggle-btn),
+.app-shell.theme-dark .mini-form button,
+.app-shell.theme-dark .appointment-tab-head button {
+  border-color: rgba(96, 165, 250, 0.3) !important;
+  background: rgba(37, 99, 235, 0.18) !important;
+  color: #dbeafe !important;
+}
+
+.app-shell.theme-dark .quick-action-btn:hover,
+.app-shell.theme-dark .crm-edit-btn:hover,
+.app-shell.theme-dark
+  .profile-content
+  button:not(.deal-card):not(.theme-toggle-btn):hover,
+.app-shell.theme-dark .mini-form button:hover,
+.app-shell.theme-dark .appointment-tab-head button:hover {
+  border-color: rgba(125, 211, 252, 0.56) !important;
+  background: rgba(37, 99, 235, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.app-shell.theme-dark .crm-edit-form,
+.app-shell.theme-dark .credit-form {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background: rgba(15, 23, 42, 0.78) !important;
+}
+
+.app-shell.theme-dark .crm-edit-form label,
+.app-shell.theme-dark .credit-form label,
+.app-shell.theme-dark .checkbox-field {
+  color: #cbd5e1 !important;
+}
+
+.app-shell.theme-dark .checkbox-field {
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.42) !important;
+  padding: 10px 12px;
+}
+
+.app-shell.theme-dark .checkbox-field input[type="checkbox"] {
+  accent-color: #38bdf8;
+}
+
+.app-shell.theme-dark .crm-edit-form input,
+.app-shell.theme-dark .crm-edit-form select,
+.app-shell.theme-dark .credit-form input,
+.app-shell.theme-dark .credit-form select,
+.app-shell.theme-dark .credit-form textarea,
+.app-shell.theme-dark .mini-form input,
+.app-shell.theme-dark .mini-form select,
+.app-shell.theme-dark .mini-form textarea {
+  border-color: rgba(96, 165, 250, 0.3) !important;
+  background: rgba(2, 6, 23, 0.72) !important;
+  color: #f8fafc !important;
+}
+
+.app-shell.theme-dark .crm-edit-form input::placeholder,
+.app-shell.theme-dark .credit-form input::placeholder,
+.app-shell.theme-dark .credit-form textarea::placeholder,
+.app-shell.theme-dark .mini-form input::placeholder,
+.app-shell.theme-dark .mini-form textarea::placeholder {
+  color: #64748b !important;
+}
+
+.app-shell.theme-dark .message-bubble.outbound {
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.18),
+    rgba(79, 70, 229, 0.16)
+  ) !important;
+}
+
+.app-shell.theme-dark .service-history-card .ro-number,
+.app-shell.theme-dark .ro-badge-inline {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background: rgba(2, 6, 23, 0.72) !important;
+  color: #dbeafe !important;
+}
+
+.app-shell.theme-dark,
+.app-shell.theme-dark * {
+  scrollbar-color: rgba(56, 189, 248, 0.5) rgba(15, 23, 42, 0.82);
+}
+
+.app-shell.theme-dark::-webkit-scrollbar,
+.app-shell.theme-dark *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.app-shell.theme-dark::-webkit-scrollbar-track,
+.app-shell.theme-dark *::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.app-shell.theme-dark::-webkit-scrollbar-thumb,
+.app-shell.theme-dark *::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(15, 23, 42, 0.82);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #22d3ee, #6366f1);
+}
+
+.app-shell.theme-dark::-webkit-scrollbar-thumb:hover,
+.app-shell.theme-dark *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #67e8f9, #818cf8);
+}
+
+.app-shell.theme-dark::-webkit-scrollbar-corner,
+.app-shell.theme-dark *::-webkit-scrollbar-corner {
+  background: rgba(15, 23, 42, 0.82);
+}
+
 .workspace {
   position: relative;
 }
@@ -1645,6 +1886,116 @@ textarea:focus,
   transform: translateX(120%);
 }
 
+.credit-form > button[type="submit"],
+.submit-btn {
+  position: relative;
+  grid-column: 1 / -1;
+  min-height: 48px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0ea5e9, #4f46e5 56%, #7c3aed), #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow:
+    0 16px 34px rgba(37, 99, 235, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+
+.credit-form > button[type="submit"]::before,
+.submit-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.24),
+    transparent
+  );
+  transform: translateX(-120%);
+  transition: transform 0.38s ease;
+}
+
+.credit-form > button[type="submit"]:hover,
+.submit-btn:hover {
+  filter: brightness(1.04);
+  transform: translateY(-2px);
+  box-shadow:
+    0 22px 44px rgba(37, 99, 235, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.credit-form > button[type="submit"]:hover::before,
+.submit-btn:hover::before {
+  transform: translateX(120%);
+}
+
+.credit-form > button[type="submit"]:active,
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+.profile-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 16px 18px 18px;
+  scroll-padding: 18px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.profile-tabs button {
+  flex: 0 0 auto;
+  max-width: none;
+  min-height: 42px;
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 1.15;
+}
+
+.profile-tabs button.active {
+  isolation: isolate;
+}
+
+.profile-tabs::-webkit-scrollbar {
+  height: 8px;
+}
+
+.profile-tabs::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.profile-tabs::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0ea5e9, #4f46e5);
+}
+
+.app-shell.theme-dark .profile-tabs {
+  border-bottom-color: rgba(148, 163, 184, 0.2) !important;
+  background:
+    linear-gradient(135deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.94)),
+    #0f172a !important;
+}
+
+.app-shell.theme-dark .profile-tabs::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.app-shell.theme-dark .profile-tabs::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #22d3ee, #818cf8);
+}
+
 .vin-decoder-panel,
 .vin-decoder-panel:hover {
   position: relative;
@@ -1738,7 +2089,68 @@ textarea:focus,
   backdrop-filter: blur(14px);
 }
 
+.mobile-utility-bar {
+  display: none;
+}
+
+.mobile-utility-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.mobile-theme-btn {
+  border-color: rgba(79, 70, 229, 0.22) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(239, 246, 255, 0.96),
+    rgba(238, 242, 255, 0.94)
+  ) !important;
+  color: #3730a3 !important;
+}
+
+.mobile-theme-btn .bottom-nav-icon {
+  font-size: 16px;
+}
+
+.app-shell.theme-dark .mobile-theme-btn {
+  border-color: rgba(125, 211, 252, 0.32) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.2),
+    rgba(79, 70, 229, 0.22)
+  ) !important;
+  color: #e0f2fe !important;
+}
+
+.app-shell.theme-dark .mobile-utility-btn {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+}
+
 @media (max-width: 900px) {
+  .mobile-utility-bar {
+    position: fixed;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 65;
+    display: flex;
+    gap: 8px;
+  }
+
   .workspace::before {
     left: 0;
   }
