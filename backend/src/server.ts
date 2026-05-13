@@ -118,6 +118,30 @@ type Activity = {
   createdAt: string;
 };
 
+type CrmTask = {
+  id: number;
+  customerId: number;
+  title: string;
+  type: "Call" | "Text" | "Email" | "Appointment" | "Follow-Up";
+  dueAt: string;
+  assignedTo: string;
+  priority: "Low" | "Normal" | "High";
+  status: "Open" | "Complete";
+  createdAt: string;
+  completedAt?: string;
+};
+
+type Message = {
+  id: number;
+  customerId: number;
+  channel: "Text" | "Email";
+  direction: "Outbound" | "Inbound";
+  subject?: string;
+  body: string;
+  template?: string;
+  createdAt: string;
+};
+
 type User = {
   id: number;
   name: string;
@@ -195,6 +219,8 @@ type Database = {
   tradeIns: TradeIn[];
   vehicleSales: VehicleSale[];
   activities: Activity[];
+  tasks: CrmTask[];
+  messages: Message[];
   repairOrders: RepairOrder[];
 };
 
@@ -330,6 +356,41 @@ const defaultDatabase: Database = {
       customerId: 1,
       type: "Appointment",
       note: "Scheduled test drive for Camry.",
+      createdAt: new Date().toISOString(),
+    },
+  ],
+  tasks: [
+    {
+      id: 1,
+      customerId: 1,
+      title: "Confirm Camry test drive",
+      type: "Call",
+      dueAt: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
+      assignedTo: "Avery",
+      priority: "High",
+      status: "Open",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      customerId: 2,
+      title: "Send F-150 payment options",
+      type: "Email",
+      dueAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+      assignedTo: "Avery",
+      priority: "Normal",
+      status: "Open",
+      createdAt: new Date().toISOString(),
+    },
+  ],
+  messages: [
+    {
+      id: 1,
+      customerId: 1,
+      channel: "Text",
+      direction: "Outbound",
+      body: "Hi Jordan, confirming your Camry test drive today. Does 3 PM still work?",
+      template: "Appointment Confirmation",
       createdAt: new Date().toISOString(),
     },
   ],
@@ -504,6 +565,8 @@ function loadDatabase(): Database {
     ...saved,
     customers: mergeSeedRecords(saved.customers, defaultDatabase.customers),
     tradeIns: mergeSeedRecords(saved.tradeIns, defaultDatabase.tradeIns),
+    tasks: saved.tasks ?? defaultDatabase.tasks,
+    messages: saved.messages ?? defaultDatabase.messages,
     repairOrders: saved.repairOrders ?? defaultDatabase.repairOrders,
   };
 }
@@ -1381,6 +1444,60 @@ app.post("/api/activities", (req, res) => {
   db.activities = [activity, ...db.activities];
   saveDatabase();
   res.status(201).json(activity);
+});
+
+app.post("/api/tasks", (req, res) => {
+  const task: CrmTask = {
+    id: Date.now(),
+    customerId: Number(req.body.customerId),
+    title: String(req.body.title || "Follow up"),
+    type: req.body.type || "Follow-Up",
+    dueAt: req.body.dueAt || new Date().toISOString(),
+    assignedTo: String(req.body.assignedTo || "Avery"),
+    priority: req.body.priority || "Normal",
+    status: "Open",
+    createdAt: new Date().toISOString(),
+  };
+  db.tasks = [task, ...db.tasks];
+  addActivity(task.customerId, "Note", `Task created: ${task.title}`);
+  saveDatabase();
+  res.status(201).json(task);
+});
+
+app.patch("/api/tasks/:id/complete", (req, res) => {
+  const taskId = Number(req.params.id);
+  db.tasks = db.tasks.map((task) =>
+    task.id === taskId
+      ? { ...task, status: "Complete", completedAt: new Date().toISOString() }
+      : task,
+  );
+  const task = db.tasks.find((item) => item.id === taskId);
+  if (task) {
+    addActivity(task.customerId, "Note", `Task completed: ${task.title}`);
+  }
+  saveDatabase();
+  res.json(task);
+});
+
+app.post("/api/messages", (req, res) => {
+  const message: Message = {
+    id: Date.now(),
+    customerId: Number(req.body.customerId),
+    channel: req.body.channel || "Text",
+    direction: "Outbound",
+    subject: req.body.subject || "",
+    body: String(req.body.body || ""),
+    template: req.body.template || "",
+    createdAt: new Date().toISOString(),
+  };
+  db.messages = [message, ...db.messages];
+  addActivity(
+    message.customerId,
+    message.channel,
+    `${message.channel} sent${message.template ? ` (${message.template})` : ""}: ${message.body}`,
+  );
+  saveDatabase();
+  res.status(201).json(message);
 });
 
 app.listen(port, () => {

@@ -198,6 +198,30 @@ type Activity = {
   createdAt: string;
 };
 
+type CrmTask = {
+  id: number;
+  customerId: number;
+  title: string;
+  type: "Call" | "Text" | "Email" | "Appointment" | "Follow-Up";
+  dueAt: string;
+  assignedTo: string;
+  priority: "Low" | "Normal" | "High";
+  status: "Open" | "Complete";
+  createdAt: string;
+  completedAt?: string;
+};
+
+type Message = {
+  id: number;
+  customerId: number;
+  channel: "Text" | "Email";
+  direction: "Outbound" | "Inbound";
+  subject?: string;
+  body: string;
+  template?: string;
+  createdAt: string;
+};
+
 type BootstrapData = {
   customers: Customer[];
   financeApplications: FinanceApplication[];
@@ -205,6 +229,8 @@ type BootstrapData = {
   tradeIns: TradeIn[];
   vehicleSales: VehicleSale[];
   activities: Activity[];
+  tasks?: CrmTask[];
+  messages?: Message[];
   repairOrders?: RepairOrder[];
 };
 
@@ -222,6 +248,8 @@ type ProfileTab =
   | "finance"
   | "credit"
   | "deals"
+  | "followup"
+  | "messages"
   | "activity"
   | "service";
 type AppPage =
@@ -1010,6 +1038,8 @@ function App() {
   const [tradeIns, setTradeIns] = useState(initialTradeIns);
   const [vehicleSales, setVehicleSales] = useState(initialVehicleSales);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [tasks, setTasks] = useState<CrmTask[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [repairOrders, setRepairOrders] =
     useState<RepairOrder[]>(initialRepairOrders);
   const [roForm, setRoForm] = useState({
@@ -1148,6 +1178,22 @@ function App() {
     customerId: "1",
     type: "Note" as Activity["type"],
     note: "",
+  });
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    type: "Follow-Up" as CrmTask["type"],
+    dueAt: "",
+    priority: "Normal" as CrmTask["priority"],
+  });
+  const [appointmentForm, setAppointmentForm] = useState({
+    title: "Sales appointment",
+    dueAt: "",
+    priority: "High" as CrmTask["priority"],
+  });
+  const [messageForm, setMessageForm] = useState({
+    channel: "Text" as Message["channel"],
+    template: "First Response",
+    body: "Hi, this is Avery with the dealership. I wanted to follow up and see how I can help.",
   });
   const [vin, setVin] = useState("");
   const [vinResult, setVinResult] = useState<VinDecodedVehicle | null>(null);
@@ -1585,6 +1631,59 @@ function App() {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         )
     : [];
+  const profileTasks = selectedCustomer
+    ? tasks
+        .filter((task) => task.customerId === selectedCustomer.id)
+        .sort(
+          (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime(),
+        )
+    : [];
+  const profileMessages = selectedCustomer
+    ? messages
+        .filter((message) => message.customerId === selectedCustomer.id)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+    : [];
+  const openTasks = tasks.filter((task) => task.status === "Open");
+  const overdueTasks = openTasks.filter(
+    (task) => new Date(task.dueAt).getTime() < Date.now(),
+  );
+  const todayTasks = openTasks.filter((task) => {
+    const due = new Date(task.dueAt);
+    const now = new Date();
+    return (
+      due.toDateString() === now.toDateString() || due.getTime() < now.getTime()
+    );
+  });
+  const appointmentTasks = openTasks
+    .filter((task) => task.type === "Appointment")
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
+    .slice(0, 8);
+  const crmAlerts = [
+    ...overdueTasks.slice(0, 3).map((task) => ({
+      id: `task-${task.id}`,
+      tone: "danger",
+      title: "Overdue follow-up",
+      detail: task.title,
+      customerId: task.customerId,
+    })),
+    ...internetLeads.slice(0, 3).map((customer) => ({
+      id: `lead-${customer.id}`,
+      tone: "warning",
+      title: "Uncontacted lead",
+      detail: `${customer.firstName} ${customer.lastName} · ${customer.interestedVehicle}`,
+      customerId: customer.id,
+    })),
+    ...stalledLeads.slice(0, 2).map((customer) => ({
+      id: `stalled-${customer.id}`,
+      tone: "info",
+      title: "Stalled deal",
+      detail: `${customer.firstName} ${customer.lastName} needs activity`,
+      customerId: customer.id,
+    })),
+  ];
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -1617,6 +1716,8 @@ function App() {
         setTradeIns(d.tradeIns);
         setVehicleSales(d.vehicleSales);
         setActivities(d.activities);
+        setTasks(d.tasks || []);
+        setMessages(d.messages || []);
         if (d.repairOrders) setRepairOrders(d.repairOrders);
       })
       .catch(() => setAppMessage("Could not load data from backend."));
@@ -1739,6 +1840,8 @@ function App() {
       setTradeIns(bd.tradeIns);
       setVehicleSales(bd.vehicleSales);
       setActivities(bd.activities);
+      setTasks(bd.tasks || []);
+      setMessages(bd.messages || []);
       localStorage.setItem("crm-authenticated", "true");
       setIsLoggedIn(true);
     } catch {
@@ -2087,6 +2190,73 @@ function App() {
     setAppMessage("Activity logged.");
   }
 
+  async function addTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCustomer || !taskForm.title) return;
+    const res = await fetch(`${API_BASE}/api/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...taskForm,
+        customerId: selectedCustomer.id,
+        assignedTo: selectedCustomer.assignedTo || currentUser?.name || "Avery",
+        dueAt: taskForm.dueAt || new Date().toISOString(),
+      }),
+    });
+    const task = await res.json();
+    setTasks([task, ...tasks]);
+    setTaskForm({ ...taskForm, title: "", dueAt: "" });
+    setAppMessage("Follow-up task created.");
+  }
+
+  async function setAppointment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCustomer || !appointmentForm.dueAt) return;
+    const res = await fetch(`${API_BASE}/api/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerId: selectedCustomer.id,
+        title: appointmentForm.title || "Sales appointment",
+        type: "Appointment",
+        dueAt: appointmentForm.dueAt,
+        assignedTo: selectedCustomer.assignedTo || currentUser?.name || "Avery",
+        priority: appointmentForm.priority,
+      }),
+    });
+    const task = await res.json();
+    setTasks([task, ...tasks]);
+    setAppointmentForm({
+      title: "Sales appointment",
+      dueAt: "",
+      priority: "High",
+    });
+    setAppMessage("Appointment scheduled.");
+  }
+
+  async function completeTask(task: CrmTask) {
+    const res = await fetch(`${API_BASE}/api/tasks/${task.id}/complete`, {
+      method: "PATCH",
+    });
+    const updated = await res.json();
+    setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
+    setAppMessage("Task completed.");
+  }
+
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCustomer || !messageForm.body) return;
+    const res = await fetch(`${API_BASE}/api/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...messageForm, customerId: selectedCustomer.id }),
+    });
+    const message = await res.json();
+    setMessages([message, ...messages]);
+    setMessageForm({ ...messageForm, body: "" });
+    setAppMessage(`${message.channel} sent.`);
+  }
+
   // ── VIN ───────────────────────────────────────────────────────────────────
 
   async function lookupVin(event: FormEvent<HTMLFormElement>) {
@@ -2394,6 +2564,8 @@ function App() {
                     "finance",
                     "credit",
                     "deals",
+                    "followup",
+                    "messages",
                     "activity",
                     "service",
                   ] as ProfileTab[]
@@ -2410,6 +2582,10 @@ function App() {
                     {tab === "credit" &&
                       `Credit${profileCreditApps.length ? ` (${profileCreditApps.length})` : ""}`}
                     {tab === "deals" && "Deals"}
+                    {tab === "followup" &&
+                      `Follow-Up${profileTasks.filter((task) => task.status === "Open").length ? ` (${profileTasks.filter((task) => task.status === "Open").length})` : ""}`}
+                    {tab === "messages" &&
+                      `Messages${profileMessages.length ? ` (${profileMessages.length})` : ""}`}
                     {tab === "activity" &&
                       `Activity${profileActivities.length ? ` (${profileActivities.length})` : ""}`}
                     {tab === "service" &&
@@ -3453,6 +3629,193 @@ function App() {
                   );
                 })()}
 
+              {profileTab === "followup" && (
+                <div className="crm-two-col">
+                  <div className="profile-form-stack">
+                    <form
+                      className="mini-form appointment-form"
+                      onSubmit={setAppointment}
+                    >
+                      <p className="card-label">Set Appointment</p>
+                      <input
+                        placeholder="Appointment title"
+                        value={appointmentForm.title}
+                        onChange={(e) =>
+                          setAppointmentForm({
+                            ...appointmentForm,
+                            title: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        type="datetime-local"
+                        value={appointmentForm.dueAt}
+                        onChange={(e) =>
+                          setAppointmentForm({
+                            ...appointmentForm,
+                            dueAt: e.target.value,
+                          })
+                        }
+                      />
+                      <select
+                        value={appointmentForm.priority}
+                        onChange={(e) =>
+                          setAppointmentForm({
+                            ...appointmentForm,
+                            priority: e.target.value as CrmTask["priority"],
+                          })
+                        }
+                      >
+                        <option>Normal</option>
+                        <option>High</option>
+                      </select>
+                      <button type="submit">Schedule Appointment</button>
+                    </form>
+                    <form className="mini-form" onSubmit={addTask}>
+                      <p className="card-label">Create Follow-Up</p>
+                      <input
+                        placeholder="Task title"
+                        value={taskForm.title}
+                        onChange={(e) =>
+                          setTaskForm({ ...taskForm, title: e.target.value })
+                        }
+                      />
+                      <select
+                        value={taskForm.type}
+                        onChange={(e) =>
+                          setTaskForm({
+                            ...taskForm,
+                            type: e.target.value as CrmTask["type"],
+                          })
+                        }
+                      >
+                        <option>Call</option>
+                        <option>Text</option>
+                        <option>Email</option>
+                        <option>Appointment</option>
+                        <option>Follow-Up</option>
+                      </select>
+                      <input
+                        type="datetime-local"
+                        value={taskForm.dueAt}
+                        onChange={(e) =>
+                          setTaskForm({ ...taskForm, dueAt: e.target.value })
+                        }
+                      />
+                      <select
+                        value={taskForm.priority}
+                        onChange={(e) =>
+                          setTaskForm({
+                            ...taskForm,
+                            priority: e.target.value as CrmTask["priority"],
+                          })
+                        }
+                      >
+                        <option>Low</option>
+                        <option>Normal</option>
+                        <option>High</option>
+                      </select>
+                      <button type="submit">Add Task</button>
+                    </form>
+                  </div>
+                  <div className="task-list">
+                    <p className="card-label">Open Follow-Ups</p>
+                    {profileTasks.length === 0 && (
+                      <p className="empty-state">No follow-ups yet.</p>
+                    )}
+                    {profileTasks.map((task) => (
+                      <div
+                        className={`task-card ${task.status === "Complete" ? "done" : ""}`}
+                        key={task.id}
+                      >
+                        <div>
+                          <strong>{task.title}</strong>
+                          <span>
+                            {task.type} · {task.priority} · Due{" "}
+                            {new Date(task.dueAt).toLocaleString()}
+                          </span>
+                        </div>
+                        {task.status === "Open" ? (
+                          <button
+                            type="button"
+                            onClick={() => completeTask(task)}
+                          >
+                            Complete
+                          </button>
+                        ) : (
+                          <small>Done</small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {profileTab === "messages" && (
+                <div className="crm-two-col">
+                  <form className="mini-form" onSubmit={sendMessage}>
+                    <p className="card-label">Send Message</p>
+                    <select
+                      value={messageForm.channel}
+                      onChange={(e) =>
+                        setMessageForm({
+                          ...messageForm,
+                          channel: e.target.value as Message["channel"],
+                        })
+                      }
+                    >
+                      <option>Text</option>
+                      <option>Email</option>
+                    </select>
+                    <select
+                      value={messageForm.template}
+                      onChange={(e) => {
+                        const template = e.target.value;
+                        const body =
+                          template === "Appointment Confirmation"
+                            ? "Hi, confirming your appointment with us. Does your scheduled time still work?"
+                            : template === "No Response Follow-Up"
+                              ? "Hi, just checking in to see if you still have questions about the vehicle."
+                              : template === "Service Equity"
+                                ? "Based on your current vehicle, you may have strong trade equity. Want to review options?"
+                                : "Hi, this is Avery with the dealership. I wanted to follow up and see how I can help.";
+                        setMessageForm({ ...messageForm, template, body });
+                      }}
+                    >
+                      <option>First Response</option>
+                      <option>Appointment Confirmation</option>
+                      <option>No Response Follow-Up</option>
+                      <option>Service Equity</option>
+                    </select>
+                    <textarea
+                      value={messageForm.body}
+                      onChange={(e) =>
+                        setMessageForm({ ...messageForm, body: e.target.value })
+                      }
+                    />
+                    <button type="submit">Send</button>
+                  </form>
+                  <div className="message-thread">
+                    <p className="card-label">Conversation Thread</p>
+                    {profileMessages.length === 0 && (
+                      <p className="empty-state">No messages yet.</p>
+                    )}
+                    {profileMessages.map((message) => (
+                      <div className="message-bubble outbound" key={message.id}>
+                        <strong>
+                          {message.channel}
+                          {message.template ? ` · ${message.template}` : ""}
+                        </strong>
+                        <span>{message.body}</span>
+                        <small>
+                          {new Date(message.createdAt).toLocaleString()}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {profileTab === "activity" && (
                 <div>
                   <div className="quick-act-row" style={{ marginBottom: 18 }}>
@@ -3939,6 +4302,113 @@ function App() {
                   </div>
                 </div>
               </article>
+
+              {(todayTasks.length > 0 || overdueTasks.length > 0) && (
+                <article className="panel followup-panel">
+                  <p className="eyebrow">Today&apos;s Work Plan</p>
+                  <h2>
+                    {overdueTasks.length} overdue · {todayTasks.length} due
+                    today
+                  </h2>
+                  <div className="task-list">
+                    {todayTasks.slice(0, 6).map((task) => {
+                      const customer = customers.find(
+                        (c) => c.id === task.customerId,
+                      );
+                      return (
+                        <div className="task-card" key={task.id}>
+                          <div>
+                            <strong>{task.title}</strong>
+                            <span>
+                              {customer
+                                ? `${customer.firstName} ${customer.lastName}`
+                                : "Customer"}{" "}
+                              · {task.type} · {task.priority}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => customer && openProfile(customer)}
+                          >
+                            Open
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              )}
+
+              {(appointmentTasks.length > 0 || crmAlerts.length > 0) && (
+                <div className="dash-grid" style={{ marginTop: 18 }}>
+                  <article className="panel appointment-panel">
+                    <p className="eyebrow">Appointment Calendar</p>
+                    <h2>Upcoming appointments</h2>
+                    <div className="appointment-list">
+                      {appointmentTasks.length === 0 && (
+                        <p className="empty-state">
+                          No appointments scheduled.
+                        </p>
+                      )}
+                      {appointmentTasks.map((task) => {
+                        const customer = customers.find(
+                          (c) => c.id === task.customerId,
+                        );
+                        return (
+                          <button
+                            type="button"
+                            className="appointment-card"
+                            key={task.id}
+                            onClick={() => customer && openProfile(customer)}
+                          >
+                            <span>
+                              {new Date(task.dueAt).toLocaleDateString()}
+                            </span>
+                            <strong>
+                              {new Date(task.dueAt).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </strong>
+                            <small>
+                              {customer
+                                ? `${customer.firstName} ${customer.lastName}`
+                                : "Customer"}{" "}
+                              · {task.title}
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </article>
+
+                  <article className="panel alerts-panel">
+                    <p className="eyebrow">Notification Center</p>
+                    <h2>Needs attention</h2>
+                    <div className="alert-list">
+                      {crmAlerts.length === 0 && (
+                        <p className="empty-state">No alerts right now. 🎉</p>
+                      )}
+                      {crmAlerts.map((alert) => {
+                        const customer = customers.find(
+                          (c) => c.id === alert.customerId,
+                        );
+                        return (
+                          <button
+                            type="button"
+                            className={`alert-card alert-${alert.tone}`}
+                            key={alert.id}
+                            onClick={() => customer && openProfile(customer)}
+                          >
+                            <strong>{alert.title}</strong>
+                            <span>{alert.detail}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </article>
+                </div>
+              )}
 
               {/* ── Active Leads + Re-engagement row ── */}
               {(activeLeads.length > 0 ||
