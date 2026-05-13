@@ -5968,31 +5968,86 @@ function App() {
                   </p>
                 </div>
               </header>
-              <article className="panel">
-                <form className="stack-form" onSubmit={lookupVin}>
+              <article className="panel vin-decoder-panel">
+                <div className="vin-hero">
+                  <div>
+                    <span className="vin-hero-icon">⌁</span>
+                    <p className="eyebrow">NHTSA Decode</p>
+                    <h2>Vehicle identity scanner</h2>
+                    <p>
+                      Paste a VIN to reveal build specs, powertrain, origin, and
+                      estimated trade value.
+                    </p>
+                  </div>
+                  <div className="vin-count">
+                    <strong>{vin.length}/17</strong>
+                    <span>characters</span>
+                  </div>
+                </div>
+                <form className="vin-search" onSubmit={lookupVin}>
                   <input
-                    placeholder="Enter 17-character VIN"
+                    placeholder="1FTFW1E50NFA00001"
                     value={vin}
                     onChange={(e) => setVin(e.target.value.toUpperCase())}
                     maxLength={17}
-                    style={{ fontFamily: "monospace", letterSpacing: 2 }}
                   />
-                  <button type="submit" disabled={vinLoading}>
-                    {vinLoading ? "Looking up..." : "Decode VIN"}
+                  <button
+                    type="submit"
+                    disabled={vinLoading || vin.length < 11}
+                  >
+                    {vinLoading ? "Scanning..." : "Decode VIN"}
                   </button>
                 </form>
+                <div className="vin-samples">
+                  {[
+                    "1FTFW1E50NFA00001",
+                    "4T1B11HK0MU000001",
+                    "1GCUYDED0NZ000001",
+                  ].map((sample) => (
+                    <button
+                      type="button"
+                      key={sample}
+                      onClick={() => setVin(sample)}
+                    >
+                      {sample}
+                    </button>
+                  ))}
+                </div>
                 {vinError && <p className="auth-error">{vinError}</p>}
                 {vinResult && (
                   <div className="vin-card">
                     {vinResult.warning && (
                       <p className="vin-warning">⚠ {vinResult.warning}</p>
                     )}
-                    <strong className="vin-title">
-                      {vinResult.year} {vinResult.make} {vinResult.model}
-                      {vinResult.trim && vinResult.trim !== "—"
-                        ? ` — ${vinResult.trim}`
-                        : ""}
-                    </strong>
+                    <div className="vin-result-hero">
+                      <div className="vin-vehicle-badge">
+                        {(vinResult.make || "V").slice(0, 1)}
+                      </div>
+                      <div>
+                        <strong className="vin-title">
+                          {vinResult.year} {vinResult.make} {vinResult.model}
+                        </strong>
+                        <span>
+                          {vinResult.trim && vinResult.trim !== "—"
+                            ? vinResult.trim
+                            : "Trim unavailable"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="vin-stat-row">
+                      <div>
+                        <span>Origin</span>
+                        <strong>{vinResult.country || "—"}</strong>
+                      </div>
+                      <div>
+                        <span>Body</span>
+                        <strong>{vinResult.bodyClass || "—"}</strong>
+                      </div>
+                      <div>
+                        <span>Drive</span>
+                        <strong>{vinResult.driveType || "—"}</strong>
+                      </div>
+                    </div>
                     <div className="vin-grid">
                       <div>
                         <span>VIN</span>
