@@ -2,6 +2,7 @@ export type AppPageName =
   | "dashboard"
   | "leads"
   | "customers"
+  | "appointments"
   | "finance"
   | "pipeline"
   | "trades"
@@ -33,6 +34,7 @@ export const VALID_APP_PAGES: AppPageName[] = [
   "dashboard",
   "leads",
   "customers",
+  "appointments",
   "finance",
   "pipeline",
   "trades",

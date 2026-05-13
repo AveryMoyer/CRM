@@ -1,0 +1,155 @@
+/* Premium Modal Polish */
+.dup-backdrop,
+.appointment-backdrop {
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.2), transparent 34%),
+    rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(10px) saturate(135%);
+}
+
+.dup-modal,
+.settings-modal,
+.appointment-modal {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98)),
+    #fff;
+  border-radius: 26px;
+  box-shadow:
+    0 30px 90px rgba(2, 6, 23, 0.34),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.settings-modal,
+.appointment-modal {
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.settings-header {
+  position: relative;
+  padding: 24px 26px 18px;
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, 0.11), rgba(14, 165, 233, 0.1)),
+    #fff;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.settings-header::after {
+  content: "";
+  position: absolute;
+  right: -46px;
+  top: -58px;
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.18), transparent 65%);
+  pointer-events: none;
+}
+
+.settings-header h3 {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.settings-avatar-preview {
+  box-shadow:
+    0 14px 34px rgba(79, 70, 229, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.45) inset;
+}
+
+.settings-modal label,
+.appointment-modal label {
+  padding: 0 26px;
+  margin-top: 14px;
+}
+
+.settings-modal input,
+.settings-modal select,
+.settings-modal textarea,
+.appointment-modal input,
+.appointment-modal select,
+.appointment-modal textarea {
+  min-height: 44px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.settings-modal input:focus,
+.settings-modal select:focus,
+.settings-modal textarea:focus,
+.appointment-modal input:focus,
+.appointment-modal select:focus,
+.appointment-modal textarea:focus {
+  border-color: #4f46e5;
+  background: #fff;
+  box-shadow:
+    0 0 0 4px rgba(79, 70, 229, 0.12),
+    0 12px 30px rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.settings-actions {
+  padding: 18px 26px 24px;
+  margin-top: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.45), #f8fafc);
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.settings-actions .ghost-button {
+  background: #fff;
+  border-color: #dbe3ef;
+  color: #475569;
+  font-weight: 800;
+}
+
+.settings-actions .ghost-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.settings-actions .dup-add-anyway {
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.28);
+  font-weight: 900;
+}
+
+.settings-actions .dup-add-anyway:hover {
+  background: linear-gradient(135deg, #4338ca, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+.dup-modal-header {
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.08)),
+    #fff;
+}
+
+.dup-modal-actions {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.45), #f8fafc);
+}
+
+@media (max-width: 640px) {
+  .settings-modal,
+  .appointment-modal,
+  .dup-modal {
+    border-radius: 24px 24px 18px 18px;
+  }
+
+  .settings-header {
+    padding: 20px 20px 16px;
+  }
+
+  .settings-modal label,
+  .appointment-modal label {
+    padding: 0 20px;
+  }
+
+  .settings-actions {
+    padding: 16px 20px 20px;
+  }
+}

@@ -1,0 +1,112 @@
+/* Appointment Workflow */
+.appointment-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(2, 6, 23, 0.66);
+  backdrop-filter: blur(6px);
+}
+
+.appointment-modal {
+  width: min(520px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.38);
+}
+
+.appointment-modal textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.appointment-modal select,
+.appointment-modal textarea {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.appointment-avatar {
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+}
+.appointment-form strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.appointment-form span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.appointment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.appointment-actions button {
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 800;
+}
+.appointment-actions button:last-child {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+}
+.appointment-tab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.appointment-tab-head h3 {
+  margin: 4px 0 0;
+  color: #0f172a;
+}
+.appointment-tab-head button {
+  padding: 9px 14px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #fff;
+  font-weight: 800;
+}
+.appointment-card-full {
+  border-left: 4px solid #4f46e5;
+}
+.showroom-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+}
+.showroom-panel {
+  margin-top: 18px;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+@media (max-width: 640px) {
+  .appointment-tab-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .appointment-tab-head button {
+    width: 100%;
+  }
+  .appointment-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .appointment-actions button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}

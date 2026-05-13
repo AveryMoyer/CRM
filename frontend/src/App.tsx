@@ -24,6 +24,12 @@ import {
   parseHashRoute,
 } from "./crmLogic";
 import "./styles/global.css";
+import "./styles/appointment-workflow.css";
+import "./styles/premium-modals.css";
+import "./styles/premium-ui.css";
+import "./styles/premium-desk.css";
+import "./styles/premium-profile.css";
+import "./styles/premium-lists.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -206,7 +212,7 @@ type CrmTask = {
   dueAt: string;
   assignedTo: string;
   priority: "Low" | "Normal" | "High";
-  status: "Open" | "Complete";
+  status: "Open" | "Showroom" | "Complete";
   createdAt: string;
   completedAt?: string;
 };
@@ -234,13 +240,23 @@ type BootstrapData = {
   repairOrders?: RepairOrder[];
 };
 
-type CurrentUser = {
+type UserAccount = {
   id: number;
   name: string;
   email: string;
   role: string;
   phone?: string;
   avatarUrl?: string;
+};
+type CurrentUser = UserAccount;
+
+type SavedDeskDeal = {
+  id: number;
+  customerId: number;
+  desk: Record<string, string | boolean>;
+  monthly: number;
+  amountFinanced: number;
+  createdAt: string;
 };
 
 type ProfileTab =
@@ -249,6 +265,7 @@ type ProfileTab =
   | "credit"
   | "deals"
   | "followup"
+  | "appointments"
   | "messages"
   | "activity"
   | "service";
@@ -256,6 +273,7 @@ type AppPage =
   | "dashboard"
   | "leads"
   | "customers"
+  | "appointments"
   | "finance"
   | "pipeline"
   | "trades"
@@ -1078,6 +1096,8 @@ function App() {
   const [quickActivityNote, setQuickActivityNote] = useState("");
   const [quickActivityType, setQuickActivityType] =
     useState<Activity["type"]>("Note");
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteModalText, setNoteModalText] = useState("");
 
   const [loginForm, setLoginForm] = useState({
     name: "",
@@ -1179,6 +1199,9 @@ function App() {
     type: "Note" as Activity["type"],
     note: "",
   });
+  const [activityReportRange, setActivityReportRange] = useState<
+    "day" | "week"
+  >("day");
   const [taskForm, setTaskForm] = useState({
     title: "",
     type: "Follow-Up" as CrmTask["type"],
@@ -1189,7 +1212,12 @@ function App() {
     title: "Sales appointment",
     dueAt: "",
     priority: "High" as CrmTask["priority"],
+    notes: "",
   });
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<
+    number | null
+  >(null);
   const [messageForm, setMessageForm] = useState({
     channel: "Text" as Message["channel"],
     template: "First Response",
@@ -1245,6 +1273,19 @@ function App() {
     termMonths: "72",
     lender: "",
     buyerZip: "",
+  });
+  const [targetPayment, setTargetPayment] = useState("");
+  const [paymentGridDowns, setPaymentGridDowns] = useState([
+    "0",
+    "1000",
+    "3000",
+  ]);
+  const [savedDeskDeals, setSavedDeskDeals] = useState<SavedDeskDeal[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("crmSavedDeskDeals") || "[]");
+    } catch {
+      return [];
+    }
   });
 
   const deskNumbers = useMemo(() => {
@@ -1313,18 +1354,63 @@ function App() {
 
   const paymentGrid = useMemo(() => {
     const terms = [36, 48, 60, 72, 84];
-    const downs = [0, 1000, 2000, 3000, 5000];
-    const base = deskNumbers.financed + (parseFloat(desk.downPayment) || 0);
+    const downs = paymentGridDowns.map((down) => parseFloat(down) || 0);
+    const selling = parseFloat(desk.sellingPrice) || 0;
+    const acv = parseFloat(desk.tradeACV) || 0;
+    const payoff = parseFloat(desk.tradePayoff) || 0;
+    const equity = acv - payoff;
+    const rebate = parseFloat(desk.rebate) || 0;
+    const taxRate = (parseFloat(desk.taxRate) || 0) / 100;
+    const fiTotal = deskNumbers.fiTotal;
+    const salesTax = (selling + fiTotal) * taxRate;
+    const fees = deskNumbers.totalFees;
+    const base = selling + fiTotal + salesTax + fees - equity - rebate;
     const aprM = parseFloat(desk.apr) / 100 / 12;
     return terms.map((term) => ({
       term,
       payments: downs.map((down) => {
         const amt = base - down;
-        if (amt <= 0 || aprM === 0) return 0;
+        if (amt <= 0) return 0;
+        if (aprM === 0) return amt / term;
         return (amt * aprM) / (1 - Math.pow(1 + aprM, -term));
       }),
     }));
-  }, [deskNumbers.financed, desk.downPayment, desk.apr]);
+  }, [
+    desk.apr,
+    desk.rebate,
+    desk.sellingPrice,
+    desk.taxRate,
+    desk.tradeACV,
+    desk.tradePayoff,
+    deskNumbers.fiTotal,
+    deskNumbers.totalFees,
+    paymentGridDowns,
+  ]);
+
+  const targetPaymentResult = useMemo(() => {
+    const target = parseFloat(targetPayment) || 0;
+    const currentDown = parseFloat(desk.downPayment) || 0;
+    const baseAmount = deskNumbers.financed + currentDown;
+    const term = parseInt(desk.termMonths) || 72;
+    const aprM = parseFloat(desk.apr) / 100 / 12;
+    if (!target || !baseAmount) return null;
+    const targetPrincipal =
+      aprM > 0
+        ? target * ((1 - Math.pow(1 + aprM, -term)) / aprM)
+        : target * term;
+    const requiredDown = Math.max(0, baseAmount - targetPrincipal);
+    return {
+      requiredDown,
+      additionalDown: Math.max(0, requiredDown - currentDown),
+      isReachable: targetPrincipal >= 0,
+    };
+  }, [
+    desk.apr,
+    desk.downPayment,
+    desk.termMonths,
+    deskNumbers.financed,
+    targetPayment,
+  ]);
 
   const deskPayment = useMemo(() => {
     const price = parseFloat(deskCalc.salePrice) || 0;
@@ -1608,6 +1694,11 @@ function App() {
     setCustPage(0);
   }
 
+  function CustomerProfile() {
+    setActiveSearch(customerSearch.trim());
+    setCustPage(0);
+  }
+
   const selectedCustomer = selectedCustomerId
     ? (customers.find((c) => c.id === selectedCustomerId) ?? null)
     : null;
@@ -1622,6 +1713,9 @@ function App() {
     : [];
   const profileSales = selectedCustomer
     ? vehicleSales.filter((s) => s.customerId === selectedCustomer.id)
+    : [];
+  const profileSavedDeskDeals = selectedCustomer
+    ? savedDeskDeals.filter((deal) => deal.customerId === selectedCustomer.id)
     : [];
   const profileActivities = selectedCustomer
     ? activities
@@ -1638,6 +1732,12 @@ function App() {
           (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime(),
         )
     : [];
+  const profileAppointments = profileTasks.filter(
+    (task) => task.type === "Appointment",
+  );
+  const nextProfileAppointment = profileAppointments.find(
+    (task) => task.status !== "Complete",
+  );
   const profileMessages = selectedCustomer
     ? messages
         .filter((message) => message.customerId === selectedCustomer.id)
@@ -1647,6 +1747,12 @@ function App() {
         )
     : [];
   const openTasks = tasks.filter((task) => task.status === "Open");
+  const allAppointmentTasks = tasks
+    .filter((task) => task.type === "Appointment")
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  const showroomAppointments = allAppointmentTasks.filter(
+    (task) => task.status === "Showroom",
+  );
   const overdueTasks = openTasks.filter(
     (task) => new Date(task.dueAt).getTime() < Date.now(),
   );
@@ -1749,8 +1855,46 @@ function App() {
     window.location.hash = `#/customers/${c.id}`;
   }
   function getCustomerName(id: number) {
-    const c = customers.find((c) => c.id === id);
-    return c ? `${c.firstName} ${c.lastName}` : "Unknown";
+    const c = customers.find((customer) => customer.id === id);
+    return c ? `${c.firstName} ${c.lastName}` : "Unknown Customer";
+  }
+  function applyDeskCustomer(customerId: string) {
+    const trade = tradeIns
+      .filter((item) => item.customerId === Number(customerId))
+      .sort((a, b) => b.id - a.id)[0];
+    setDesk({
+      ...desk,
+      customerId,
+      tradeYear: trade?.year || "",
+      tradeMake: trade?.make || "",
+      tradeModel: trade?.model || "",
+      tradeACV: trade ? String(trade.estimatedValue) : "",
+      tradePayoff: trade ? String(trade.payoff) : "",
+    });
+  }
+  function saveDeskDeal() {
+    const customerId = Number(desk.customerId);
+    if (!customerId) {
+      setAppMessage("Select a customer before saving the deal.");
+      return;
+    }
+    const savedDeal: SavedDeskDeal = {
+      id: Date.now(),
+      customerId,
+      desk: { ...desk },
+      monthly: deskNumbers.monthly,
+      amountFinanced: deskNumbers.financed,
+      createdAt: new Date().toISOString(),
+    };
+    const nextDeals = [savedDeal, ...savedDeskDeals];
+    setSavedDeskDeals(nextDeals);
+    localStorage.setItem("crmSavedDeskDeals", JSON.stringify(nextDeals));
+    setAppMessage("Desk deal saved to customer profile.");
+  }
+  function reopenDeskDeal(savedDeal: SavedDeskDeal) {
+    setDesk({ ...desk, ...savedDeal.desk });
+    window.location.hash = "#/desk";
+    setProfileTab("deals");
   }
   function statusClass(s: string) {
     return (
@@ -2190,6 +2334,25 @@ function App() {
     setAppMessage("Activity logged.");
   }
 
+  async function saveQuickNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCustomer || !noteModalText.trim()) return;
+    const res = await fetch(`${API_BASE}/api/activities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerId: String(selectedCustomer.id),
+        type: "Note",
+        note: noteModalText.trim(),
+      }),
+    });
+    const act = await res.json();
+    setActivities([act, ...activities]);
+    setNoteModalText("");
+    setShowNoteModal(false);
+    setAppMessage("Note saved.");
+  }
+
   async function addTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer || !taskForm.title) return;
@@ -2212,26 +2375,88 @@ function App() {
   async function setAppointment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCustomer || !appointmentForm.dueAt) return;
-    const res = await fetch(`${API_BASE}/api/tasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: selectedCustomer.id,
-        title: appointmentForm.title || "Sales appointment",
-        type: "Appointment",
-        dueAt: appointmentForm.dueAt,
-        assignedTo: selectedCustomer.assignedTo || currentUser?.name || "Avery",
-        priority: appointmentForm.priority,
-      }),
-    });
+    const payload = {
+      customerId: selectedCustomer.id,
+      title: appointmentForm.title || "Sales appointment",
+      type: "Appointment",
+      dueAt: appointmentForm.dueAt,
+      assignedTo: selectedCustomer.assignedTo || currentUser?.name || "Avery",
+      priority: appointmentForm.priority,
+      status: "Open",
+    };
+    const res = await fetch(
+      editingAppointmentId
+        ? `${API_BASE}/api/tasks/${editingAppointmentId}`
+        : `${API_BASE}/api/tasks`,
+      {
+        method: editingAppointmentId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
     const task = await res.json();
-    setTasks([task, ...tasks]);
+    setTasks(
+      editingAppointmentId
+        ? tasks.map((item) => (item.id === editingAppointmentId ? task : item))
+        : [task, ...tasks],
+    );
+    if (appointmentForm.notes) {
+      const noteRes = await fetch(`${API_BASE}/api/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: selectedCustomer.id,
+          type: "Appointment",
+          note: appointmentForm.notes,
+        }),
+      });
+      const activity = await noteRes.json();
+      setActivities([activity, ...activities]);
+    }
     setAppointmentForm({
       title: "Sales appointment",
       dueAt: "",
       priority: "High",
+      notes: "",
     });
-    setAppMessage("Appointment scheduled.");
+    setEditingAppointmentId(null);
+    setShowAppointmentModal(false);
+    setAppMessage(
+      editingAppointmentId ? "Appointment updated." : "Appointment scheduled.",
+    );
+  }
+
+  function openAppointmentModal(task?: CrmTask) {
+    setEditingAppointmentId(task?.id ?? null);
+    setAppointmentForm({
+      title: task?.title || "Sales appointment",
+      dueAt: task?.dueAt ? task.dueAt.slice(0, 16) : "",
+      priority: task?.priority || "High",
+      notes: "",
+    });
+    setShowAppointmentModal(true);
+  }
+
+  async function updateTaskStatus(task: CrmTask, status: CrmTask["status"]) {
+    const res = await fetch(`${API_BASE}/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...task,
+        status,
+        completedAt:
+          status === "Complete" ? new Date().toISOString() : undefined,
+      }),
+    });
+    const updated = await res.json();
+    setTasks(tasks.map((item) => (item.id === task.id ? updated : item)));
+    setAppMessage(
+      status === "Showroom"
+        ? "Appointment marked in showroom."
+        : status === "Complete"
+          ? "Appointment completed."
+          : "Appointment updated.",
+    );
   }
 
   async function completeTask(task: CrmTask) {
@@ -2425,542 +2650,1714 @@ function App() {
 
   // ── Customer Profile / Deal Jacket ────────────────────────────────────────
 
+  const appointmentModal = showAppointmentModal && (
+    <div
+      className="appointment-backdrop"
+      onClick={() => setShowAppointmentModal(false)}
+    >
+      <form
+        className="settings-modal appointment-modal"
+        onSubmit={setAppointment}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="settings-header">
+          <div className="settings-avatar-preview appointment-avatar">
+            <span>📅</span>
+          </div>
+          <div>
+            <p className="eyebrow">
+              {editingAppointmentId
+                ? "Edit Appointment"
+                : "Schedule Appointment"}
+            </p>
+            <h3>
+              {selectedCustomer
+                ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+                : "Customer"}
+            </h3>
+          </div>
+        </div>
+        <label>
+          Appointment Title
+          <input
+            value={appointmentForm.title}
+            onChange={(e) =>
+              setAppointmentForm({ ...appointmentForm, title: e.target.value })
+            }
+            placeholder="Sales appointment"
+          />
+        </label>
+        <label>
+          Date & Time
+          <input
+            type="datetime-local"
+            value={appointmentForm.dueAt}
+            onChange={(e) =>
+              setAppointmentForm({ ...appointmentForm, dueAt: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          Priority
+          <select
+            value={appointmentForm.priority}
+            onChange={(e) =>
+              setAppointmentForm({
+                ...appointmentForm,
+                priority: e.target.value as CrmTask["priority"],
+              })
+            }
+          >
+            <option>Normal</option>
+            <option>High</option>
+          </select>
+        </label>
+        <label>
+          Notes
+          <textarea
+            value={appointmentForm.notes}
+            onChange={(e) =>
+              setAppointmentForm({ ...appointmentForm, notes: e.target.value })
+            }
+            placeholder="What are they coming in for?"
+          />
+        </label>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setShowAppointmentModal(false)}
+          >
+            Cancel
+          </button>
+          <button type="submit" className="dup-add-anyway">
+            {editingAppointmentId ? "Save Appointment" : "Schedule"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
+  const noteModal = showNoteModal && (
+    <div
+      className="appointment-backdrop"
+      onClick={() => setShowNoteModal(false)}
+    >
+      <form
+        className="settings-modal appointment-modal"
+        onSubmit={saveQuickNote}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="settings-header">
+          <div className="settings-avatar-preview appointment-avatar">
+            <span>📝</span>
+          </div>
+          <div>
+            <p className="eyebrow">Customer Note</p>
+            <h3>
+              {selectedCustomer
+                ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+                : "Customer"}
+            </h3>
+          </div>
+        </div>
+        <label>
+          Note
+          <textarea
+            value={noteModalText}
+            onChange={(e) => setNoteModalText(e.target.value)}
+            placeholder="Type your note..."
+          />
+        </label>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setShowNoteModal(false)}
+          >
+            Cancel
+          </button>
+          <button type="submit" className="dup-add-anyway">
+            Save Note
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
   if (selectedCustomerId) {
     return (
-      <main className="app-shell">
-        <aside className="sidebar">
-          <div className="sidebar-brand">
-            <div className="brand-mark">AS</div>
-            <div className="brand-name">
-              <strong>AutoSuite</strong>
-              <span>CRM</span>
+      <>
+        {appointmentModal}
+        {noteModal}
+        <main className="app-shell">
+          <aside className="sidebar">
+            <div className="sidebar-brand">
+              <div className="brand-mark">AS</div>
+              <div className="brand-name">
+                <strong>AutoSuite</strong>
+                <span>CRM</span>
+              </div>
             </div>
-          </div>
-          <nav>
-            <a href="#/dashboard">
-              <span className="nav-item-inner">
-                <span className="nav-icon">
-                  <LayoutDashboard size={16} />
-                </span>
-                <span className="nav-label">Dashboard</span>
-              </span>
-            </a>
-            <a href="#/leads">
-              <span className="nav-item-inner">
-                <span className="nav-icon">
-                  <Inbox size={16} />
-                </span>
-                <span className="nav-label">Lead Inbox</span>
-              </span>
-            </a>
-            <a href="#/customers">
-              <span className="nav-item-inner">
-                <span className="nav-icon">
-                  <Users size={16} />
-                </span>
-                <span className="nav-label">Customers</span>
-              </span>
-            </a>
-            <a className="active" href={`#/customers/${selectedCustomerId}`}>
-              <span className="nav-item-inner">
-                <span className="nav-icon">
-                  <FileText size={16} />
-                </span>
-                <span className="nav-label">Deal Jacket</span>
-              </span>
-            </a>
-          </nav>
-          <div className="sidebar-footer">
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem("crm-authenticated");
-                setIsLoggedIn(false);
-              }}
-            >
-              <LogOut size={14} />
-              Log Out
-            </button>
-          </div>
-        </aside>
-
-        <section className="workspace">
-          {appMessage && (
-            <p className="app-message" onClick={() => setAppMessage("")}>
-              {appMessage} ×
-            </p>
-          )}
-          <header className="page-header">
-            <div>
-              <p className="eyebrow">Deal Jacket</p>
-              <h1>
-                {selectedCustomer
-                  ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-                  : "Customer not found"}
-              </h1>
-              {selectedCustomer && (
-                <div className="profile-meta">
-                  <span>{selectedCustomer.phone}</span>
-                  <span>{selectedCustomer.email || "No email"}</span>
-                  <span
-                    className={`status-badge ${statusClass(selectedCustomer.status)}`}
-                  >
-                    {selectedCustomer.status}
+            <nav>
+              <a href="#/dashboard">
+                <span className="nav-item-inner">
+                  <span className="nav-icon">
+                    <LayoutDashboard size={16} />
                   </span>
-                  {selectedCustomer.assignedTo && (
-                    <span className="meta-tag">
-                      Rep: {selectedCustomer.assignedTo}
-                    </span>
-                  )}
-                  {selectedCustomer.source && (
-                    <span className="meta-tag source-tag">
-                      {selectedCustomer.source}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="page-header-actions">
-              {selectedCustomer &&
-                (selectedCustomer.status === "Sold" ? (
-                  <button
-                    type="button"
-                    className="unsold-btn"
-                    onClick={() => markCustomerUnsold(selectedCustomer)}
-                  >
-                    Mark Unsold
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="sold-btn"
-                    onClick={() => markCustomerSold(selectedCustomer)}
-                  >
-                    Mark Sold
-                  </button>
-                ))}
+                  <span className="nav-label">Dashboard</span>
+                </span>
+              </a>
+              <a href="#/leads">
+                <span className="nav-item-inner">
+                  <span className="nav-icon">
+                    <Inbox size={16} />
+                  </span>
+                  <span className="nav-label">Lead Inbox</span>
+                </span>
+              </a>
+              <a href="#/customers">
+                <span className="nav-item-inner">
+                  <span className="nav-icon">
+                    <Users size={16} />
+                  </span>
+                  <span className="nav-label">Customers</span>
+                </span>
+              </a>
+              <a className="active" href={`#/customers/${selectedCustomerId}`}>
+                <span className="nav-item-inner">
+                  <span className="nav-icon">
+                    <FileText size={16} />
+                  </span>
+                  <span className="nav-label">Deal Jacket</span>
+                </span>
+              </a>
+            </nav>
+            <div className="sidebar-footer">
               <button
                 type="button"
-                className="ghost-button"
                 onClick={() => {
-                  window.location.hash = "#/customers";
+                  localStorage.removeItem("crm-authenticated");
+                  setIsLoggedIn(false);
                 }}
               >
-                ← All Customers
+                <LogOut size={14} />
+                Log Out
               </button>
             </div>
-          </header>
+          </aside>
 
-          {!selectedCustomer ? (
-            <article className="panel">
-              <h2>Customer not found.</h2>
-            </article>
-          ) : (
-            <article className="panel profile-panel">
-              <div className="profile-tabs">
-                {(
-                  [
-                    "overview",
-                    "finance",
-                    "credit",
-                    "deals",
-                    "followup",
-                    "messages",
-                    "activity",
-                    "service",
-                  ] as ProfileTab[]
-                ).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={profileTab === tab ? "active" : ""}
-                    onClick={() => setProfileTab(tab)}
-                  >
-                    {tab === "overview" && "Overview"}
-                    {tab === "finance" &&
-                      `Finance App${profileFinance.length ? ` (${profileFinance.length})` : ""}`}
-                    {tab === "credit" &&
-                      `Credit${profileCreditApps.length ? ` (${profileCreditApps.length})` : ""}`}
-                    {tab === "deals" && "Deals"}
-                    {tab === "followup" &&
-                      `Follow-Up${profileTasks.filter((task) => task.status === "Open").length ? ` (${profileTasks.filter((task) => task.status === "Open").length})` : ""}`}
-                    {tab === "messages" &&
-                      `Messages${profileMessages.length ? ` (${profileMessages.length})` : ""}`}
-                    {tab === "activity" &&
-                      `Activity${profileActivities.length ? ` (${profileActivities.length})` : ""}`}
-                    {tab === "service" &&
-                      (() => {
-                        const cnt = repairOrders.filter(
-                          (r) => r.customerId === selectedCustomer.id,
-                        ).length;
-                        return `Service${cnt ? ` (${cnt})` : ""}`;
-                      })()}
-                  </button>
-                ))}
+          <section className="workspace">
+            {appMessage && (
+              <p className="app-message" onClick={() => setAppMessage("")}>
+                {appMessage} ×
+              </p>
+            )}
+            <header className="page-header">
+              <div>
+                <p className="eyebrow">Deal Jacket</p>
+                <h1>
+                  {selectedCustomer
+                    ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+                    : "Customer not found"}
+                </h1>
+                {selectedCustomer && (
+                  <div className="profile-meta">
+                    <span>{selectedCustomer.phone}</span>
+                    <span>{selectedCustomer.email || "No email"}</span>
+                    <span
+                      className={`status-badge ${statusClass(selectedCustomer.status)}`}
+                    >
+                      {selectedCustomer.status}
+                    </span>
+                    {selectedCustomer.assignedTo && (
+                      <span className="meta-tag">
+                        Rep: {selectedCustomer.assignedTo}
+                      </span>
+                    )}
+                    {selectedCustomer.source && (
+                      <span className="meta-tag source-tag">
+                        {selectedCustomer.source}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+              <div className="page-header-actions">
+                {nextProfileAppointment &&
+                  nextProfileAppointment.status !== "Showroom" && (
+                    <button
+                      type="button"
+                      className="showroom-btn"
+                      onClick={() =>
+                        updateTaskStatus(nextProfileAppointment, "Showroom")
+                      }
+                    >
+                      Mark In Showroom
+                    </button>
+                  )}
+                {selectedCustomer &&
+                  (selectedCustomer.status === "Sold" ? (
+                    <button
+                      type="button"
+                      className="unsold-btn"
+                      onClick={() => markCustomerUnsold(selectedCustomer)}
+                    >
+                      Mark Unsold
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sold-btn"
+                      onClick={() => markCustomerSold(selectedCustomer)}
+                    >
+                      Mark Sold
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    window.location.hash = "#/customers";
+                  }}
+                >
+                  ← All Customers
+                </button>
+              </div>
+            </header>
 
-              {profileTab === "overview" && (
-                <div className="crm-overview">
-                  {/* ── Left: Contact Card ── */}
-                  <div className="crm-contact-panel">
-                    <div className="crm-avatar">
-                      {selectedCustomer.firstName[0]}
-                      {selectedCustomer.lastName[0] || ""}
-                    </div>
-                    <div className="crm-name-block">
-                      <h2>
-                        {selectedCustomer.firstName} {selectedCustomer.lastName}
-                      </h2>
-                      <div className="crm-badges">
-                        <span
-                          className={`status-badge ${statusClass(selectedCustomer.status)}`}
-                        >
-                          {selectedCustomer.status}
-                        </span>
-                        {selectedCustomer.temperature && (
+            {!selectedCustomer ? (
+              <article className="panel">
+                <h2>Customer not found.</h2>
+              </article>
+            ) : (
+              <article className="panel profile-panel">
+                <div className="profile-tabs">
+                  {(
+                    [
+                      "overview",
+                      "finance",
+                      "credit",
+                      "deals",
+                      "followup",
+                      "appointments",
+                      "messages",
+                      "activity",
+                      "service",
+                    ] as ProfileTab[]
+                  ).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      className={profileTab === tab ? "active" : ""}
+                      onClick={() => setProfileTab(tab)}
+                    >
+                      {tab === "overview" && "Overview"}
+                      {tab === "finance" &&
+                        `Finance App${profileFinance.length ? ` (${profileFinance.length})` : ""}`}
+                      {tab === "credit" &&
+                        `Credit${profileCreditApps.length ? ` (${profileCreditApps.length})` : ""}`}
+                      {tab === "deals" && "Deals"}
+                      {tab === "followup" &&
+                        `Follow-Up${profileTasks.filter((task) => task.status === "Open").length ? ` (${profileTasks.filter((task) => task.status === "Open").length})` : ""}`}
+                      {tab === "appointments" &&
+                        `Appointments${profileAppointments.length ? ` (${profileAppointments.length})` : ""}`}
+                      {tab === "messages" &&
+                        `Messages${profileMessages.length ? ` (${profileMessages.length})` : ""}`}
+                      {tab === "activity" &&
+                        `Activity${profileActivities.length ? ` (${profileActivities.length})` : ""}`}
+                      {tab === "service" &&
+                        (() => {
+                          const cnt = repairOrders.filter(
+                            (r) => r.customerId === selectedCustomer.id,
+                          ).length;
+                          return `Service${cnt ? ` (${cnt})` : ""}`;
+                        })()}
+                    </button>
+                  ))}
+                </div>
+
+                {profileTab === "overview" && (
+                  <div className="crm-overview">
+                    {/* ── Left: Contact Card ── */}
+                    <div className="crm-contact-panel">
+                      <div className="crm-avatar">
+                        {selectedCustomer.firstName[0]}
+                        {selectedCustomer.lastName[0] || ""}
+                      </div>
+                      <div className="crm-name-block">
+                        <h2>
+                          {selectedCustomer.firstName}{" "}
+                          {selectedCustomer.lastName}
+                        </h2>
+                        <div className="crm-badges">
                           <span
-                            className={`temp-badge ${tempClass(selectedCustomer.temperature)}`}
+                            className={`status-badge ${statusClass(selectedCustomer.status)}`}
                           >
-                            {selectedCustomer.temperature}
+                            {selectedCustomer.status}
                           </span>
+                          {selectedCustomer.temperature && (
+                            <span
+                              className={`temp-badge ${tempClass(selectedCustomer.temperature)}`}
+                            >
+                              {selectedCustomer.temperature}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Quick action buttons */}
+                      <div className="crm-quick-actions">
+                        {[
+                          {
+                            label: "📞 Call",
+                            type: "Call" as Activity["type"],
+                          },
+                          {
+                            label: "💬 Text",
+                            type: "Text" as Activity["type"],
+                          },
+                          {
+                            label: "✉ Email",
+                            type: "Email" as Activity["type"],
+                          },
+                          {
+                            label: "📅 Schedule",
+                            type: "Appointment" as Activity["type"],
+                          },
+                          {
+                            label: "📝 Note",
+                            type: "Note" as Activity["type"],
+                          },
+                        ].map(({ label, type }) => (
+                          <button
+                            key={type}
+                            type="button"
+                            className="quick-action-btn"
+                            onClick={() => {
+                              if (type === "Appointment") {
+                                setEditingAppointmentId(null);
+                                setAppointmentForm({
+                                  title: "Sales appointment",
+                                  dueAt: "",
+                                  priority: "High",
+                                  notes: "",
+                                });
+                                setShowAppointmentModal(true);
+                                return;
+                              }
+                              if (type === "Note") {
+                                setNoteModalText("");
+                                setShowNoteModal(true);
+                                return;
+                              }
+                              setQuickActivityType(type);
+                              setQuickActivityNote(`${type} logged`);
+                              setTimeout(addQuickActivity, 0);
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Contact info — view or edit */}
+                      {profileEditMode ? (
+                        <form
+                          className="crm-edit-form"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            doSaveCustomer();
+                            setProfileEditMode(false);
+                          }}
+                        >
+                          <div className="crm-edit-row">
+                            <label>
+                              First Name
+                              <input
+                                value={customerForm.firstName}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    firstName: e.target.value,
+                                  })
+                                }
+                                required
+                              />
+                            </label>
+                            <label>
+                              Last Name
+                              <input
+                                value={customerForm.lastName}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    lastName: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="crm-edit-row">
+                            <label>
+                              Phone
+                              <input
+                                value={customerForm.phone}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    phone: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              Email
+                              <input
+                                type="email"
+                                value={customerForm.email}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    email: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label>
+                            Address
+                            <input
+                              value={customerForm.address}
+                              placeholder="123 Main St, City, ST 12345"
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  address: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <div className="crm-edit-row">
+                            <label>
+                              Status
+                              <select
+                                value={customerForm.status}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    status: e.target.value as CustomerStatus,
+                                  })
+                                }
+                              >
+                                <option>New Lead</option>
+                                <option>Contacted</option>
+                                <option>Appt Set</option>
+                                <option>Appt Show</option>
+                                <option>Working</option>
+                                <option>Sold</option>
+                                <option>Lost</option>
+                              </select>
+                            </label>
+                            <label>
+                              Temperature
+                              <select
+                                value={customerForm.temperature}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    temperature: e.target.value as
+                                      | LeadTemp
+                                      | "",
+                                  })
+                                }
+                              >
+                                <option value="">—</option>
+                                <option>Hot</option>
+                                <option>Warm</option>
+                                <option>Cold</option>
+                              </select>
+                            </label>
+                          </div>
+                          <div className="crm-edit-row">
+                            <label>
+                              Source
+                              <input
+                                value={customerForm.source}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    source: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label>
+                              Assigned Rep
+                              <input
+                                value={customerForm.assignedTo}
+                                onChange={(e) =>
+                                  setCustomerForm({
+                                    ...customerForm,
+                                    assignedTo: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label>
+                            Vehicle of Interest
+                            <input
+                              value={customerForm.interestedVehicle}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  interestedVehicle: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label>
+                            Next Follow-Up
+                            <input
+                              value={customerForm.nextFollowUp}
+                              onChange={(e) =>
+                                setCustomerForm({
+                                  ...customerForm,
+                                  nextFollowUp: e.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <div className="crm-edit-actions">
+                            <button type="submit" className="search-go-btn">
+                              Save Changes
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => {
+                                resetCustomerForm();
+                                setProfileEditMode(false);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="crm-contact-info">
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">📞</span>
+                            <div>
+                              <span className="crm-info-label">Phone</span>
+                              <a
+                                href={`tel:${selectedCustomer.phone}`}
+                                className="crm-info-value"
+                              >
+                                {selectedCustomer.phone || (
+                                  <span className="muted">—</span>
+                                )}
+                              </a>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">✉</span>
+                            <div>
+                              <span className="crm-info-label">Email</span>
+                              <a
+                                href={`mailto:${selectedCustomer.email}`}
+                                className="crm-info-value"
+                              >
+                                {selectedCustomer.email || (
+                                  <span className="muted">—</span>
+                                )}
+                              </a>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">📍</span>
+                            <div>
+                              <span className="crm-info-label">Address</span>
+                              <span className="crm-info-value">
+                                {selectedCustomer.address || (
+                                  <span className="muted">Not on file</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">🚗</span>
+                            <div>
+                              <span className="crm-info-label">
+                                Vehicle Interest
+                              </span>
+                              <span className="crm-info-value">
+                                {selectedCustomer.interestedVehicle || (
+                                  <span className="muted">—</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">📅</span>
+                            <div>
+                              <span className="crm-info-label">
+                                Next Follow-Up
+                              </span>
+                              <span className="crm-info-value">
+                                {selectedCustomer.nextFollowUp || (
+                                  <span className="muted">Not scheduled</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">👤</span>
+                            <div>
+                              <span className="crm-info-label">
+                                Assigned Rep
+                              </span>
+                              <span className="crm-info-value">
+                                {selectedCustomer.assignedTo || (
+                                  <span className="muted">Unassigned</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="crm-info-row">
+                            <span className="crm-info-icon">🔗</span>
+                            <div>
+                              <span className="crm-info-label">Source</span>
+                              <span className="crm-info-value">
+                                {selectedCustomer.source || (
+                                  <span className="muted">Unknown</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="crm-edit-btn"
+                            onClick={() => {
+                              editCustomer(selectedCustomer);
+                              setProfileEditMode(true);
+                            }}
+                          >
+                            ✏ Edit Contact Info
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Stats strip */}
+                      <div className="crm-stat-strip">
+                        <div className="crm-stat">
+                          <strong>{profileFinance.length}</strong>
+                          <span>Finance Apps</span>
+                        </div>
+                        <div className="crm-stat">
+                          <strong>{profileTrades.length}</strong>
+                          <span>Trade-Ins</span>
+                        </div>
+                        <div className="crm-stat">
+                          <strong>{profileActivities.length}</strong>
+                          <span>Activities</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Right: Activity Feed ── */}
+                    <div className="crm-activity-panel">
+                      <p className="card-label" style={{ marginBottom: 10 }}>
+                        Log Activity
+                      </p>
+                      <div className="quick-act-row">
+                        <select
+                          value={quickActivityType}
+                          onChange={(e) =>
+                            setQuickActivityType(
+                              e.target.value as Activity["type"],
+                            )
+                          }
+                        >
+                          <option>Call</option>
+                          <option>Text</option>
+                          <option>Email</option>
+                          <option>Appointment</option>
+                          <option>Note</option>
+                        </select>
+                        <input
+                          placeholder="What happened or was discussed?"
+                          value={quickActivityNote}
+                          onChange={(e) => setQuickActivityNote(e.target.value)}
+                        />
+                        <button type="button" onClick={addQuickActivity}>
+                          Log
+                        </button>
+                      </div>
+                      <div className="activity-timeline">
+                        {profileActivities.slice(0, 10).map((act) => (
+                          <div className="timeline-item" key={act.id}>
+                            <span
+                              className={`timeline-dot dot-${act.type.toLowerCase()}`}
+                            />
+                            <div>
+                              <strong>{act.type}</strong>
+                              <span>{act.note}</span>
+                              <small>
+                                {new Date(act.createdAt).toLocaleString()}
+                              </small>
+                            </div>
+                          </div>
+                        ))}
+                        {profileActivities.length === 0 && (
+                          <p className="empty-state">
+                            No activity yet on this deal jacket.
+                          </p>
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
 
-                    {/* Quick action buttons */}
-                    <div className="crm-quick-actions">
-                      {[
-                        { label: "📞 Call", type: "Call" as Activity["type"] },
-                        { label: "💬 Text", type: "Text" as Activity["type"] },
-                        { label: "✉ Email", type: "Email" as Activity["type"] },
-                        {
-                          label: "📅 Appt",
-                          type: "Appointment" as Activity["type"],
-                        },
-                        { label: "📝 Note", type: "Note" as Activity["type"] },
-                      ].map(({ label, type }) => (
-                        <button
-                          key={type}
-                          type="button"
-                          className="quick-action-btn"
-                          onClick={() => {
-                            setQuickActivityType(type);
-                            setQuickActivityNote(`${type} logged`);
-                            setTimeout(addQuickActivity, 0);
-                          }}
-                        >
-                          {label}
-                        </button>
+                {profileTab === "finance" && (
+                  <form
+                    className="credit-form"
+                    onSubmit={addFinanceApplication}
+                  >
+                    <h3 className="form-section-title">Buyer Information</h3>
+                    <input
+                      placeholder="Applicant name"
+                      value={financeForm.applicantName}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          applicantName: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Date of birth (MM/DD/YYYY)"
+                      value={financeForm.dateOfBirth}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          dateOfBirth: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="SSN last 4 digits"
+                      value={financeForm.ssnLast4}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          ssnLast4: e.target.value,
+                        })
+                      }
+                    />
+                    <h3 className="form-section-title">Address</h3>
+                    <input
+                      placeholder="Street address"
+                      value={financeForm.address}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          address: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="City"
+                      value={financeForm.city}
+                      onChange={(e) =>
+                        setFinanceForm({ ...financeForm, city: e.target.value })
+                      }
+                    />
+                    <input
+                      placeholder="State"
+                      value={financeForm.state}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          state: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="ZIP code"
+                      value={financeForm.zip}
+                      onChange={(e) =>
+                        setFinanceForm({ ...financeForm, zip: e.target.value })
+                      }
+                    />
+                    <h3 className="form-section-title">Employment</h3>
+                    <input
+                      placeholder="Employer name"
+                      value={financeForm.employerName}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          employerName: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Job title"
+                      value={financeForm.jobTitle}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          jobTitle: e.target.value,
+                        })
+                      }
+                    />
+                    <select
+                      value={financeForm.employmentStatus}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          employmentStatus: e.target.value,
+                        })
+                      }
+                    >
+                      <option>Full-time</option>
+                      <option>Part-time</option>
+                      <option>Self-employed</option>
+                      <option>Retired</option>
+                      <option>Other</option>
+                    </select>
+                    <input
+                      placeholder="Time on job (e.g. 3 years)"
+                      value={financeForm.timeOnJob}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          timeOnJob: e.target.value,
+                        })
+                      }
+                    />
+                    <h3 className="form-section-title">Income</h3>
+                    <input
+                      placeholder="Monthly gross income ($)"
+                      value={financeForm.monthlyIncome}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          monthlyIncome: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Other monthly income ($)"
+                      value={financeForm.otherIncome}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          otherIncome: e.target.value,
+                        })
+                      }
+                    />
+                    <h3 className="form-section-title">Deal Structure</h3>
+                    <input
+                      placeholder="Requested vehicle"
+                      value={financeForm.requestedVehicle}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          requestedVehicle: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Down payment ($)"
+                      value={financeForm.downPayment}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          downPayment: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Trade-in payoff ($)"
+                      value={financeForm.tradePayoff}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          tradePayoff: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Amount requested ($)"
+                      value={financeForm.requestedAmount}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          requestedAmount: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Term in months (e.g. 72)"
+                      value={financeForm.termMonths}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          termMonths: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Credit range (e.g. 680-719)"
+                      value={financeForm.creditRange}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          creditRange: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Preferred lender"
+                      value={financeForm.lender}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          lender: e.target.value,
+                        })
+                      }
+                    />
+                    <input
+                      placeholder="Decision notes"
+                      value={financeForm.decisionNotes}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          decisionNotes: e.target.value,
+                        })
+                      }
+                    />
+                    <select
+                      value={financeForm.status}
+                      onChange={(e) =>
+                        setFinanceForm({
+                          ...financeForm,
+                          status: e.target
+                            .value as FinanceApplication["status"],
+                        })
+                      }
+                    >
+                      <option>New</option>
+                      <option>Submitted</option>
+                      <option>Approved</option>
+                      <option>Needs Review</option>
+                    </select>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={financeForm.consentToPullCredit}
+                        onChange={(e) =>
+                          setFinanceForm({
+                            ...financeForm,
+                            consentToPullCredit: e.target.checked,
+                          })
+                        }
+                      />
+                      Customer authorizes credit bureau pull
+                    </label>
+                    <button type="submit" className="submit-btn">
+                      Submit Finance Application
+                    </button>
+                  </form>
+                )}
+
+                {profileTab === "credit" && (
+                  <div>
+                    <form
+                      className="credit-form"
+                      onSubmit={addCreditApplication}
+                      style={{ marginBottom: 24 }}
+                    >
+                      <h3 className="form-section-title">Credit Application</h3>
+                      <input
+                        placeholder="Applicant name"
+                        value={creditForm.applicantName}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            applicantName: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Date of birth"
+                        value={creditForm.dateOfBirth}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            dateOfBirth: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="SSN last 4"
+                        value={creditForm.ssnLast4}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            ssnLast4: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Address"
+                        value={creditForm.address}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            address: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="City"
+                        value={creditForm.city}
+                        onChange={(e) =>
+                          setCreditForm({ ...creditForm, city: e.target.value })
+                        }
+                      />
+                      <input
+                        placeholder="State"
+                        value={creditForm.state}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            state: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="ZIP"
+                        value={creditForm.zip}
+                        onChange={(e) =>
+                          setCreditForm({ ...creditForm, zip: e.target.value })
+                        }
+                      />
+                      <select
+                        value={creditForm.residenceType}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            residenceType: e.target.value,
+                          })
+                        }
+                      >
+                        <option>Rent</option>
+                        <option>Own</option>
+                        <option>Family</option>
+                        <option>Other</option>
+                      </select>
+                      <input
+                        placeholder="Time at address"
+                        value={creditForm.timeAtAddress}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            timeAtAddress: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Employer"
+                        value={creditForm.employerName}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            employerName: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Job title"
+                        value={creditForm.jobTitle}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            jobTitle: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Monthly income"
+                        value={creditForm.monthlyIncome}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            monthlyIncome: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Other income"
+                        value={creditForm.otherIncome}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            otherIncome: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Bank name"
+                        value={creditForm.bankName}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            bankName: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Down payment"
+                        value={creditForm.downPayment}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            downPayment: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Requested vehicle"
+                        value={creditForm.requestedVehicle}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            requestedVehicle: e.target.value,
+                          })
+                        }
+                      />
+                      <select
+                        value={creditForm.status}
+                        onChange={(e) =>
+                          setCreditForm({
+                            ...creditForm,
+                            status: e.target
+                              .value as CreditApplication["status"],
+                          })
+                        }
+                      >
+                        <option>Draft</option>
+                        <option>Submitted</option>
+                        <option>Manager Review</option>
+                        <option>Approved</option>
+                        <option>Declined</option>
+                      </select>
+                      <label className="checkbox-field">
+                        <input
+                          type="checkbox"
+                          checked={creditForm.consentToPullCredit}
+                          onChange={(e) =>
+                            setCreditForm({
+                              ...creditForm,
+                              consentToPullCredit: e.target.checked,
+                            })
+                          }
+                        />
+                        Customer authorized credit review
+                      </label>
+                      <button type="submit">Save Credit Application</button>
+                    </form>
+                    <div className="deal-list">
+                      {profileCreditApps.length === 0 && (
+                        <p className="empty-state">
+                          No credit applications on file.
+                        </p>
+                      )}
+                      {profileCreditApps.map((app) => (
+                        <div className="deal-card" key={app.id}>
+                          <strong>{app.applicantName}</strong>
+                          <span>
+                            {app.employerName || "No employer"} — $
+                            {app.monthlyIncome.toLocaleString()}/mo
+                          </span>
+                          <div className="card-row">
+                            <span
+                              className={`status-badge ${app.status === "Approved" ? "badge-sold" : app.status === "Declined" ? "badge-danger" : "badge-finance"}`}
+                            >
+                              {app.status}
+                            </span>
+                            <small>
+                              {new Date(app.submittedAt).toLocaleDateString()}
+                            </small>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                  </div>
+                )}
 
-                    {/* Contact info — view or edit */}
-                    {profileEditMode ? (
-                      <form
-                        className="crm-edit-form"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          doSaveCustomer();
-                          setProfileEditMode(false);
-                        }}
-                      >
-                        <div className="crm-edit-row">
-                          <label>
-                            First Name
-                            <input
-                              value={customerForm.firstName}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  firstName: e.target.value,
-                                })
-                              }
-                              required
-                            />
-                          </label>
-                          <label>
-                            Last Name
-                            <input
-                              value={customerForm.lastName}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  lastName: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <div className="crm-edit-row">
-                          <label>
-                            Phone
-                            <input
-                              value={customerForm.phone}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  phone: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                          <label>
-                            Email
-                            <input
-                              type="email"
-                              value={customerForm.email}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  email: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <label>
-                          Address
-                          <input
-                            value={customerForm.address}
-                            placeholder="123 Main St, City, ST 12345"
-                            onChange={(e) =>
-                              setCustomerForm({
-                                ...customerForm,
-                                address: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <div className="crm-edit-row">
-                          <label>
-                            Status
-                            <select
-                              value={customerForm.status}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  status: e.target.value as CustomerStatus,
-                                })
-                              }
-                            >
-                              <option>New Lead</option>
-                              <option>Contacted</option>
-                              <option>Appt Set</option>
-                              <option>Appt Show</option>
-                              <option>Working</option>
-                              <option>Sold</option>
-                              <option>Lost</option>
-                            </select>
-                          </label>
-                          <label>
-                            Temperature
-                            <select
-                              value={customerForm.temperature}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  temperature: e.target.value as LeadTemp | "",
-                                })
-                              }
-                            >
-                              <option value="">—</option>
-                              <option>Hot</option>
-                              <option>Warm</option>
-                              <option>Cold</option>
-                            </select>
-                          </label>
-                        </div>
-                        <div className="crm-edit-row">
-                          <label>
-                            Source
-                            <input
-                              value={customerForm.source}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  source: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                          <label>
-                            Assigned Rep
-                            <input
-                              value={customerForm.assignedTo}
-                              onChange={(e) =>
-                                setCustomerForm({
-                                  ...customerForm,
-                                  assignedTo: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <label>
-                          Vehicle of Interest
-                          <input
-                            value={customerForm.interestedVehicle}
-                            onChange={(e) =>
-                              setCustomerForm({
-                                ...customerForm,
-                                interestedVehicle: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <label>
-                          Next Follow-Up
-                          <input
-                            value={customerForm.nextFollowUp}
-                            onChange={(e) =>
-                              setCustomerForm({
-                                ...customerForm,
-                                nextFollowUp: e.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                        <div className="crm-edit-actions">
-                          <button type="submit" className="search-go-btn">
-                            Save Changes
-                          </button>
+                {profileTab === "deals" && (
+                  <div className="deals-layout">
+                    <div>
+                      <p className="card-label">Saved Desk Deals</p>
+                      <div className="deal-list">
+                        {profileSavedDeskDeals.length === 0 && (
+                          <p className="empty-state">
+                            No saved desk deals yet.
+                          </p>
+                        )}
+                        {profileSavedDeskDeals.map((savedDeal) => (
                           <button
+                            className="deal-card clickable saved-desk-card"
+                            key={savedDeal.id}
+                            onClick={() => reopenDeskDeal(savedDeal)}
                             type="button"
-                            className="ghost-button"
-                            onClick={() => {
-                              resetCustomerForm();
-                              setProfileEditMode(false);
-                            }}
                           >
-                            Cancel
+                            <strong>
+                              {String(savedDeal.desk.year || "")}{" "}
+                              {String(savedDeal.desk.make || "")}{" "}
+                              {String(savedDeal.desk.model || "") ||
+                                "Desk Deal"}
+                            </strong>
+                            <span>
+                              ${savedDeal.monthly.toFixed(2)}/mo · $
+                              {savedDeal.amountFinanced.toLocaleString(
+                                undefined,
+                                {
+                                  maximumFractionDigits: 0,
+                                },
+                              )}{" "}
+                              financed
+                            </span>
+                            <small>
+                              Saved{" "}
+                              {new Date(savedDeal.createdAt).toLocaleString()}
+                            </small>
                           </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="crm-contact-info">
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">📞</span>
-                          <div>
-                            <span className="crm-info-label">Phone</span>
-                            <a
-                              href={`tel:${selectedCustomer.phone}`}
-                              className="crm-info-value"
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="card-label">Finance Applications</p>
+                      <div className="deal-list">
+                        {profileFinance.length === 0 && (
+                          <p className="empty-state">
+                            No finance applications yet.
+                          </p>
+                        )}
+                        {profileFinance.map((app) => (
+                          <div className="deal-card" key={app.id}>
+                            <strong>
+                              {app.requestedVehicle ||
+                                selectedCustomer.interestedVehicle}
+                            </strong>
+                            <span>
+                              ${app.downPayment.toLocaleString()} down ·{" "}
+                              {app.creditRange}
+                            </span>
+                            <select
+                              value={app.status}
+                              onChange={(e) =>
+                                updateFinanceStatus(
+                                  app.id,
+                                  e.target
+                                    .value as FinanceApplication["status"],
+                                )
+                              }
                             >
-                              {selectedCustomer.phone || (
-                                <span className="muted">—</span>
-                              )}
-                            </a>
+                              <option>New</option>
+                              <option>Submitted</option>
+                              <option>Approved</option>
+                              <option>Needs Review</option>
+                            </select>
                           </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">✉</span>
-                          <div>
-                            <span className="crm-info-label">Email</span>
-                            <a
-                              href={`mailto:${selectedCustomer.email}`}
-                              className="crm-info-value"
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="card-label">Vehicle Sales</p>
+                      <div className="deal-list">
+                        {profileSales.length === 0 && (
+                          <p className="empty-state">
+                            No vehicle sales on this deal.
+                          </p>
+                        )}
+                        {profileSales.map((sale) => (
+                          <div className="deal-card" key={sale.id}>
+                            <strong>
+                              {sale.year} {sale.make} {sale.model}
+                            </strong>
+                            <span>
+                              Stock #{sale.stockNumber} · $
+                              {sale.salePrice.toLocaleString()}
+                            </span>
+                            <span
+                              className={`status-badge ${sale.stage === "Delivered" ? "badge-sold" : "badge-finance"}`}
                             >
-                              {selectedCustomer.email || (
-                                <span className="muted">—</span>
-                              )}
-                            </a>
-                          </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">📍</span>
-                          <div>
-                            <span className="crm-info-label">Address</span>
-                            <span className="crm-info-value">
-                              {selectedCustomer.address || (
-                                <span className="muted">Not on file</span>
-                              )}
+                              {sale.stage}
                             </span>
                           </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">🚗</span>
-                          <div>
-                            <span className="crm-info-label">
-                              Vehicle Interest
-                            </span>
-                            <span className="crm-info-value">
-                              {selectedCustomer.interestedVehicle || (
-                                <span className="muted">—</span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">📅</span>
-                          <div>
-                            <span className="crm-info-label">
-                              Next Follow-Up
-                            </span>
-                            <span className="crm-info-value">
-                              {selectedCustomer.nextFollowUp || (
-                                <span className="muted">Not scheduled</span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">👤</span>
-                          <div>
-                            <span className="crm-info-label">Assigned Rep</span>
-                            <span className="crm-info-value">
-                              {selectedCustomer.assignedTo || (
-                                <span className="muted">Unassigned</span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="crm-info-row">
-                          <span className="crm-info-icon">🔗</span>
-                          <div>
-                            <span className="crm-info-label">Source</span>
-                            <span className="crm-info-value">
-                              {selectedCustomer.source || (
-                                <span className="muted">Unknown</span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="crm-edit-btn"
-                          onClick={() => {
-                            editCustomer(selectedCustomer);
-                            setProfileEditMode(true);
-                          }}
-                        >
-                          ✏ Edit Contact Info
-                        </button>
+                        ))}
                       </div>
-                    )}
-
-                    {/* Stats strip */}
-                    <div className="crm-stat-strip">
-                      <div className="crm-stat">
-                        <strong>{profileFinance.length}</strong>
-                        <span>Finance Apps</span>
-                      </div>
-                      <div className="crm-stat">
-                        <strong>{profileTrades.length}</strong>
-                        <span>Trade-Ins</span>
-                      </div>
-                      <div className="crm-stat">
-                        <strong>{profileActivities.length}</strong>
-                        <span>Activities</span>
+                    </div>
+                    <div>
+                      <p className="card-label">Trade-Ins</p>
+                      <div className="deal-list">
+                        {profileTrades.length === 0 && (
+                          <p className="empty-state">
+                            No trade-ins on this deal.
+                          </p>
+                        )}
+                        {profileTrades.map((trade) => (
+                          <div className="deal-card" key={trade.id}>
+                            <strong>
+                              {trade.year} {trade.make} {trade.model}
+                            </strong>
+                            <span>
+                              {trade.mileage.toLocaleString()} miles · ACV $
+                              {trade.estimatedValue.toLocaleString()}
+                            </span>
+                            <span>
+                              Payoff: ${trade.payoff.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
+                )}
 
-                  {/* ── Right: Activity Feed ── */}
-                  <div className="crm-activity-panel">
-                    <p className="card-label" style={{ marginBottom: 10 }}>
-                      Log Activity
-                    </p>
-                    <div className="quick-act-row">
+                {profileTab === "service" &&
+                  (() => {
+                    const customerROs = repairOrders.filter(
+                      (r) => r.customerId === selectedCustomer.id,
+                    );
+                    return (
+                      <div>
+                        {customerROs.length === 0 ? (
+                          <p className="empty-state">
+                            No service history for this customer.
+                          </p>
+                        ) : (
+                          <div className="service-history-list">
+                            {customerROs.map((ro) => (
+                              <div className="service-history-card" key={ro.id}>
+                                <div className="sh-header">
+                                  <div>
+                                    <code className="ro-number">
+                                      {ro.roNumber}
+                                    </code>
+                                    <span
+                                      className="ro-status-badge ro-badge-inline"
+                                      style={{ marginLeft: 8 }}
+                                    >
+                                      {ro.status}
+                                    </span>
+                                  </div>
+                                  <span className="sh-date">
+                                    {new Date(
+                                      ro.createdAt,
+                                    ).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <strong className="sh-vehicle">
+                                  {ro.vehicleYear} {ro.vehicleMake}{" "}
+                                  {ro.vehicleModel} —{" "}
+                                  {ro.vehicleMileageIn.toLocaleString()} mi
+                                </strong>
+                                <div className="sh-lines">
+                                  {ro.lines.map((line) => (
+                                    <div className="sh-line" key={line.id}>
+                                      <span>{line.description}</span>
+                                      <span>
+                                        $
+                                        {(
+                                          line.laborTotal + line.partsTotal
+                                        ).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="sh-total">
+                                  <span>Advisor: {ro.advisor}</span>
+                                  <strong>
+                                    Total: ${ro.total.toLocaleString()}
+                                  </strong>
+                                </div>
+                                {ro.notes && (
+                                  <p className="ro-notes">{ro.notes}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                {profileTab === "followup" && (
+                  <div className="crm-two-col">
+                    <div className="profile-form-stack">
+                      <div className="mini-form appointment-form">
+                        <p className="card-label">Appointments</p>
+                        <strong>
+                          Schedule test drives, showroom visits, and follow-ups.
+                        </strong>
+                        <span>
+                          Use the popup to add date, time, priority, and notes.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openAppointmentModal()}
+                        >
+                          + Schedule Appointment
+                        </button>
+                      </div>
+                      <form className="mini-form" onSubmit={addTask}>
+                        <p className="card-label">Create Follow-Up</p>
+                        <input
+                          placeholder="Task title"
+                          value={taskForm.title}
+                          onChange={(e) =>
+                            setTaskForm({ ...taskForm, title: e.target.value })
+                          }
+                        />
+                        <select
+                          value={taskForm.type}
+                          onChange={(e) =>
+                            setTaskForm({
+                              ...taskForm,
+                              type: e.target.value as CrmTask["type"],
+                            })
+                          }
+                        >
+                          <option>Call</option>
+                          <option>Text</option>
+                          <option>Email</option>
+                          <option>Appointment</option>
+                          <option>Follow-Up</option>
+                        </select>
+                        <input
+                          type="datetime-local"
+                          value={taskForm.dueAt}
+                          onChange={(e) =>
+                            setTaskForm({ ...taskForm, dueAt: e.target.value })
+                          }
+                        />
+                        <select
+                          value={taskForm.priority}
+                          onChange={(e) =>
+                            setTaskForm({
+                              ...taskForm,
+                              priority: e.target.value as CrmTask["priority"],
+                            })
+                          }
+                        >
+                          <option>Low</option>
+                          <option>Normal</option>
+                          <option>High</option>
+                        </select>
+                        <button type="submit">Add Task</button>
+                      </form>
+                    </div>
+                    <div className="task-list">
+                      <p className="card-label">Open Follow-Ups</p>
+                      {profileTasks.length === 0 && (
+                        <p className="empty-state">No follow-ups yet.</p>
+                      )}
+                      {profileTasks.map((task) => (
+                        <div
+                          className={`task-card ${task.status === "Complete" ? "done" : ""}`}
+                          key={task.id}
+                        >
+                          <div>
+                            <strong>{task.title}</strong>
+                            <span>
+                              {task.type} · {task.priority} · Due{" "}
+                              {new Date(task.dueAt).toLocaleString()}
+                            </span>
+                          </div>
+                          {task.status !== "Complete" ? (
+                            <div className="appointment-actions">
+                              {task.type === "Appointment" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openAppointmentModal(task)}
+                                  >
+                                    Edit
+                                  </button>
+                                  {task.status !== "Showroom" && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        updateTaskStatus(task, "Showroom")
+                                      }
+                                    >
+                                      In Showroom
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  task.type === "Appointment"
+                                    ? updateTaskStatus(task, "Complete")
+                                    : completeTask(task)
+                                }
+                              >
+                                Complete
+                              </button>
+                            </div>
+                          ) : (
+                            <small>Done</small>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {profileTab === "appointments" && (
+                  <div className="task-list appointment-tab-list">
+                    <div className="appointment-tab-head">
+                      <div>
+                        <p className="card-label">Appointments</p>
+                        <h3>Scheduled visits and showroom activity</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openAppointmentModal()}
+                      >
+                        + Schedule Appointment
+                      </button>
+                    </div>
+                    {profileAppointments.length === 0 && (
+                      <p className="empty-state">No appointments scheduled.</p>
+                    )}
+                    {profileAppointments.map((task) => (
+                      <div
+                        className={`task-card appointment-card-full ${task.status === "Complete" ? "done" : ""}`}
+                        key={task.id}
+                      >
+                        <div>
+                          <strong>{task.title}</strong>
+                          <span>
+                            {task.priority} · {task.status} ·{" "}
+                            {new Date(task.dueAt).toLocaleString()}
+                          </span>
+                        </div>
+                        {task.status !== "Complete" ? (
+                          <div className="appointment-actions">
+                            <button
+                              type="button"
+                              onClick={() => openAppointmentModal(task)}
+                            >
+                              Edit
+                            </button>
+                            {task.status !== "Showroom" && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateTaskStatus(task, "Showroom")
+                                }
+                              >
+                                In Showroom
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => updateTaskStatus(task, "Complete")}
+                            >
+                              Complete
+                            </button>
+                          </div>
+                        ) : (
+                          <small>Completed</small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {profileTab === "messages" && (
+                  <div className="crm-two-col">
+                    <form className="mini-form" onSubmit={sendMessage}>
+                      <p className="card-label">Send Message</p>
+                      <select
+                        value={messageForm.channel}
+                        onChange={(e) =>
+                          setMessageForm({
+                            ...messageForm,
+                            channel: e.target.value as Message["channel"],
+                          })
+                        }
+                      >
+                        <option>Text</option>
+                        <option>Email</option>
+                      </select>
+                      <select
+                        value={messageForm.template}
+                        onChange={(e) => {
+                          const template = e.target.value;
+                          const body =
+                            template === "Appointment Confirmation"
+                              ? "Hi, confirming your appointment with us. Does your scheduled time still work?"
+                              : template === "No Response Follow-Up"
+                                ? "Hi, just checking in to see if you still have questions about the vehicle."
+                                : template === "Service Equity"
+                                  ? "Based on your current vehicle, you may have strong trade equity. Want to review options?"
+                                  : "Hi, this is Avery with the dealership. I wanted to follow up and see how I can help.";
+                          setMessageForm({ ...messageForm, template, body });
+                        }}
+                      >
+                        <option>First Response</option>
+                        <option>Appointment Confirmation</option>
+                        <option>No Response Follow-Up</option>
+                        <option>Service Equity</option>
+                      </select>
+                      <textarea
+                        value={messageForm.body}
+                        onChange={(e) =>
+                          setMessageForm({
+                            ...messageForm,
+                            body: e.target.value,
+                          })
+                        }
+                      />
+                      <button type="submit">Send</button>
+                    </form>
+                    <div className="message-thread">
+                      <p className="card-label">Conversation Thread</p>
+                      {profileMessages.length === 0 && (
+                        <p className="empty-state">No messages yet.</p>
+                      )}
+                      {profileMessages.map((message) => (
+                        <div
+                          className="message-bubble outbound"
+                          key={message.id}
+                        >
+                          <strong>
+                            {message.channel}
+                            {message.template ? ` · ${message.template}` : ""}
+                          </strong>
+                          <span>{message.body}</span>
+                          <small>
+                            {new Date(message.createdAt).toLocaleString()}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {profileTab === "activity" && (
+                  <div>
+                    <div className="quick-act-row" style={{ marginBottom: 18 }}>
                       <select
                         value={quickActivityType}
                         onChange={(e) =>
@@ -2976,7 +4373,7 @@ function App() {
                         <option>Note</option>
                       </select>
                       <input
-                        placeholder="What happened or was discussed?"
+                        placeholder="Log activity..."
                         value={quickActivityNote}
                         onChange={(e) => setQuickActivityNote(e.target.value)}
                       />
@@ -2985,7 +4382,10 @@ function App() {
                       </button>
                     </div>
                     <div className="activity-timeline">
-                      {profileActivities.slice(0, 10).map((act) => (
+                      {profileActivities.length === 0 && (
+                        <p className="empty-state">No activities yet.</p>
+                      )}
+                      {profileActivities.map((act) => (
                         <div className="timeline-item" key={act.id}>
                           <span
                             className={`timeline-dot dot-${act.type.toLowerCase()}`}
@@ -2999,872 +4399,14 @@ function App() {
                           </div>
                         </div>
                       ))}
-                      {profileActivities.length === 0 && (
-                        <p className="empty-state">
-                          No activity yet on this deal jacket.
-                        </p>
-                      )}
                     </div>
                   </div>
-                </div>
-              )}
-
-              {profileTab === "finance" && (
-                <form className="credit-form" onSubmit={addFinanceApplication}>
-                  <h3 className="form-section-title">Buyer Information</h3>
-                  <input
-                    placeholder="Applicant name"
-                    value={financeForm.applicantName}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        applicantName: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Date of birth (MM/DD/YYYY)"
-                    value={financeForm.dateOfBirth}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        dateOfBirth: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="SSN last 4 digits"
-                    value={financeForm.ssnLast4}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        ssnLast4: e.target.value,
-                      })
-                    }
-                  />
-                  <h3 className="form-section-title">Address</h3>
-                  <input
-                    placeholder="Street address"
-                    value={financeForm.address}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        address: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="City"
-                    value={financeForm.city}
-                    onChange={(e) =>
-                      setFinanceForm({ ...financeForm, city: e.target.value })
-                    }
-                  />
-                  <input
-                    placeholder="State"
-                    value={financeForm.state}
-                    onChange={(e) =>
-                      setFinanceForm({ ...financeForm, state: e.target.value })
-                    }
-                  />
-                  <input
-                    placeholder="ZIP code"
-                    value={financeForm.zip}
-                    onChange={(e) =>
-                      setFinanceForm({ ...financeForm, zip: e.target.value })
-                    }
-                  />
-                  <h3 className="form-section-title">Employment</h3>
-                  <input
-                    placeholder="Employer name"
-                    value={financeForm.employerName}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        employerName: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Job title"
-                    value={financeForm.jobTitle}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        jobTitle: e.target.value,
-                      })
-                    }
-                  />
-                  <select
-                    value={financeForm.employmentStatus}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        employmentStatus: e.target.value,
-                      })
-                    }
-                  >
-                    <option>Full-time</option>
-                    <option>Part-time</option>
-                    <option>Self-employed</option>
-                    <option>Retired</option>
-                    <option>Other</option>
-                  </select>
-                  <input
-                    placeholder="Time on job (e.g. 3 years)"
-                    value={financeForm.timeOnJob}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        timeOnJob: e.target.value,
-                      })
-                    }
-                  />
-                  <h3 className="form-section-title">Income</h3>
-                  <input
-                    placeholder="Monthly gross income ($)"
-                    value={financeForm.monthlyIncome}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        monthlyIncome: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Other monthly income ($)"
-                    value={financeForm.otherIncome}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        otherIncome: e.target.value,
-                      })
-                    }
-                  />
-                  <h3 className="form-section-title">Deal Structure</h3>
-                  <input
-                    placeholder="Requested vehicle"
-                    value={financeForm.requestedVehicle}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        requestedVehicle: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Down payment ($)"
-                    value={financeForm.downPayment}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        downPayment: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Trade-in payoff ($)"
-                    value={financeForm.tradePayoff}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        tradePayoff: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Amount requested ($)"
-                    value={financeForm.requestedAmount}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        requestedAmount: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Term in months (e.g. 72)"
-                    value={financeForm.termMonths}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        termMonths: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Credit range (e.g. 680-719)"
-                    value={financeForm.creditRange}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        creditRange: e.target.value,
-                      })
-                    }
-                  />
-                  <input
-                    placeholder="Preferred lender"
-                    value={financeForm.lender}
-                    onChange={(e) =>
-                      setFinanceForm({ ...financeForm, lender: e.target.value })
-                    }
-                  />
-                  <input
-                    placeholder="Decision notes"
-                    value={financeForm.decisionNotes}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        decisionNotes: e.target.value,
-                      })
-                    }
-                  />
-                  <select
-                    value={financeForm.status}
-                    onChange={(e) =>
-                      setFinanceForm({
-                        ...financeForm,
-                        status: e.target.value as FinanceApplication["status"],
-                      })
-                    }
-                  >
-                    <option>New</option>
-                    <option>Submitted</option>
-                    <option>Approved</option>
-                    <option>Needs Review</option>
-                  </select>
-                  <label className="checkbox-field">
-                    <input
-                      type="checkbox"
-                      checked={financeForm.consentToPullCredit}
-                      onChange={(e) =>
-                        setFinanceForm({
-                          ...financeForm,
-                          consentToPullCredit: e.target.checked,
-                        })
-                      }
-                    />
-                    Customer authorizes credit bureau pull
-                  </label>
-                  <button type="submit" className="submit-btn">
-                    Submit Finance Application
-                  </button>
-                </form>
-              )}
-
-              {profileTab === "credit" && (
-                <div>
-                  <form
-                    className="credit-form"
-                    onSubmit={addCreditApplication}
-                    style={{ marginBottom: 24 }}
-                  >
-                    <h3 className="form-section-title">Credit Application</h3>
-                    <input
-                      placeholder="Applicant name"
-                      value={creditForm.applicantName}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          applicantName: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Date of birth"
-                      value={creditForm.dateOfBirth}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          dateOfBirth: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="SSN last 4"
-                      value={creditForm.ssnLast4}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          ssnLast4: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Address"
-                      value={creditForm.address}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          address: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="City"
-                      value={creditForm.city}
-                      onChange={(e) =>
-                        setCreditForm({ ...creditForm, city: e.target.value })
-                      }
-                    />
-                    <input
-                      placeholder="State"
-                      value={creditForm.state}
-                      onChange={(e) =>
-                        setCreditForm({ ...creditForm, state: e.target.value })
-                      }
-                    />
-                    <input
-                      placeholder="ZIP"
-                      value={creditForm.zip}
-                      onChange={(e) =>
-                        setCreditForm({ ...creditForm, zip: e.target.value })
-                      }
-                    />
-                    <select
-                      value={creditForm.residenceType}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          residenceType: e.target.value,
-                        })
-                      }
-                    >
-                      <option>Rent</option>
-                      <option>Own</option>
-                      <option>Family</option>
-                      <option>Other</option>
-                    </select>
-                    <input
-                      placeholder="Time at address"
-                      value={creditForm.timeAtAddress}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          timeAtAddress: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Employer"
-                      value={creditForm.employerName}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          employerName: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Job title"
-                      value={creditForm.jobTitle}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          jobTitle: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Monthly income"
-                      value={creditForm.monthlyIncome}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          monthlyIncome: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Other income"
-                      value={creditForm.otherIncome}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          otherIncome: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Bank name"
-                      value={creditForm.bankName}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          bankName: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Down payment"
-                      value={creditForm.downPayment}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          downPayment: e.target.value,
-                        })
-                      }
-                    />
-                    <input
-                      placeholder="Requested vehicle"
-                      value={creditForm.requestedVehicle}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          requestedVehicle: e.target.value,
-                        })
-                      }
-                    />
-                    <select
-                      value={creditForm.status}
-                      onChange={(e) =>
-                        setCreditForm({
-                          ...creditForm,
-                          status: e.target.value as CreditApplication["status"],
-                        })
-                      }
-                    >
-                      <option>Draft</option>
-                      <option>Submitted</option>
-                      <option>Manager Review</option>
-                      <option>Approved</option>
-                      <option>Declined</option>
-                    </select>
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={creditForm.consentToPullCredit}
-                        onChange={(e) =>
-                          setCreditForm({
-                            ...creditForm,
-                            consentToPullCredit: e.target.checked,
-                          })
-                        }
-                      />
-                      Customer authorized credit review
-                    </label>
-                    <button type="submit">Save Credit Application</button>
-                  </form>
-                  <div className="deal-list">
-                    {profileCreditApps.length === 0 && (
-                      <p className="empty-state">
-                        No credit applications on file.
-                      </p>
-                    )}
-                    {profileCreditApps.map((app) => (
-                      <div className="deal-card" key={app.id}>
-                        <strong>{app.applicantName}</strong>
-                        <span>
-                          {app.employerName || "No employer"} — $
-                          {app.monthlyIncome.toLocaleString()}/mo
-                        </span>
-                        <div className="card-row">
-                          <span
-                            className={`status-badge ${app.status === "Approved" ? "badge-sold" : app.status === "Declined" ? "badge-danger" : "badge-finance"}`}
-                          >
-                            {app.status}
-                          </span>
-                          <small>
-                            {new Date(app.submittedAt).toLocaleDateString()}
-                          </small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {profileTab === "deals" && (
-                <div className="deals-layout">
-                  <div>
-                    <p className="card-label">Finance Applications</p>
-                    <div className="deal-list">
-                      {profileFinance.length === 0 && (
-                        <p className="empty-state">
-                          No finance applications yet.
-                        </p>
-                      )}
-                      {profileFinance.map((app) => (
-                        <div className="deal-card" key={app.id}>
-                          <strong>
-                            {app.requestedVehicle ||
-                              selectedCustomer.interestedVehicle}
-                          </strong>
-                          <span>
-                            ${app.downPayment.toLocaleString()} down ·{" "}
-                            {app.creditRange}
-                          </span>
-                          <select
-                            value={app.status}
-                            onChange={(e) =>
-                              updateFinanceStatus(
-                                app.id,
-                                e.target.value as FinanceApplication["status"],
-                              )
-                            }
-                          >
-                            <option>New</option>
-                            <option>Submitted</option>
-                            <option>Approved</option>
-                            <option>Needs Review</option>
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="card-label">Vehicle Sales</p>
-                    <div className="deal-list">
-                      {profileSales.length === 0 && (
-                        <p className="empty-state">
-                          No vehicle sales on this deal.
-                        </p>
-                      )}
-                      {profileSales.map((sale) => (
-                        <div className="deal-card" key={sale.id}>
-                          <strong>
-                            {sale.year} {sale.make} {sale.model}
-                          </strong>
-                          <span>
-                            Stock #{sale.stockNumber} · $
-                            {sale.salePrice.toLocaleString()}
-                          </span>
-                          <span
-                            className={`status-badge ${sale.stage === "Delivered" ? "badge-sold" : "badge-finance"}`}
-                          >
-                            {sale.stage}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="card-label">Trade-Ins</p>
-                    <div className="deal-list">
-                      {profileTrades.length === 0 && (
-                        <p className="empty-state">
-                          No trade-ins on this deal.
-                        </p>
-                      )}
-                      {profileTrades.map((trade) => (
-                        <div className="deal-card" key={trade.id}>
-                          <strong>
-                            {trade.year} {trade.make} {trade.model}
-                          </strong>
-                          <span>
-                            {trade.mileage.toLocaleString()} miles · ACV $
-                            {trade.estimatedValue.toLocaleString()}
-                          </span>
-                          <span>Payoff: ${trade.payoff.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {profileTab === "service" &&
-                (() => {
-                  const customerROs = repairOrders.filter(
-                    (r) => r.customerId === selectedCustomer.id,
-                  );
-                  return (
-                    <div>
-                      {customerROs.length === 0 ? (
-                        <p className="empty-state">
-                          No service history for this customer.
-                        </p>
-                      ) : (
-                        <div className="service-history-list">
-                          {customerROs.map((ro) => (
-                            <div className="service-history-card" key={ro.id}>
-                              <div className="sh-header">
-                                <div>
-                                  <code className="ro-number">
-                                    {ro.roNumber}
-                                  </code>
-                                  <span
-                                    className="ro-status-badge ro-badge-inline"
-                                    style={{ marginLeft: 8 }}
-                                  >
-                                    {ro.status}
-                                  </span>
-                                </div>
-                                <span className="sh-date">
-                                  {new Date(ro.createdAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <strong className="sh-vehicle">
-                                {ro.vehicleYear} {ro.vehicleMake}{" "}
-                                {ro.vehicleModel} —{" "}
-                                {ro.vehicleMileageIn.toLocaleString()} mi
-                              </strong>
-                              <div className="sh-lines">
-                                {ro.lines.map((line) => (
-                                  <div className="sh-line" key={line.id}>
-                                    <span>{line.description}</span>
-                                    <span>
-                                      $
-                                      {(
-                                        line.laborTotal + line.partsTotal
-                                      ).toLocaleString()}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="sh-total">
-                                <span>Advisor: {ro.advisor}</span>
-                                <strong>
-                                  Total: ${ro.total.toLocaleString()}
-                                </strong>
-                              </div>
-                              {ro.notes && (
-                                <p className="ro-notes">{ro.notes}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-              {profileTab === "followup" && (
-                <div className="crm-two-col">
-                  <div className="profile-form-stack">
-                    <form
-                      className="mini-form appointment-form"
-                      onSubmit={setAppointment}
-                    >
-                      <p className="card-label">Set Appointment</p>
-                      <input
-                        placeholder="Appointment title"
-                        value={appointmentForm.title}
-                        onChange={(e) =>
-                          setAppointmentForm({
-                            ...appointmentForm,
-                            title: e.target.value,
-                          })
-                        }
-                      />
-                      <input
-                        type="datetime-local"
-                        value={appointmentForm.dueAt}
-                        onChange={(e) =>
-                          setAppointmentForm({
-                            ...appointmentForm,
-                            dueAt: e.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        value={appointmentForm.priority}
-                        onChange={(e) =>
-                          setAppointmentForm({
-                            ...appointmentForm,
-                            priority: e.target.value as CrmTask["priority"],
-                          })
-                        }
-                      >
-                        <option>Normal</option>
-                        <option>High</option>
-                      </select>
-                      <button type="submit">Schedule Appointment</button>
-                    </form>
-                    <form className="mini-form" onSubmit={addTask}>
-                      <p className="card-label">Create Follow-Up</p>
-                      <input
-                        placeholder="Task title"
-                        value={taskForm.title}
-                        onChange={(e) =>
-                          setTaskForm({ ...taskForm, title: e.target.value })
-                        }
-                      />
-                      <select
-                        value={taskForm.type}
-                        onChange={(e) =>
-                          setTaskForm({
-                            ...taskForm,
-                            type: e.target.value as CrmTask["type"],
-                          })
-                        }
-                      >
-                        <option>Call</option>
-                        <option>Text</option>
-                        <option>Email</option>
-                        <option>Appointment</option>
-                        <option>Follow-Up</option>
-                      </select>
-                      <input
-                        type="datetime-local"
-                        value={taskForm.dueAt}
-                        onChange={(e) =>
-                          setTaskForm({ ...taskForm, dueAt: e.target.value })
-                        }
-                      />
-                      <select
-                        value={taskForm.priority}
-                        onChange={(e) =>
-                          setTaskForm({
-                            ...taskForm,
-                            priority: e.target.value as CrmTask["priority"],
-                          })
-                        }
-                      >
-                        <option>Low</option>
-                        <option>Normal</option>
-                        <option>High</option>
-                      </select>
-                      <button type="submit">Add Task</button>
-                    </form>
-                  </div>
-                  <div className="task-list">
-                    <p className="card-label">Open Follow-Ups</p>
-                    {profileTasks.length === 0 && (
-                      <p className="empty-state">No follow-ups yet.</p>
-                    )}
-                    {profileTasks.map((task) => (
-                      <div
-                        className={`task-card ${task.status === "Complete" ? "done" : ""}`}
-                        key={task.id}
-                      >
-                        <div>
-                          <strong>{task.title}</strong>
-                          <span>
-                            {task.type} · {task.priority} · Due{" "}
-                            {new Date(task.dueAt).toLocaleString()}
-                          </span>
-                        </div>
-                        {task.status === "Open" ? (
-                          <button
-                            type="button"
-                            onClick={() => completeTask(task)}
-                          >
-                            Complete
-                          </button>
-                        ) : (
-                          <small>Done</small>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {profileTab === "messages" && (
-                <div className="crm-two-col">
-                  <form className="mini-form" onSubmit={sendMessage}>
-                    <p className="card-label">Send Message</p>
-                    <select
-                      value={messageForm.channel}
-                      onChange={(e) =>
-                        setMessageForm({
-                          ...messageForm,
-                          channel: e.target.value as Message["channel"],
-                        })
-                      }
-                    >
-                      <option>Text</option>
-                      <option>Email</option>
-                    </select>
-                    <select
-                      value={messageForm.template}
-                      onChange={(e) => {
-                        const template = e.target.value;
-                        const body =
-                          template === "Appointment Confirmation"
-                            ? "Hi, confirming your appointment with us. Does your scheduled time still work?"
-                            : template === "No Response Follow-Up"
-                              ? "Hi, just checking in to see if you still have questions about the vehicle."
-                              : template === "Service Equity"
-                                ? "Based on your current vehicle, you may have strong trade equity. Want to review options?"
-                                : "Hi, this is Avery with the dealership. I wanted to follow up and see how I can help.";
-                        setMessageForm({ ...messageForm, template, body });
-                      }}
-                    >
-                      <option>First Response</option>
-                      <option>Appointment Confirmation</option>
-                      <option>No Response Follow-Up</option>
-                      <option>Service Equity</option>
-                    </select>
-                    <textarea
-                      value={messageForm.body}
-                      onChange={(e) =>
-                        setMessageForm({ ...messageForm, body: e.target.value })
-                      }
-                    />
-                    <button type="submit">Send</button>
-                  </form>
-                  <div className="message-thread">
-                    <p className="card-label">Conversation Thread</p>
-                    {profileMessages.length === 0 && (
-                      <p className="empty-state">No messages yet.</p>
-                    )}
-                    {profileMessages.map((message) => (
-                      <div className="message-bubble outbound" key={message.id}>
-                        <strong>
-                          {message.channel}
-                          {message.template ? ` · ${message.template}` : ""}
-                        </strong>
-                        <span>{message.body}</span>
-                        <small>
-                          {new Date(message.createdAt).toLocaleString()}
-                        </small>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {profileTab === "activity" && (
-                <div>
-                  <div className="quick-act-row" style={{ marginBottom: 18 }}>
-                    <select
-                      value={quickActivityType}
-                      onChange={(e) =>
-                        setQuickActivityType(e.target.value as Activity["type"])
-                      }
-                    >
-                      <option>Call</option>
-                      <option>Text</option>
-                      <option>Email</option>
-                      <option>Appointment</option>
-                      <option>Note</option>
-                    </select>
-                    <input
-                      placeholder="Log activity..."
-                      value={quickActivityNote}
-                      onChange={(e) => setQuickActivityNote(e.target.value)}
-                    />
-                    <button type="button" onClick={addQuickActivity}>
-                      Log
-                    </button>
-                  </div>
-                  <div className="activity-timeline">
-                    {profileActivities.length === 0 && (
-                      <p className="empty-state">No activities yet.</p>
-                    )}
-                    {profileActivities.map((act) => (
-                      <div className="timeline-item" key={act.id}>
-                        <span
-                          className={`timeline-dot dot-${act.type.toLowerCase()}`}
-                        />
-                        <div>
-                          <strong>{act.type}</strong>
-                          <span>{act.note}</span>
-                          <small>
-                            {new Date(act.createdAt).toLocaleString()}
-                          </small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </article>
-          )}
-        </section>
-      </main>
+                )}
+              </article>
+            )}
+          </section>
+        </main>
+      </>
     );
   }
 
@@ -3888,6 +4430,12 @@ function App() {
       badge: urgentLeads.length || undefined,
     },
     { page: "customers", label: "Customers", icon: <Users size={16} /> },
+    {
+      page: "appointments",
+      label: "Appointments",
+      icon: <Clock size={16} />,
+      badge: showroomAppointments.length || undefined,
+    },
     {
       page: "finance",
       label: "Finance",
@@ -4064,6 +4612,8 @@ function App() {
           </form>
         </div>
       )}
+      {appointmentModal}
+      {noteModal}
       {soldCelebration && (
         <div className="sold-celebration" aria-live="polite">
           <div className="sold-burst">
@@ -4180,10 +4730,14 @@ function App() {
           {/* ── DASHBOARD ──────────────────────────────────────── */}
           {currentPage === "dashboard" && (
             <>
-              <header className="page-header">
+              <header className="page-header dashboard-hero">
                 <div>
                   <p className="eyebrow">AutoSuite CRM</p>
                   <h1>Today's Overview</h1>
+                  <p className="page-subtitle">
+                    Live dealership command center for leads, follow-ups,
+                    appointments, sold customers, and service equity.
+                  </p>
                 </div>
                 <div className="header-actions">
                   <button type="button" onClick={() => navigate("leads")}>
@@ -4302,6 +4856,60 @@ function App() {
                   </div>
                 </div>
               </article>
+
+              {showroomAppointments.length > 0 && (
+                <article className="panel showroom-panel">
+                  <div className="appointment-tab-head">
+                    <div>
+                      <p className="eyebrow">In Showroom</p>
+                      <h2>
+                        {showroomAppointments.length} customers in showroom
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate("appointments")}
+                    >
+                      View Appointments
+                    </button>
+                  </div>
+                  <div className="task-list">
+                    {showroomAppointments.slice(0, 6).map((task) => {
+                      const customer = customers.find(
+                        (c) => c.id === task.customerId,
+                      );
+                      return (
+                        <div
+                          className="task-card appointment-card-full"
+                          key={task.id}
+                        >
+                          <div>
+                            <strong>{getCustomerName(task.customerId)}</strong>
+                            <span>
+                              {task.title} ·{" "}
+                              {new Date(task.dueAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="appointment-actions">
+                            <button
+                              type="button"
+                              onClick={() => customer && openProfile(customer)}
+                            >
+                              Profile
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateTaskStatus(task, "Complete")}
+                            >
+                              Complete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              )}
 
               {(todayTasks.length > 0 || overdueTasks.length > 0) && (
                 <article className="panel followup-panel">
@@ -5404,6 +6012,83 @@ function App() {
             </>
           )}
 
+          {/* ── APPOINTMENTS ─────────────────────────────────────── */}
+          {currentPage === "appointments" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Appointments</p>
+                  <h1>Appointment Desk</h1>
+                  <p className="page-subtitle">
+                    View, edit, mark showroom, and complete every appointment.
+                  </p>
+                </div>
+              </header>
+
+              <article className="panel task-list appointment-tab-list">
+                <div className="appointment-tab-head">
+                  <div>
+                    <p className="card-label">All Appointments</p>
+                    <h3>{allAppointmentTasks.length} total appointments</h3>
+                  </div>
+                </div>
+                {allAppointmentTasks.length === 0 && (
+                  <p className="empty-state">No appointments scheduled.</p>
+                )}
+                {allAppointmentTasks.map((task) => (
+                  <div
+                    className={`task-card appointment-card-full ${task.status === "Complete" ? "done" : ""}`}
+                    key={task.id}
+                  >
+                    <div>
+                      <strong>{task.title}</strong>
+                      <span>
+                        {getCustomerName(task.customerId)} · {task.priority} ·{" "}
+                        {task.status} · {new Date(task.dueAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="appointment-actions">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openProfile(
+                            customers.find((c) => c.id === task.customerId) ||
+                              customers[0],
+                          )
+                        }
+                      >
+                        Profile
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openAppointmentModal(task)}
+                      >
+                        Edit
+                      </button>
+                      {task.status !== "Showroom" &&
+                        task.status !== "Complete" && (
+                          <button
+                            type="button"
+                            onClick={() => updateTaskStatus(task, "Showroom")}
+                          >
+                            In Showroom
+                          </button>
+                        )}
+                      {task.status !== "Complete" && (
+                        <button
+                          type="button"
+                          onClick={() => updateTaskStatus(task, "Complete")}
+                        >
+                          Complete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </article>
+            </>
+          )}
+
           {/* ── FINANCE ──────────────────────────────────────────── */}
           {currentPage === "finance" && (
             <>
@@ -6198,49 +6883,54 @@ function App() {
                     instantly.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() =>
-                    setDesk({
-                      customerId: "",
-                      stockNumber: "",
-                      year: "",
-                      make: "",
-                      model: "",
-                      trim: "",
-                      msrp: "",
-                      sellingPrice: "",
-                      tradeYear: "",
-                      tradeMake: "",
-                      tradeModel: "",
-                      tradeACV: "",
-                      tradePayoff: "",
-                      downPayment: "",
-                      rebate: "",
-                      docFee: "699",
-                      titleFee: "100",
-                      regFee: "200",
-                      taxRate: "8.5",
-                      gap: false,
-                      gapPrice: "895",
-                      warranty: false,
-                      warrantyPrice: "2495",
-                      tireWheel: false,
-                      tirewheelPrice: "1195",
-                      paintPro: false,
-                      paintProPrice: "799",
-                      creditLife: false,
-                      creditLifePrice: "599",
-                      apr: "7.9",
-                      termMonths: "72",
-                      lender: "",
-                      buyerZip: "",
-                    })
-                  }
-                >
-                  Clear Desk
-                </button>
+                <div className="header-actions">
+                  <button type="button" onClick={saveDeskDeal}>
+                    Save Deal
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setDesk({
+                        customerId: "",
+                        stockNumber: "",
+                        year: "",
+                        make: "",
+                        model: "",
+                        trim: "",
+                        msrp: "",
+                        sellingPrice: "",
+                        tradeYear: "",
+                        tradeMake: "",
+                        tradeModel: "",
+                        tradeACV: "",
+                        tradePayoff: "",
+                        downPayment: "",
+                        rebate: "",
+                        docFee: "699",
+                        titleFee: "100",
+                        regFee: "200",
+                        taxRate: "8.5",
+                        gap: false,
+                        gapPrice: "895",
+                        warranty: false,
+                        warrantyPrice: "2495",
+                        tireWheel: false,
+                        tirewheelPrice: "1195",
+                        paintPro: false,
+                        paintProPrice: "799",
+                        creditLife: false,
+                        creditLifePrice: "599",
+                        apr: "7.9",
+                        termMonths: "72",
+                        lender: "",
+                        buyerZip: "",
+                      })
+                    }
+                  >
+                    Clear Desk
+                  </button>
+                </div>
               </header>
 
               <div className="desk-layout">
@@ -6254,9 +6944,7 @@ function App() {
                         <label>Select Customer</label>
                         <select
                           value={desk.customerId}
-                          onChange={(e) =>
-                            setDesk({ ...desk, customerId: e.target.value })
-                          }
+                          onChange={(e) => applyDeskCustomer(e.target.value)}
                         >
                           <option value="">— No customer selected —</option>
                           {customers.map((c) => (
@@ -6678,6 +7366,17 @@ function App() {
                       {desk.termMonths} mo · {desk.apr}% APR
                       {desk.lender ? ` · ${desk.lender}` : ""}
                     </p>
+                    {deskNumbers.equity > 0 && (
+                      <div className="cash-back-pill">
+                        <span>Customer equity / money back</span>
+                        <strong>
+                          $
+                          {deskNumbers.equity.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </strong>
+                      </div>
+                    )}
                   </div>
 
                   {/* Deal Breakdown */}
@@ -6729,7 +7428,7 @@ function App() {
                       >
                         <span>
                           {deskNumbers.equity > 0
-                            ? "– Trade Equity"
+                            ? "– Trade Equity / Money Back"
                             : "+ Negative Equity"}
                         </span>
                         <span>
@@ -6775,6 +7474,59 @@ function App() {
                     </div>
                   </div>
 
+                  {deskNumbers.financed > 0 && (
+                    <div className="desk-target-card">
+                      <div className="desk-target-head">
+                        <p className="desk-section-title">Payment Target</p>
+                        <span>Reverse-calculate cash needed</span>
+                      </div>
+                      <div className="desk-target-row">
+                        <label>
+                          Desired monthly payment
+                          <input
+                            placeholder="650"
+                            value={targetPayment}
+                            onChange={(e) => setTargetPayment(e.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={!targetPaymentResult}
+                          onClick={() => {
+                            if (!targetPaymentResult) return;
+                            setDesk({
+                              ...desk,
+                              downPayment: String(
+                                Math.ceil(targetPaymentResult.requiredDown),
+                              ),
+                            });
+                          }}
+                        >
+                          Apply Down
+                        </button>
+                      </div>
+                      {targetPaymentResult && (
+                        <div className="desk-target-result">
+                          <span>Recommended total down</span>
+                          <strong>
+                            $
+                            {targetPaymentResult.requiredDown.toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 0 },
+                            )}
+                          </strong>
+                          <small>
+                            Extra from current down: $
+                            {targetPaymentResult.additionalDown.toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 0 },
+                            )}
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Payment Grid */}
                   {deskNumbers.financed > 0 && (
                     <div className="payment-grid-wrap">
@@ -6783,20 +7535,68 @@ function App() {
                         {desk.apr}% APR — payments at different terms and down
                         payments
                       </p>
+                      <div className="payment-grid-down-editor">
+                        {paymentGridDowns.map((down, index) => {
+                          const downAmount = parseFloat(down) || 0;
+                          return (
+                            <div
+                              className={`payment-scenario-card ${
+                                downAmount ===
+                                (parseFloat(desk.downPayment) || 0)
+                                  ? "active"
+                                  : ""
+                              }`}
+                              key={index}
+                              onClick={() =>
+                                setDesk({
+                                  ...desk,
+                                  downPayment: String(downAmount),
+                                })
+                              }
+                            >
+                              <label onClick={(e) => e.stopPropagation()}>
+                                Down Option {index + 1}
+                                <input
+                                  value={down}
+                                  onChange={(e) => {
+                                    const next = [...paymentGridDowns];
+                                    next[index] = e.target.value.replace(
+                                      /[^\d.]/g,
+                                      "",
+                                    );
+                                    setPaymentGridDowns(next);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
                       <div className="payment-grid-scroll">
                         <table className="payment-grid-table">
                           <thead>
                             <tr>
                               <th>Term</th>
-                              {[0, 1000, 2000, 3000, 5000].map((d) => (
-                                <th key={d}>${d.toLocaleString()} down</th>
-                              ))}
+                              {paymentGridDowns.map((down, index) => {
+                                const d = parseFloat(down) || 0;
+                                return (
+                                  <th key={index}>
+                                    ${d.toLocaleString()} down
+                                  </th>
+                                );
+                              })}
                             </tr>
                           </thead>
                           <tbody>
                             {paymentGrid.map((row) => (
                               <tr
                                 key={row.term}
+                                onClick={() =>
+                                  setDesk({
+                                    ...desk,
+                                    termMonths: String(row.term),
+                                  })
+                                }
                                 className={
                                   row.term === parseInt(desk.termMonths)
                                     ? "grid-row-active"
@@ -6810,8 +7610,18 @@ function App() {
                                   <td
                                     key={i}
                                     className={pmt > 0 ? "" : "grid-zero"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDesk({
+                                        ...desk,
+                                        termMonths: String(row.term),
+                                        downPayment: String(
+                                          parseFloat(paymentGridDowns[i]) || 0,
+                                        ),
+                                      });
+                                    }}
                                   >
-                                    {pmt > 0 ? `$${pmt.toFixed(0)}` : "—"}
+                                    ${pmt.toFixed(0)}
                                   </td>
                                 ))}
                               </tr>
@@ -6828,7 +7638,7 @@ function App() {
 
           {/* ── ACTIVITIES ───────────────────────────────────────── */}
           {currentPage === "activities" && (
-            <>
+            <div className="activities-page">
               <header className="page-header">
                 <div>
                   <p className="eyebrow">Activity Log</p>
@@ -6840,8 +7650,15 @@ function App() {
                   </p>
                 </div>
               </header>
-              <article className="panel" style={{ marginBottom: 18 }}>
-                <p className="eyebrow">Log Activity</p>
+              <article className="panel activity-log-panel">
+                <div>
+                  <p className="eyebrow">Log Activity</p>
+                  <h2>Record a customer touchpoint</h2>
+                  <p className="panel-note">
+                    Capture calls, texts, emails, appointments, and notes in one
+                    clean timeline.
+                  </p>
+                </div>
                 <form className="contact-form" onSubmit={addActivity}>
                   <select
                     value={activityForm.customerId}
@@ -6902,7 +7719,7 @@ function App() {
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {/* ── SERVICE ──────────────────────────────────────────── */}

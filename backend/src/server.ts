@@ -126,7 +126,7 @@ type CrmTask = {
   dueAt: string;
   assignedTo: string;
   priority: "Low" | "Normal" | "High";
-  status: "Open" | "Complete";
+  status: "Open" | "Showroom" | "Complete";
   createdAt: string;
   completedAt?: string;
 };
@@ -1474,6 +1474,25 @@ app.patch("/api/tasks/:id/complete", (req, res) => {
   const task = db.tasks.find((item) => item.id === taskId);
   if (task) {
     addActivity(task.customerId, "Note", `Task completed: ${task.title}`);
+  }
+  saveDatabase();
+  res.json(task);
+});
+
+app.patch("/api/tasks/:id", (req, res) => {
+  const taskId = Number(req.params.id);
+  db.tasks = db.tasks.map((task) =>
+    task.id === taskId
+      ? {
+          ...task,
+          ...req.body,
+          customerId: Number(req.body.customerId ?? task.customerId),
+        }
+      : task,
+  );
+  const task = db.tasks.find((item) => item.id === taskId);
+  if (task) {
+    addActivity(task.customerId, "Note", `Task updated: ${task.title}`);
   }
   saveDatabase();
   res.json(task);

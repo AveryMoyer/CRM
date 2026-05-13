@@ -1,0 +1,509 @@
+/* Premium App-Wide UI Polish */
+:root {
+  --premium-bg: #eef3ff;
+  --premium-ink: #0b1220;
+  --premium-muted: #64748b;
+  --premium-border: rgba(148, 163, 184, 0.28);
+  --premium-card: rgba(255, 255, 255, 0.86);
+  --premium-primary: #4f46e5;
+  --premium-primary-2: #2563eb;
+  --premium-shadow: 0 22px 70px rgba(15, 23, 42, 0.12);
+  --premium-soft-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(79, 70, 229, 0.16), transparent 32%),
+    radial-gradient(
+      circle at 94% 18%,
+      rgba(14, 165, 233, 0.14),
+      transparent 30%
+    ),
+    linear-gradient(135deg, #f8fbff 0%, #eef3ff 48%, #f8fafc 100%);
+  color: var(--premium-ink);
+}
+
+.app-shell {
+  background:
+    radial-gradient(
+      circle at 18% 0%,
+      rgba(99, 102, 241, 0.14),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 92% 10%,
+      rgba(6, 182, 212, 0.12),
+      transparent 28%
+    ),
+    linear-gradient(135deg, #f8fbff 0%, #eef3ff 48%, #f8fafc 100%);
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96)),
+    radial-gradient(circle at top, rgba(99, 102, 241, 0.26), transparent 38%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.18);
+}
+
+.brand-mark {
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  box-shadow: 0 14px 28px rgba(99, 102, 241, 0.28);
+}
+
+.sidebar a,
+.sidebar-footer button,
+.bottom-nav-item,
+.bottom-nav-button {
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+  transform: translateX(3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+.sidebar a.active {
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.26), rgba(37, 99, 235, 0.12)),
+    rgba(255, 255, 255, 0.06);
+  color: #e0e7ff;
+}
+
+.workspace {
+  position: relative;
+}
+
+.workspace::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 240px;
+  height: 190px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.workspace > * {
+  position: relative;
+  z-index: 1;
+}
+
+.page-header {
+  padding: 24px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 28px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9),
+      rgba(248, 250, 252, 0.72)
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(99, 102, 241, 0.15),
+      transparent 32%
+    );
+  box-shadow: var(--premium-soft-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.page-header h1 {
+  font-size: clamp(28px, 3vw, 42px);
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.page-subtitle,
+.page-header p:not(.eyebrow) {
+  color: var(--premium-muted);
+}
+
+.eyebrow,
+.card-label {
+  color: #4f46e5;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.panel,
+.crm-contact-panel,
+.lead-card,
+.task-card,
+.finance-card,
+.credit-card,
+.trade-appraisal-card,
+.service-history-card,
+.vin-card,
+.ro-card,
+.pipeline-card-full,
+.kpi-card {
+  border: 1px solid var(--premium-border);
+  box-shadow: var(--premium-soft-shadow);
+  backdrop-filter: blur(12px);
+}
+
+.panel,
+.crm-contact-panel,
+.finance-card,
+.credit-card,
+.trade-appraisal-card,
+.service-history-card,
+.vin-card,
+.ro-card,
+.pipeline-card-full {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.93),
+      rgba(248, 250, 252, 0.86)
+    ),
+    #fff;
+  border-radius: 26px;
+}
+
+.panel:hover,
+.crm-contact-panel:hover,
+.lead-card:hover,
+.task-card:hover,
+.finance-card:hover,
+.credit-card:hover,
+.trade-appraisal-card:hover,
+.service-history-card:hover,
+.vin-card:hover,
+.ro-card:hover,
+.pipeline-card-full:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--premium-shadow);
+  border-color: rgba(99, 102, 241, 0.26);
+}
+
+.panel,
+.crm-contact-panel,
+.lead-card,
+.task-card,
+.finance-card,
+.credit-card,
+.trade-appraisal-card,
+.service-history-card,
+.vin-card,
+.ro-card,
+.pipeline-card-full {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.kpi-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  min-height: 126px;
+}
+
+.kpi-card::before {
+  content: "";
+  position: absolute;
+  inset: -40% -20% auto auto;
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  filter: blur(2px);
+}
+
+.kpi-card strong {
+  letter-spacing: -0.055em;
+}
+
+button,
+.header-actions button,
+.header-actions a,
+.search-go-btn,
+.lead-card button,
+.task-card button,
+.appointment-actions button,
+.crm-edit-actions button {
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    filter 0.14s ease,
+    background 0.14s ease;
+}
+
+button:hover,
+.header-actions button:hover,
+.header-actions a:hover,
+.search-go-btn:hover,
+.lead-card button:hover,
+.task-card button:hover,
+.appointment-actions button:hover,
+.crm-edit-actions button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.header-actions button,
+.header-actions a,
+.search-go-btn,
+.sold-btn,
+.showroom-btn {
+  background: linear-gradient(
+    135deg,
+    var(--premium-primary),
+    var(--premium-primary-2)
+  );
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.25);
+  font-weight: 900;
+}
+
+input,
+select,
+textarea,
+.search-input,
+.filter-select {
+  border-color: #dbe3ef;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.search-input:focus,
+.filter-select:focus {
+  border-color: var(--premium-primary);
+  background: #fff;
+  box-shadow:
+    0 0 0 4px rgba(79, 70, 229, 0.11),
+    0 12px 26px rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.customer-table,
+.report-table,
+.lead-list,
+.task-list,
+.activity-timeline {
+  border-radius: 22px;
+}
+
+.cust-row,
+.report-row,
+.timeline-item {
+  transition:
+    background 0.14s ease,
+    transform 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.cust-row:hover,
+.report-row:hover,
+.timeline-item:hover {
+  background: rgba(238, 242, 255, 0.72);
+  transform: translateX(2px);
+}
+
+.status-badge,
+.temp-badge,
+.meta-tag,
+.active-search-badge,
+.nav-badge {
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.crm-quick-actions {
+  background: linear-gradient(
+    135deg,
+    rgba(248, 250, 252, 0.92),
+    rgba(238, 242, 255, 0.72)
+  );
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.quick-action-btn {
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.quick-action-btn:hover {
+  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.14);
+}
+
+.showroom-btn {
+  position: relative;
+  overflow: hidden;
+  padding: 11px 17px;
+  border: 1px solid rgba(251, 191, 36, 0.46);
+  border-radius: 999px;
+  background:
+    radial-gradient(
+      circle at 18% 0%,
+      rgba(255, 255, 255, 0.42),
+      transparent 28%
+    ),
+    linear-gradient(135deg, #f59e0b, #ea580c 55%, #c2410c);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow:
+    0 14px 32px rgba(234, 88, 12, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.showroom-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transform: translateX(-120%);
+  transition: transform 0.36s ease;
+}
+
+.showroom-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  box-shadow:
+    0 18px 40px rgba(234, 88, 12, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.showroom-btn:hover::before {
+  transform: translateX(120%);
+}
+
+.vin-decoder-panel,
+.vin-decoder-panel:hover {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 28px;
+  background:
+    radial-gradient(
+      circle at 18% 18%,
+      rgba(14, 165, 233, 0.22),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 86% 0%,
+      rgba(99, 102, 241, 0.24),
+      transparent 34%
+    ),
+    linear-gradient(135deg, #0f172a, #1e293b 48%, #111827);
+  color: #e5e7eb;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+  transform: none;
+}
+
+.vin-decoder-panel::after {
+  position: absolute;
+  top: -120px;
+  right: -100px;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.18);
+  content: "";
+}
+
+.vin-decoder-panel .eyebrow {
+  color: #67e8f9;
+}
+
+.vin-hero h2 {
+  color: #fff;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+}
+
+.vin-hero p {
+  color: #cbd5e1;
+}
+
+.vin-count {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vin-count strong {
+  color: #fff;
+}
+
+.vin-search input {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.76);
+  color: #fff;
+  box-shadow: none;
+}
+
+.vin-search input:focus {
+  border-color: rgba(34, 211, 238, 0.65);
+  background: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14);
+}
+
+.vin-search button {
+  background: linear-gradient(135deg, #22c55e, #0ea5e9);
+  color: #fff;
+  box-shadow: 0 16px 38px rgba(14, 165, 233, 0.3);
+}
+
+.vin-samples button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  box-shadow: none;
+}
+
+.vin-samples button:hover {
+  background: rgba(14, 165, 233, 0.16);
+  color: #fff;
+}
+
+.bottom-nav {
+  box-shadow: 0 -18px 50px rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(14px);
+}
+
+@media (max-width: 900px) {
+  .workspace::before {
+    left: 0;
+  }
+
+  .page-header {
+    border-radius: 22px;
+    padding: 20px;
+  }
+
+  .panel,
+  .crm-contact-panel,
+  .finance-card,
+  .credit-card,
+  .trade-appraisal-card,
+  .service-history-card,
+  .vin-card,
+  .ro-card,
+  .pipeline-card-full {
+    border-radius: 22px;
+  }
+}

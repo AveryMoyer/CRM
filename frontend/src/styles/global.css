@@ -5040,3 +5040,110 @@ a.crm-info-value:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Dashboard Visual Upgrade ─────────────────────────────────────────────── */
+.dashboard-hero {
+  position: relative;
+  min-height: 158px;
+  overflow: hidden;
+  padding: 24px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 28px !important;
+  background:
+    radial-gradient(
+      circle at 86% 18%,
+      rgba(14, 165, 233, 0.28),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 12% 0%,
+      rgba(99, 102, 241, 0.34),
+      transparent 32%
+    ),
+    linear-gradient(135deg, #020617 0%, #111827 46%, #1e1b4b 100%) !important;
+  color: #fff;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.22) !important;
+}
+
+.dashboard-hero::after {
+  position: absolute;
+  right: -38px;
+  bottom: -54px;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(14, 165, 233, 0.08)
+  );
+  font-weight: 1000;
+  line-height: 1;
+  content: "";
+}
+
+.dashboard-hero .header-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #4f46e5, #2563eb) !important;
+  color: #fff;
+  font-weight: 900;
+}
+
+.dashboard-hero .eyebrow {
+  color: #93c5fd !important;
+}
+
+.dashboard-hero h1 {
+  color: #ffffff !important;
+  text-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+}
+
+.dashboard-hero .page-subtitle {
+  max-width: 700px;
+  color: #dbeafe !important;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.kpi-card span,
+.kpi-card strong,
+.kpi-card small {
+  position: relative;
+  z-index: 2;
+}
+
+.kpi-card strong {
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.funnel-panel {
+  border-left: 5px solid #4f46e5 !important;
+}
+
+.funnel-stages {
+  padding: 14px;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.funnel-stage {
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.funnel-stage:hover {
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .dashboard-hero {
+    min-height: auto;
+  }
+  .dashboard-hero::after {
+    width: 120px;
+    height: 120px;
+    right: -42px;
+    bottom: -42px;
+  }
+}

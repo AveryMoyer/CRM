@@ -1,0 +1,276 @@
+/* Premium Customer Profile */
+.profile-panel {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(30, 41, 59, 0.1);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.12), transparent 34%),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(79, 70, 229, 0.14),
+      transparent 34%
+    ),
+    linear-gradient(180deg, #f8fafc, #e2e8f0);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.14);
+}
+
+.profile-panel,
+.profile-panel * {
+  min-width: 0;
+}
+
+.profile-tabs {
+  gap: 10px;
+  margin: 0;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.92)),
+    #0f172a;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: nowrap;
+}
+
+.profile-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-tabs button {
+  flex: 0 0 auto;
+  padding: 10px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.profile-tabs button:hover {
+  border-color: rgba(125, 211, 252, 0.38);
+  background: rgba(14, 165, 233, 0.12);
+  color: #fff;
+}
+
+.profile-tabs button.active {
+  border-color: rgba(103, 232, 249, 0.52);
+  background: linear-gradient(135deg, #0ea5e9, #4f46e5);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(14, 165, 233, 0.24);
+}
+
+.profile-panel > :not(.profile-tabs),
+.overview-layout,
+.deals-layout,
+.profile-grid,
+.crm-overview {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.profile-panel > :not(.profile-tabs) {
+  margin: 18px;
+}
+
+.overview-layout,
+.deals-layout,
+.crm-overview {
+  gap: 18px;
+  align-items: start;
+}
+
+.deals-layout {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.detail-card,
+.mini-form,
+.deal-list,
+.activity-timeline,
+.service-history-list,
+.message-list,
+.appointment-list {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.detail-card,
+.mini-form {
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(59, 130, 246, 0.1),
+      transparent 32%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
+}
+
+.detail-card h3,
+.mini-form strong,
+.appointment-tab-head h3 {
+  color: #0f172a;
+  letter-spacing: -0.025em;
+}
+
+.card-label {
+  color: #4f46e5;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.deal-list {
+  display: grid;
+  gap: 10px;
+}
+
+.deal-card {
+  max-width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.14);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(79, 70, 229, 0.08),
+      transparent 34%
+    ),
+    linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.075);
+}
+
+.crm-contact-panel,
+.crm-details-panel,
+.crm-next-step-card,
+.crm-quick-actions,
+.profile-card {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 24px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(14, 165, 233, 0.1),
+      transparent 30%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.9));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
+}
+
+.crm-contact-panel {
+  border-top: 4px solid #0ea5e9;
+}
+
+.crm-details-panel {
+  border-top: 4px solid #4f46e5;
+}
+
+.crm-next-step-card {
+  border-top: 4px solid #10b981;
+}
+
+.profile-card {
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.crm-contact-panel h2,
+.crm-details-panel h3,
+.crm-next-step-card strong,
+.profile-card strong {
+  color: #0f172a;
+  letter-spacing: -0.025em;
+}
+
+.crm-contact-panel p,
+.crm-details-panel p,
+.crm-next-step-card span,
+.profile-card span {
+  overflow-wrap: anywhere;
+}
+
+.deal-card.clickable:hover {
+  border-color: rgba(79, 70, 229, 0.36);
+  background: linear-gradient(135deg, #eef2ff, #ffffff);
+  transform: translateY(-1px);
+}
+
+.deal-card strong,
+.deal-card span,
+.deal-card small,
+.timeline-item strong,
+.timeline-item span,
+.timeline-item small {
+  overflow-wrap: anywhere;
+}
+
+.deal-card select,
+.mini-form input,
+.mini-form select,
+.mini-form textarea,
+.profile-grid input,
+.profile-grid select,
+.profile-grid textarea {
+  max-width: 100%;
+  border-radius: 14px;
+  border-color: #dbe3ef;
+  background: #fff;
+}
+
+.activity-timeline.full-timeline,
+.activity-timeline,
+.service-history-list {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+}
+
+.timeline-item {
+  border-bottom-color: rgba(226, 232, 240, 0.9);
+}
+
+.timeline-dot {
+  box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.1);
+}
+
+.appointment-tab-head {
+  gap: 12px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.appointment-tab-head button,
+.mini-form button,
+.profile-content button:not(.deal-card) {
+  max-width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .deals-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .profile-content {
+    padding: 14px;
+  }
+
+  .overview-layout,
+  .deals-layout,
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-tabs {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
