@@ -593,7 +593,7 @@ function addActivity(customerId: number, type: Activity["type"], note: string) {
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors({ origin: "*" }));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "auto-retail-crm-api" });

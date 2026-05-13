@@ -1040,6 +1040,8 @@ function App() {
     phone: "",
     avatarUrl: "",
   });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profilePhotoLoading, setProfilePhotoLoading] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">(
     "login",
   );
@@ -2118,6 +2120,11 @@ function App() {
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!currentUser) return;
+    if (profilePhotoLoading) {
+      setAppMessage("Please wait for the profile photo to finish loading.");
+      return;
+    }
+    setProfileSaving(true);
     try {
       const res = await fetch(
         `${API_BASE}/api/users/${currentUser.id}/profile`,
@@ -2138,6 +2145,8 @@ function App() {
       setAppMessage("Profile updated.");
     } catch {
       setAppMessage("Could not connect to backend to update profile.");
+    } finally {
+      setProfileSaving(false);
     }
   }
 
@@ -2147,12 +2156,23 @@ function App() {
       setAppMessage("Please upload an image file.");
       return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setAppMessage("Profile photo must be smaller than 5MB.");
+      return;
+    }
+    setProfilePhotoLoading(true);
     const reader = new FileReader();
     reader.onload = () => {
       setSettingsForm((form) => ({
         ...form,
         avatarUrl: String(reader.result || ""),
       }));
+      setProfilePhotoLoading(false);
+      setAppMessage("Profile photo ready. Click Save Profile to keep it.");
+    };
+    reader.onerror = () => {
+      setProfilePhotoLoading(false);
+      setAppMessage("Could not read that profile photo.");
     };
     reader.readAsDataURL(file);
   }
@@ -4811,9 +4831,13 @@ function App() {
               <input
                 type="file"
                 accept="image/*"
+                disabled={profileSaving}
                 onChange={(e) => uploadProfilePicture(e.target.files?.[0])}
               />
             </label>
+            {profilePhotoLoading && (
+              <p className="panel-note">Loading profile photo…</p>
+            )}
             {settingsForm.avatarUrl && (
               <button
                 type="button"
@@ -4843,8 +4867,12 @@ function App() {
               >
                 Cancel
               </button>
-              <button type="submit" className="dup-add-anyway">
-                Save Profile
+              <button
+                type="submit"
+                className="dup-add-anyway"
+                disabled={profileSaving || profilePhotoLoading}
+              >
+                {profileSaving ? "Saving…" : "Save Profile"}
               </button>
             </div>
           </form>
