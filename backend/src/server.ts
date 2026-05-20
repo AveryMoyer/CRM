@@ -1,6 +1,6 @@
 import cors from "cors";
 import dotenv from "dotenv";
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import helmet from "helmet";
@@ -11,8 +11,89 @@ const app = express();
 const port = process.env.PORT || 4000;
 const dataFile = join(process.cwd(), "data", "crm-data.json");
 
+// ─── RBAC Role Hierarchy ─────────────────────────────────────────────────────
+type CrmRole =
+  | "SuperAdmin" // Platform owner — sees all dealerships
+  | "DealerGroupAdmin" // Owns/manages multiple rooftops in a group
+  | "DealerPrincipal" // Dealer owner — one rooftop, all departments
+  | "GeneralManager" // GM — one rooftop, all departments
+  | "SalesManager" // Sales dept only
+  | "FinanceManager" // F&I dept only
+  | "ServiceManager" // Service dept only
+  | "Salesperson" // Only their own assigned leads
+  | "ServiceAdvisor" // Only their assigned ROs
+  | "Technician"; // View-only on assigned ROs
+
+const ROLE_RANK: Record<CrmRole, number> = {
+  SuperAdmin: 100,
+  DealerGroupAdmin: 90,
+  DealerPrincipal: 80,
+  GeneralManager: 70,
+  SalesManager: 60,
+  FinanceManager: 60,
+  ServiceManager: 60,
+  Salesperson: 30,
+  ServiceAdvisor: 30,
+  Technician: 20,
+};
+
+function hasRank(role: CrmRole, minimum: CrmRole): boolean {
+  return (ROLE_RANK[role] ?? 0) >= ROLE_RANK[minimum];
+}
+
+// ─── Tenant / Auth context attached to every request ─────────────────────────
+declare global {
+  namespace Express {
+    interface Request {
+      tenant: {
+        dealershipId: number;
+        role: CrmRole;
+        userId: number;
+        dealerGroupId?: number;
+      };
+    }
+  }
+}
+
+// ─── Dealer Group (parent company owning multiple rooftops) ─────────────────
+type DealerGroup = {
+  id: number;
+  name: string; // e.g. "AutoNation Southeast"
+  contactEmail: string;
+  contactPhone: string;
+  plan: "starter" | "pro" | "enterprise";
+  active: boolean;
+  createdAt: string;
+};
+
+// ─── Dealership (one physical rooftop / location) ────────────────────────────
+type Dealership = {
+  id: number;
+  dealerGroupId?: number; // null = independent dealer
+  name: string; // e.g. "Ford of Hollywood"
+  subdomain: string; // e.g. "fordofhollywood" → fordofhollywood.yourcrm.com
+  customDomain?: string; // e.g. "crm.fordofhollywood.com"
+  brand: string; // e.g. "Ford"
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  phone: string;
+  email: string;
+  logoUrl: string;
+  primaryColor: string; // hex, used for portal branding
+  accentColor: string;
+  dealerCode?: string; // DMS dealer code (Dealertrack, RouteOne, etc.)
+  dmsProvider?: string; // "Dealertrack" | "RouteOne" | "CUDL" | "FEX DMS"
+  leadRoutingZips?: string[]; // zip codes that auto-route leads here
+  active: boolean;
+  plan: "starter" | "pro" | "enterprise";
+  createdAt: string;
+};
+
 type Customer = {
   id: number;
+  dealershipId: number;
   firstName: string;
   lastName: string;
   email: string;
@@ -31,10 +112,12 @@ type Customer = {
   assignedTo: string;
   createdAt?: string;
   nextFollowUp: string;
+  masterCustomerId?: number;
 };
 
 type FinanceApplication = {
   id: number;
+  dealershipId: number;
   customerId: number;
   applicantName?: string;
   dateOfBirth?: string;
@@ -63,6 +146,7 @@ type FinanceApplication = {
 
 type CreditApplication = {
   id: number;
+  dealershipId: number;
   customerId: number;
   applicantName: string;
   dateOfBirth: string;
@@ -105,6 +189,7 @@ type CreditApplication = {
 
 type TradeIn = {
   id: number;
+  dealershipId: number;
   customerId: number;
   year: string;
   make: string;
@@ -117,6 +202,7 @@ type TradeIn = {
 
 type VehicleSale = {
   id: number;
+  dealershipId: number;
   customerId: number;
   stockNumber: string;
   year: string;
@@ -128,6 +214,7 @@ type VehicleSale = {
 
 type Activity = {
   id: number;
+  dealershipId: number;
   customerId: number;
   type: "Call" | "Text" | "Email" | "Appointment" | "Note";
   note: string;
@@ -136,6 +223,7 @@ type Activity = {
 
 type CrmTask = {
   id: number;
+  dealershipId: number;
   customerId: number;
   title: string;
   type: "Call" | "Text" | "Email" | "Appointment" | "Follow-Up";
@@ -149,6 +237,7 @@ type CrmTask = {
 
 type Message = {
   id: number;
+  dealershipId: number;
   customerId: number;
   channel: "Text" | "Email";
   direction: "Outbound" | "Inbound";
@@ -160,12 +249,16 @@ type Message = {
 
 type User = {
   id: number;
+  dealershipId: number; // primary rooftop
+  dealerGroupId?: number; // if group admin, which group
   name: string;
   email: string;
   password: string;
-  role: string;
+  role: CrmRole;
   phone?: string;
   avatarUrl?: string;
+  // Cross-store access: extra dealership IDs this user can access
+  crossStoreAccess?: number[];
 };
 
 type RoStatus =
@@ -189,6 +282,7 @@ type ServiceLine = {
 
 type RepairOrder = {
   id: number;
+  dealershipId: number;
   roNumber: string;
   customerId?: number;
   customerName: string;
@@ -228,6 +322,8 @@ type VinDecodedVehicle = {
 };
 
 type Database = {
+  dealerGroups: DealerGroup[];
+  dealerships: Dealership[];
   users: User[];
   customers: Customer[];
   financeApplications: FinanceApplication[];
@@ -240,21 +336,105 @@ type Database = {
   repairOrders: RepairOrder[];
 };
 
+const DEFAULT_DEALERSHIP_ID = 1;
+const DEFAULT_GROUP_ID = 1;
+
 const defaultDatabase: Database = {
+  dealerGroups: [
+    {
+      id: DEFAULT_GROUP_ID,
+      name: "Demo Auto Group",
+      contactEmail: "admin@demoautogroup.com",
+      contactPhone: "(800) 555-0100",
+      plan: "enterprise",
+      active: true,
+      createdAt: new Date().toISOString(),
+    },
+  ],
+  dealerships: [
+    {
+      id: DEFAULT_DEALERSHIP_ID,
+      dealerGroupId: DEFAULT_GROUP_ID,
+      name: "Demo Ford",
+      subdomain: "demoford",
+      brand: "Ford",
+      address: "1000 Main Street",
+      city: "Houston",
+      state: "TX",
+      zip: "77001",
+      phone: "(713) 555-0100",
+      email: "info@demoford.example.com",
+      logoUrl: "",
+      primaryColor: "#003087",
+      accentColor: "#FF6B00",
+      dealerCode: "TX-FORD-001",
+      dmsProvider: "Dealertrack",
+      leadRoutingZips: ["77001", "77002", "77003"],
+      active: true,
+      plan: "enterprise",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      dealerGroupId: DEFAULT_GROUP_ID,
+      name: "Demo Kia",
+      subdomain: "demokia",
+      brand: "Kia",
+      address: "2000 Commerce Blvd",
+      city: "Houston",
+      state: "TX",
+      zip: "77004",
+      phone: "(713) 555-0200",
+      email: "info@demokia.example.com",
+      logoUrl: "",
+      primaryColor: "#BB0000",
+      accentColor: "#CCCCCC",
+      dealerCode: "TX-KIA-001",
+      dmsProvider: "RouteOne",
+      leadRoutingZips: ["77004", "77005"],
+      active: true,
+      plan: "pro",
+      createdAt: new Date().toISOString(),
+    },
+  ],
   users: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      dealerGroupId: DEFAULT_GROUP_ID,
       name: "Avery Moyer",
       email: "avery@example.com",
       password: "password",
-      role: "Sales Manager",
+      role: "SalesManager",
       phone: "(713) 555-0188",
+      avatarUrl: "",
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      dealerGroupId: DEFAULT_GROUP_ID,
+      name: "Group Admin",
+      email: "groupadmin@example.com",
+      password: "password",
+      role: "DealerGroupAdmin",
+      phone: "",
+      avatarUrl: "",
+    },
+    {
+      id: 3,
+      dealershipId: 2,
+      name: "Kia Manager",
+      email: "manager@demokia.example.com",
+      password: "password",
+      role: "GeneralManager",
+      phone: "",
       avatarUrl: "",
     },
   ],
   customers: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       firstName: "Jordan",
       lastName: "Lee",
       email: "jordan@example.com",
@@ -268,6 +448,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       firstName: "Taylor",
       lastName: "Smith",
       email: "taylor@example.com",
@@ -281,6 +462,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 9,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       firstName: "Ernesto",
       lastName: "Alverez",
       email: "ernesto.alverez@gmail.com",
@@ -296,6 +478,7 @@ const defaultDatabase: Database = {
   financeApplications: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 2,
       employmentStatus: "Full-time",
       monthlyIncome: 6200,
@@ -307,6 +490,7 @@ const defaultDatabase: Database = {
   creditApplications: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 2,
       applicantName: "Taylor Smith",
       dateOfBirth: "1991-06-12",
@@ -350,6 +534,7 @@ const defaultDatabase: Database = {
   tradeIns: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 2,
       year: "2018",
       make: "Honda",
@@ -360,6 +545,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 9,
       year: "2023",
       make: "Ford",
@@ -373,6 +559,7 @@ const defaultDatabase: Database = {
   vehicleSales: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 2,
       stockNumber: "A1024",
       year: "2023",
@@ -385,6 +572,7 @@ const defaultDatabase: Database = {
   activities: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 1,
       type: "Appointment",
       note: "Scheduled test drive for Camry.",
@@ -394,6 +582,7 @@ const defaultDatabase: Database = {
   tasks: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 1,
       title: "Confirm Camry test drive",
       type: "Call",
@@ -405,6 +594,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 2,
       title: "Send F-150 payment options",
       type: "Email",
@@ -418,6 +608,7 @@ const defaultDatabase: Database = {
   messages: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       customerId: 1,
       channel: "Text",
       direction: "Outbound",
@@ -429,6 +620,7 @@ const defaultDatabase: Database = {
   repairOrders: [
     {
       id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       roNumber: "RO-240501",
       customerId: 1,
       customerName: "Jordan Lee",
@@ -472,6 +664,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       roNumber: "RO-240502",
       customerName: "Walk-in Customer",
       customerPhone: "(555) 000-1234",
@@ -503,6 +696,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       roNumber: "RO-240503",
       customerId: 5,
       customerName: "Riley Wilson",
@@ -544,6 +738,7 @@ const defaultDatabase: Database = {
     },
     {
       id: 4,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
       roNumber: "RO-240504",
       customerName: "Marcus Bell",
       customerPhone: "(555) 321-7654",
@@ -595,6 +790,14 @@ function loadDatabase(): Database {
   return {
     ...defaultDatabase,
     ...saved,
+    dealerGroups: mergeSeedRecords(
+      saved.dealerGroups,
+      defaultDatabase.dealerGroups,
+    ),
+    dealerships: mergeSeedRecords(
+      saved.dealerships,
+      defaultDatabase.dealerships,
+    ),
     customers: mergeSeedRecords(saved.customers, defaultDatabase.customers),
     tradeIns: mergeSeedRecords(saved.tradeIns, defaultDatabase.tradeIns),
     tasks: saved.tasks ?? defaultDatabase.tasks,
@@ -610,10 +813,16 @@ function saveDatabase() {
   writeFileSync(dataFile, JSON.stringify(db, null, 2));
 }
 
-function addActivity(customerId: number, type: Activity["type"], note: string) {
+function addActivity(
+  dealershipId: number,
+  customerId: number,
+  type: Activity["type"],
+  note: string,
+) {
   db.activities = [
     {
       id: Date.now(),
+      dealershipId,
       customerId,
       type,
       note,
@@ -623,12 +832,248 @@ function addActivity(customerId: number, type: Activity["type"], note: string) {
   ];
 }
 
+// ─── Tenant Resolution Middleware ────────────────────────────────────────────
+// Reads X-Dealership-Id header (set by frontend after login).
+// Falls back to DEFAULT_DEALERSHIP_ID for local dev / single-tenant mode.
+// In production, swap this for JWT verification.
+function tenantMiddleware(req: Request, res: Response, next: NextFunction) {
+  const headerDealershipId = Number(req.headers["x-dealership-id"] || 0);
+  const headerUserId = Number(req.headers["x-user-id"] || 1);
+  const headerRole = (req.headers["x-user-role"] as CrmRole) || "Salesperson";
+  const headerGroupId =
+    Number(req.headers["x-dealer-group-id"] || 0) || undefined;
+
+  // SuperAdmin can pass dealershipId 0 to operate across all rooftops
+  const dealershipId = headerDealershipId || DEFAULT_DEALERSHIP_ID;
+
+  req.tenant = {
+    dealershipId,
+    role: headerRole,
+    userId: headerUserId,
+    dealerGroupId: headerGroupId,
+  };
+  next();
+}
+
+// Helper: resolve visible dealership IDs for the calling user
+function visibleDealershipIds(tenant: Request["tenant"]): number[] | null {
+  if (tenant.role === "SuperAdmin") return null; // null = all
+  if (tenant.role === "DealerGroupAdmin" && tenant.dealerGroupId) {
+    return db.dealerships
+      .filter((d) => d.dealerGroupId === tenant.dealerGroupId && d.active)
+      .map((d) => d.id);
+  }
+  // For all other roles: primary rooftop + any crossStoreAccess grants
+  const user = db.users.find((u) => u.id === tenant.userId);
+  const extra = user?.crossStoreAccess ?? [];
+  return [tenant.dealershipId, ...extra];
+}
+
+// Helper: check if a record belongs to tenant's visible scope
+function inScope(
+  tenant: Request["tenant"],
+  recordDealershipId: number,
+): boolean {
+  const ids = visibleDealershipIds(tenant);
+  if (ids === null) return true;
+  return ids.includes(recordDealershipId);
+}
+
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
+app.use(tenantMiddleware);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "auto-retail-crm-api" });
+});
+
+// ─── Dealership / Rooftop Management Routes ──────────────────────────────────
+
+// List all dealer groups (SuperAdmin only)
+app.get("/api/dealer-groups", (req, res) => {
+  if (!hasRank(req.tenant.role, "DealerGroupAdmin")) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  if (req.tenant.role === "SuperAdmin") {
+    res.json(db.dealerGroups);
+    return;
+  }
+  res.json(db.dealerGroups.filter((g) => g.id === req.tenant.dealerGroupId));
+});
+
+app.post("/api/dealer-groups", (req, res) => {
+  if (req.tenant.role !== "SuperAdmin") {
+    res.status(403).json({ message: "SuperAdmin only" });
+    return;
+  }
+  const group: DealerGroup = {
+    id: Date.now(),
+    name: String(req.body.name || "").trim(),
+    contactEmail: String(req.body.contactEmail || "").trim(),
+    contactPhone: String(req.body.contactPhone || "").trim(),
+    plan: req.body.plan || "starter",
+    active: true,
+    createdAt: new Date().toISOString(),
+  };
+  db.dealerGroups = [group, ...db.dealerGroups];
+  saveDatabase();
+  res.status(201).json(group);
+});
+
+// List dealerships visible to caller
+app.get("/api/dealerships", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const result =
+    ids === null
+      ? db.dealerships
+      : db.dealerships.filter((d) => ids.includes(d.id));
+  res.json(result);
+});
+
+// Get single dealership
+app.get("/api/dealerships/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const dealership = db.dealerships.find((d) => d.id === id);
+  if (!dealership) {
+    res.status(404).json({ message: "Dealership not found" });
+    return;
+  }
+  if (!inScope(req.tenant, dealership.id)) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  res.json(dealership);
+});
+
+// Create new dealership/rooftop (SuperAdmin or DealerGroupAdmin)
+app.post("/api/dealerships", (req, res) => {
+  if (!hasRank(req.tenant.role, "DealerGroupAdmin")) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  const subdomain = String(req.body.subdomain || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]/g, "-");
+  if (db.dealerships.some((d) => d.subdomain === subdomain)) {
+    res.status(409).json({ message: "Subdomain already in use" });
+    return;
+  }
+  const dealership: Dealership = {
+    id: Date.now(),
+    dealerGroupId: req.body.dealerGroupId
+      ? Number(req.body.dealerGroupId)
+      : req.tenant.dealerGroupId,
+    name: String(req.body.name || "").trim(),
+    subdomain,
+    customDomain: req.body.customDomain || undefined,
+    brand: String(req.body.brand || "").trim(),
+    address: String(req.body.address || "").trim(),
+    city: String(req.body.city || "").trim(),
+    state: String(req.body.state || "").trim(),
+    zip: String(req.body.zip || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    email: String(req.body.email || "").trim(),
+    logoUrl: req.body.logoUrl || "",
+    primaryColor: req.body.primaryColor || "#1a1a2e",
+    accentColor: req.body.accentColor || "#e94560",
+    dealerCode: req.body.dealerCode || undefined,
+    dmsProvider: req.body.dmsProvider || undefined,
+    leadRoutingZips: req.body.leadRoutingZips || [],
+    active: true,
+    plan: req.body.plan || "starter",
+    createdAt: new Date().toISOString(),
+  };
+  db.dealerships = [dealership, ...db.dealerships];
+  saveDatabase();
+  res.status(201).json(dealership);
+});
+
+// Update dealership branding/settings
+app.put("/api/dealerships/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.dealerships.find((d) => d.id === id);
+  if (!existing) {
+    res.status(404).json({ message: "Dealership not found" });
+    return;
+  }
+  if (
+    !inScope(req.tenant, existing.id) ||
+    !hasRank(req.tenant.role, "GeneralManager")
+  ) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  const updated: Dealership = {
+    ...existing,
+    ...req.body,
+    id: existing.id,
+    createdAt: existing.createdAt,
+  };
+  db.dealerships = db.dealerships.map((d) => (d.id === id ? updated : d));
+  saveDatabase();
+  res.json(updated);
+});
+
+// Resolve subdomain → dealership (called by frontend on load)
+app.get("/api/resolve-tenant", (req, res) => {
+  const subdomain = String(req.query.subdomain || "")
+    .toLowerCase()
+    .trim();
+  const domain = String(req.query.domain || "")
+    .toLowerCase()
+    .trim();
+  let dealership: Dealership | undefined;
+  if (subdomain)
+    dealership = db.dealerships.find(
+      (d) => d.subdomain === subdomain && d.active,
+    );
+  if (!dealership && domain)
+    dealership = db.dealerships.find(
+      (d) => d.customDomain === domain && d.active,
+    );
+  if (!dealership) {
+    res.status(404).json({ message: "Dealership not found" });
+    return;
+  }
+  res.json({
+    id: dealership.id,
+    name: dealership.name,
+    brand: dealership.brand,
+    logoUrl: dealership.logoUrl,
+    primaryColor: dealership.primaryColor,
+    accentColor: dealership.accentColor,
+    plan: dealership.plan,
+  });
+});
+
+// Lead routing: given a zip code, which dealership should get this lead?
+app.get("/api/route-lead", (req, res) => {
+  const zip = String(req.query.zip || "").trim();
+  const brand = String(req.query.brand || "")
+    .toLowerCase()
+    .trim();
+  if (!zip) {
+    res.status(400).json({ message: "zip is required" });
+    return;
+  }
+  let match = db.dealerships.find(
+    (d) =>
+      d.active &&
+      d.leadRoutingZips?.includes(zip) &&
+      (!brand || d.brand.toLowerCase() === brand),
+  );
+  if (!match && brand)
+    match = db.dealerships.find(
+      (d) => d.active && d.brand.toLowerCase() === brand,
+    );
+  if (!match) {
+    res.status(404).json({ message: "No matching dealership for this lead" });
+    return;
+  }
+  res.json({ dealershipId: match.id, dealershipName: match.name });
 });
 
 app.get("/api/vin/:vin", async (req, res) => {
@@ -982,12 +1427,16 @@ app.post("/api/signup", (req, res) => {
     return;
   }
 
+  const dealershipId = req.body.dealershipId
+    ? Number(req.body.dealershipId)
+    : DEFAULT_DEALERSHIP_ID;
   const user: User = {
     id: Date.now(),
+    dealershipId,
     name,
     email,
     password,
-    role: "Sales Consultant",
+    role: "Salesperson",
     phone: "",
     avatarUrl: "",
   };
@@ -1003,7 +1452,10 @@ app.post("/api/signup", (req, res) => {
       email: user.email,
       phone: user.phone,
       avatarUrl: user.avatarUrl,
+      dealershipId: user.dealershipId,
+      dealerGroupId: user.dealerGroupId,
     },
+    dealership: db.dealerships.find((d) => d.id === user.dealershipId),
   });
 });
 
@@ -1021,6 +1473,7 @@ app.post("/api/login", (req, res) => {
     return;
   }
 
+  const dealership = db.dealerships.find((d) => d.id === user.dealershipId);
   res.json({
     token: `demo-token-${user.id}`,
     user: {
@@ -1030,7 +1483,19 @@ app.post("/api/login", (req, res) => {
       email: user.email,
       phone: user.phone,
       avatarUrl: user.avatarUrl,
+      dealershipId: user.dealershipId,
+      dealerGroupId: user.dealerGroupId,
     },
+    dealership: dealership
+      ? {
+          id: dealership.id,
+          name: dealership.name,
+          brand: dealership.brand,
+          logoUrl: dealership.logoUrl,
+          primaryColor: dealership.primaryColor,
+          accentColor: dealership.accentColor,
+        }
+      : null,
   });
 });
 
@@ -1054,7 +1519,7 @@ app.put("/api/users/:id/profile", (req, res) => {
     ...existing,
     name: String(req.body.name || existing.name).trim(),
     email,
-    role: String(req.body.role || existing.role).trim(),
+    role: (req.body.role || existing.role) as CrmRole,
     phone: String(req.body.phone || "").trim(),
     avatarUrl: String(req.body.avatarUrl || "").trim(),
   };
@@ -1096,34 +1561,60 @@ app.post("/api/forgot-password", (req, res) => {
   res.json({ message: "Password updated. You can log in now." });
 });
 
-app.get("/api/bootstrap", (_req, res) => {
-  res.json(db);
+app.get("/api/bootstrap", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  if (ids === null) {
+    res.json(db);
+    return;
+  }
+  res.json({
+    ...db,
+    customers: db.customers.filter((r) => ids.includes(r.dealershipId)),
+    financeApplications: db.financeApplications.filter((r) =>
+      ids.includes(r.dealershipId),
+    ),
+    creditApplications: db.creditApplications.filter((r) =>
+      ids.includes(r.dealershipId),
+    ),
+    tradeIns: db.tradeIns.filter((r) => ids.includes(r.dealershipId)),
+    vehicleSales: db.vehicleSales.filter((r) => ids.includes(r.dealershipId)),
+    activities: db.activities.filter((r) => ids.includes(r.dealershipId)),
+    tasks: db.tasks.filter((r) => ids.includes(r.dealershipId)),
+    messages: db.messages.filter((r) => ids.includes(r.dealershipId)),
+    repairOrders: db.repairOrders.filter((r) => ids.includes(r.dealershipId)),
+    users: db.users.filter((u) => ids.includes(u.dealershipId)),
+  });
 });
 
-app.get("/api/summary", (_req, res) => {
-  const pipelineValue = db.vehicleSales.reduce(
+app.get("/api/summary", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const filter = <T extends { dealershipId: number }>(arr: T[]) =>
+    ids === null ? arr : arr.filter((r) => ids.includes(r.dealershipId));
+
+  const sales = filter(db.vehicleSales);
+  const pipelineValue = sales.reduce(
     (total, sale) => total + sale.salePrice,
     0,
   );
-  const deliveredValue = db.vehicleSales
+  const deliveredValue = sales
     .filter((sale) => sale.stage === "Delivered")
     .reduce((total, sale) => total + sale.salePrice, 0);
-  const financePending = db.financeApplications.filter(
+  const financePending = filter(db.financeApplications).filter(
     (application) => application.status !== "Approved",
   ).length;
-  const appointmentCount = db.customers.filter(
+  const appointmentCount = filter(db.customers).filter(
     (customer) =>
       customer.status === "Appt Set" || customer.status === "Appt Show",
   ).length;
-
-  const openROs = db.repairOrders.filter((ro) => ro.status !== "Closed").length;
-  const readyROs = db.repairOrders.filter((ro) => ro.status === "Ready").length;
+  const ros = filter(db.repairOrders);
+  const openROs = ros.filter((ro) => ro.status !== "Closed").length;
+  const readyROs = ros.filter((ro) => ro.status === "Ready").length;
 
   res.json({
-    customers: db.customers.length,
-    financeApplications: db.financeApplications.length,
-    tradeIns: db.tradeIns.length,
-    vehicleSales: db.vehicleSales.length,
+    customers: filter(db.customers).length,
+    financeApplications: filter(db.financeApplications).length,
+    tradeIns: filter(db.tradeIns).length,
+    vehicleSales: sales.length,
     pipelineValue,
     deliveredValue,
     financePending,
@@ -1133,42 +1624,85 @@ app.get("/api/summary", (_req, res) => {
   });
 });
 
-app.get("/api/customers", (_req, res) => res.json(db.customers));
+app.get("/api/customers", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const results =
+    ids === null
+      ? db.customers
+      : db.customers.filter((c) => ids.includes(c.dealershipId));
+  // Salesperson sees only their assigned leads
+  if (req.tenant.role === "Salesperson") {
+    const user = db.users.find((u) => u.id === req.tenant.userId);
+    res.json(results.filter((c) => c.assignedTo === user?.name));
+    return;
+  }
+  res.json(results);
+});
 
 app.post("/api/customers", (req, res) => {
   const customer: Customer = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     firstName: req.body.firstName,
     lastName: req.body.lastName,
     email: req.body.email || "",
     phone: req.body.phone,
-    status: req.body.status || "Lead",
+    status: req.body.status || "New Lead",
     interestedVehicle: req.body.interestedVehicle || "",
     source: req.body.source || "Manual Entry",
-    assignedTo: req.body.assignedTo || "Avery",
+    assignedTo: req.body.assignedTo || "",
     nextFollowUp: req.body.nextFollowUp || "Not scheduled",
   };
 
   db.customers = [customer, ...db.customers];
-  addActivity(customer.id, "Note", "Customer record created.");
+  addActivity(
+    customer.dealershipId,
+    customer.id,
+    "Note",
+    "Customer record created.",
+  );
   saveDatabase();
   res.status(201).json(customer);
 });
 
 app.put("/api/customers/:id", (req, res) => {
   const customerId = Number(req.params.id);
+  const existing = db.customers.find((c) => c.id === customerId);
+  if (!existing || !inScope(req.tenant, existing.dealershipId)) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
   db.customers = db.customers.map((customer) =>
     customer.id === customerId
-      ? { ...customer, ...req.body, id: customerId }
+      ? {
+          ...customer,
+          ...req.body,
+          id: customerId,
+          dealershipId: existing.dealershipId,
+        }
       : customer,
   );
-  addActivity(customerId, "Note", "Customer record updated.");
+  addActivity(
+    existing.dealershipId,
+    customerId,
+    "Note",
+    "Customer record updated.",
+  );
   saveDatabase();
   res.json(db.customers.find((customer) => customer.id === customerId));
 });
 
 app.delete("/api/customers/:id", (req, res) => {
   const customerId = Number(req.params.id);
+  const existing = db.customers.find((c) => c.id === customerId);
+  if (
+    !existing ||
+    !inScope(req.tenant, existing.dealershipId) ||
+    !hasRank(req.tenant.role, "SalesManager")
+  ) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
   db.customers = db.customers.filter((customer) => customer.id !== customerId);
   db.financeApplications = db.financeApplications.filter(
     (application) => application.customerId !== customerId,
@@ -1186,13 +1720,19 @@ app.delete("/api/customers/:id", (req, res) => {
   res.status(204).send();
 });
 
-app.get("/api/finance-applications", (_req, res) =>
-  res.json(db.financeApplications),
-);
+app.get("/api/finance-applications", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const results =
+    ids === null
+      ? db.financeApplications
+      : db.financeApplications.filter((r) => ids.includes(r.dealershipId));
+  res.json(results);
+});
 
 app.post("/api/finance-applications", (req, res) => {
   const application: FinanceApplication = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     applicantName: req.body.applicantName || "",
     dateOfBirth: req.body.dateOfBirth || "",
@@ -1221,6 +1761,7 @@ app.post("/api/finance-applications", (req, res) => {
 
   db.financeApplications = [application, ...db.financeApplications];
   addActivity(
+    application.dealershipId,
     application.customerId,
     "Note",
     `Finance application ${application.status.toLowerCase()}.`,
@@ -1241,6 +1782,7 @@ app.patch("/api/finance-applications/:id/status", (req, res) => {
   );
   if (application)
     addActivity(
+      application.dealershipId,
       application.customerId,
       "Note",
       `Finance status changed to ${application.status}.`,
@@ -1285,9 +1827,14 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
     res.status(404).json({ message: "Customer was not found" });
     return;
   }
+  if (!inScope(req.tenant, customer.dealershipId)) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
 
   const creditApplication: CreditApplication = {
     id: Date.now(),
+    dealershipId: customer.dealershipId,
     customerId,
     applicantName:
       req.body.applicantName || `${customer.firstName} ${customer.lastName}`,
@@ -1334,6 +1881,7 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
   db.financeApplications = [
     {
       id: Date.now() + 1,
+      dealershipId: customer.dealershipId,
       customerId,
       employmentStatus: creditApplication.employmentStatus,
       monthlyIncome: creditApplication.monthlyIncome,
@@ -1343,17 +1891,30 @@ app.post("/api/customers/:id/credit-applications", (req, res) => {
     },
     ...db.financeApplications,
   ];
-  addActivity(customerId, "Note", "Full credit application added to profile.");
+  addActivity(
+    customer.dealershipId,
+    customerId,
+    "Note",
+    "Full credit application added to profile.",
+  );
   saveDatabase();
 
   res.status(201).json(creditApplication);
 });
 
-app.get("/api/trade-ins", (_req, res) => res.json(db.tradeIns));
+app.get("/api/trade-ins", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.tradeIns
+      : db.tradeIns.filter((r) => ids.includes(r.dealershipId)),
+  );
+});
 
 app.post("/api/trade-ins", (req, res) => {
   const tradeIn: TradeIn = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     year: req.body.year,
     make: req.body.make,
@@ -1366,6 +1927,7 @@ app.post("/api/trade-ins", (req, res) => {
 
   db.tradeIns = [tradeIn, ...db.tradeIns];
   addActivity(
+    tradeIn.dealershipId,
     tradeIn.customerId,
     "Note",
     `Trade-in added: ${tradeIn.year} ${tradeIn.make} ${tradeIn.model}.`,
@@ -1374,11 +1936,19 @@ app.post("/api/trade-ins", (req, res) => {
   res.status(201).json(tradeIn);
 });
 
-app.get("/api/vehicle-sales", (_req, res) => res.json(db.vehicleSales));
+app.get("/api/vehicle-sales", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.vehicleSales
+      : db.vehicleSales.filter((r) => ids.includes(r.dealershipId)),
+  );
+});
 
 app.post("/api/vehicle-sales", (req, res) => {
   const sale: VehicleSale = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     stockNumber: req.body.stockNumber,
     year: req.body.year,
@@ -1390,6 +1960,7 @@ app.post("/api/vehicle-sales", (req, res) => {
 
   db.vehicleSales = [sale, ...db.vehicleSales];
   addActivity(
+    sale.dealershipId,
     sale.customerId,
     "Appointment",
     `Vehicle deal added: ${sale.year} ${sale.make} ${sale.model}.`,
@@ -1406,6 +1977,7 @@ app.patch("/api/vehicle-sales/:id/stage", (req, res) => {
   const sale = db.vehicleSales.find((item) => item.id === saleId);
   if (sale)
     addActivity(
+      sale.dealershipId,
       sale.customerId,
       "Note",
       `Vehicle sale stage changed to ${sale.stage}.`,
@@ -1414,11 +1986,19 @@ app.patch("/api/vehicle-sales/:id/stage", (req, res) => {
   res.json(sale);
 });
 
-app.get("/api/repair-orders", (_req, res) => res.json(db.repairOrders));
+app.get("/api/repair-orders", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.repairOrders
+      : db.repairOrders.filter((r) => ids.includes(r.dealershipId)),
+  );
+});
 
 app.post("/api/repair-orders", (req, res) => {
   const ro: RepairOrder = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     roNumber: `RO-${String(Date.now()).slice(-6)}`,
     customerId: req.body.customerId ? Number(req.body.customerId) : undefined,
     customerName: req.body.customerName || "Walk-in",
@@ -1441,7 +2021,12 @@ app.post("/api/repair-orders", (req, res) => {
   };
   db.repairOrders = [ro, ...db.repairOrders];
   if (ro.customerId)
-    addActivity(ro.customerId, "Note", `Service RO ${ro.roNumber} opened.`);
+    addActivity(
+      ro.dealershipId,
+      ro.customerId,
+      "Note",
+      `Service RO ${ro.roNumber} opened.`,
+    );
   saveDatabase();
   res.status(201).json(ro);
 });
@@ -1471,6 +2056,7 @@ app.patch("/api/repair-orders/:id/status", (req, res) => {
   const ro = db.repairOrders.find((r) => r.id === roId);
   if (ro?.customerId)
     addActivity(
+      ro.dealershipId,
       ro.customerId,
       "Note",
       `Service RO ${ro.roNumber} → ${newStatus}.`,
@@ -1479,11 +2065,19 @@ app.patch("/api/repair-orders/:id/status", (req, res) => {
   res.json(ro);
 });
 
-app.get("/api/activities", (_req, res) => res.json(db.activities));
+app.get("/api/activities", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.activities
+      : db.activities.filter((r) => ids.includes(r.dealershipId)),
+  );
+});
 
 app.post("/api/activities", (req, res) => {
   const activity: Activity = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     type: req.body.type || "Note",
     note: req.body.note,
@@ -1498,17 +2092,23 @@ app.post("/api/activities", (req, res) => {
 app.post("/api/tasks", (req, res) => {
   const task: CrmTask = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     title: String(req.body.title || "Follow up"),
     type: req.body.type || "Follow-Up",
     dueAt: req.body.dueAt || new Date().toISOString(),
-    assignedTo: String(req.body.assignedTo || "Avery"),
+    assignedTo: String(req.body.assignedTo || ""),
     priority: req.body.priority || "Normal",
     status: "Open",
     createdAt: new Date().toISOString(),
   };
   db.tasks = [task, ...db.tasks];
-  addActivity(task.customerId, "Note", `Task created: ${task.title}`);
+  addActivity(
+    task.dealershipId,
+    task.customerId,
+    "Note",
+    `Task created: ${task.title}`,
+  );
   saveDatabase();
   res.status(201).json(task);
 });
@@ -1522,7 +2122,12 @@ app.patch("/api/tasks/:id/complete", (req, res) => {
   );
   const task = db.tasks.find((item) => item.id === taskId);
   if (task) {
-    addActivity(task.customerId, "Note", `Task completed: ${task.title}`);
+    addActivity(
+      task.dealershipId,
+      task.customerId,
+      "Note",
+      `Task completed: ${task.title}`,
+    );
   }
   saveDatabase();
   res.json(task);
@@ -1541,7 +2146,12 @@ app.patch("/api/tasks/:id", (req, res) => {
   );
   const task = db.tasks.find((item) => item.id === taskId);
   if (task) {
-    addActivity(task.customerId, "Note", `Task updated: ${task.title}`);
+    addActivity(
+      task.dealershipId,
+      task.customerId,
+      "Note",
+      `Task updated: ${task.title}`,
+    );
   }
   saveDatabase();
   res.json(task);
@@ -1550,6 +2160,7 @@ app.patch("/api/tasks/:id", (req, res) => {
 app.post("/api/messages", (req, res) => {
   const message: Message = {
     id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
     customerId: Number(req.body.customerId),
     channel: req.body.channel || "Text",
     direction: "Outbound",
@@ -1560,6 +2171,7 @@ app.post("/api/messages", (req, res) => {
   };
   db.messages = [message, ...db.messages];
   addActivity(
+    message.dealershipId,
     message.customerId,
     message.channel,
     `${message.channel} sent${message.template ? ` (${message.template})` : ""}: ${message.body}`,

@@ -256,14 +256,38 @@ type BootstrapData = {
   repairOrders?: RepairOrder[];
 };
 
+type CrmRole =
+  | "SuperAdmin"
+  | "DealerGroupAdmin"
+  | "DealerPrincipal"
+  | "GeneralManager"
+  | "SalesManager"
+  | "FinanceManager"
+  | "ServiceManager"
+  | "Salesperson"
+  | "ServiceAdvisor"
+  | "Technician";
+
 type UserAccount = {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: CrmRole | string;
   phone?: string;
   avatarUrl?: string;
+  dealershipId?: number;
+  dealerGroupId?: number;
 };
+
+type DealershipBranding = {
+  id: number;
+  name: string;
+  brand: string;
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+};
+
 type CurrentUser = UserAccount;
 
 type SavedDeskDeal = {
@@ -301,6 +325,51 @@ type AppPage =
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
   "http://localhost:4000";
+
+// ── Tenant-aware fetch wrapper ─────────────────────────────────────────────
+// Reads dealership/user context from localStorage and injects it as headers
+// on every API call so the backend can enforce row-level isolation.
+function getTenantHeaders(): Record<string, string> {
+  const userRaw = localStorage.getItem("crm-current-user");
+  const user: UserAccount | null = userRaw ? JSON.parse(userRaw) : null;
+  if (!user) return {};
+  const headers: Record<string, string> = {
+    "X-User-Id": String(user.id),
+    "X-User-Role": user.role,
+  };
+  if (user.dealershipId) headers["X-Dealership-Id"] = String(user.dealershipId);
+  if (user.dealerGroupId)
+    headers["X-Dealer-Group-Id"] = String(user.dealerGroupId);
+  return headers;
+}
+
+async function apiFetch(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const tenantHeaders = getTenantHeaders();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...tenantHeaders,
+      ...(options.headers as Record<string, string> | undefined),
+    },
+  });
+}
+
+function applyDealerBranding(dealership: DealershipBranding | null) {
+  const root = document.documentElement;
+  if (dealership?.primaryColor) {
+    root.style.setProperty("--dealer-primary", dealership.primaryColor);
+    root.style.setProperty(
+      "--dealer-accent",
+      dealership.accentColor || dealership.primaryColor,
+    );
+  } else {
+    root.style.removeProperty("--dealer-primary");
+    root.style.removeProperty("--dealer-accent");
+  }
+}
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 
@@ -1064,6 +1133,11 @@ function App() {
     const saved = localStorage.getItem("crm-current-user");
     return saved ? (JSON.parse(saved) as CurrentUser) : null;
   });
+  const [currentDealership, setCurrentDealership] =
+    useState<DealershipBranding | null>(() => {
+      const saved = localStorage.getItem("crm-dealership");
+      return saved ? (JSON.parse(saved) as DealershipBranding) : null;
+    });
   const [showSettings, setShowSettings] = useState(false);
   const [soldCelebration, setSoldCelebration] = useState<string | null>(null);
   const [settingsForm, setSettingsForm] = useState({
@@ -1961,8 +2035,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const saved = localStorage.getItem("crm-dealership");
+    if (saved) applyDealerBranding(JSON.parse(saved) as DealershipBranding);
+  }, []);
+
+  useEffect(() => {
     if (!isLoggedIn) return;
-    fetch(`${API_BASE}/api/bootstrap`)
+    apiFetch(`${API_BASE}/api/bootstrap`)
       .then((r) => r.json())
       .then((d: BootstrapData) => {
         const duplicateIds = findDuplicateIds(d.customers.map((c) => c.id));
@@ -2372,6 +2451,7 @@ function App() {
         return;
       }
       const user = data.user as CurrentUser | undefined;
+      const dealership = (data.dealership as DealershipBranding) || null;
       if (user) {
         setCurrentUser(user);
         setSettingsForm({
@@ -2383,7 +2463,12 @@ function App() {
         });
         localStorage.setItem("crm-current-user", JSON.stringify(user));
       }
-      const boot = await fetch(`${API_BASE}/api/bootstrap`);
+      if (dealership) {
+        setCurrentDealership(dealership);
+        localStorage.setItem("crm-dealership", JSON.stringify(dealership));
+        applyDealerBranding(dealership);
+      }
+      const boot = await apiFetch(`${API_BASE}/api/bootstrap`);
       if (!boot.ok) {
         setAuthError(
           await readApiError(
@@ -2412,7 +2497,10 @@ function App() {
   function logout() {
     localStorage.removeItem("crm-authenticated");
     localStorage.removeItem("crm-current-user");
+    localStorage.removeItem("crm-dealership");
     setCurrentUser(null);
+    setCurrentDealership(null);
+    applyDealerBranding(null);
     setIsLoggedIn(false);
     setShowSettings(false);
   }
@@ -2444,7 +2532,7 @@ function App() {
     }
     setProfileSaving(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/users/${currentUser.id}/profile`,
         {
           method: "PUT",
@@ -2539,7 +2627,7 @@ function App() {
   async function doSaveCustomer() {
     try {
       if (editingCustomerId) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_BASE}/api/customers/${editingCustomerId}`,
           {
             method: "PUT",
@@ -2559,7 +2647,7 @@ function App() {
         setShowAddForm(false);
         setAppMessage("Customer updated.");
       } else {
-        const res = await fetch(`${API_BASE}/api/customers`, {
+        const res = await apiFetch(`${API_BASE}/api/customers`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(customerForm),
@@ -2589,7 +2677,7 @@ function App() {
     setAppMessage(`${customer.firstName} ${customer.lastName} marked sold!`);
 
     try {
-      await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+      await apiFetch(`${API_BASE}/api/customers/${customer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedCustomer),
@@ -2609,7 +2697,7 @@ function App() {
     );
 
     try {
-      await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+      await apiFetch(`${API_BASE}/api/customers/${customer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedCustomer),
@@ -2633,7 +2721,7 @@ function App() {
 
   async function deleteCustomer(id: number) {
     try {
-      const res = await fetch(`${API_BASE}/api/customers/${id}`, {
+      const res = await apiFetch(`${API_BASE}/api/customers/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -2649,7 +2737,7 @@ function App() {
 
   async function assignLead(customer: Customer, assignedTo: string) {
     try {
-      const res = await fetch(`${API_BASE}/api/customers/${customer.id}`, {
+      const res = await apiFetch(`${API_BASE}/api/customers/${customer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...customer, assignedTo, status: "Appt Set" }),
@@ -2671,7 +2759,7 @@ function App() {
   async function addFinanceApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/api/finance-applications`, {
+      const res = await apiFetch(`${API_BASE}/api/finance-applications`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(financeForm),
@@ -2698,7 +2786,7 @@ function App() {
     status: FinanceApplication["status"],
   ) {
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/finance-applications/${id}/status`,
         {
           method: "PATCH",
@@ -2727,7 +2815,7 @@ function App() {
     event.preventDefault();
     if (!selectedCustomer) return;
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/customers/${selectedCustomer.id}/credit-applications`,
         {
           method: "POST",
@@ -2755,7 +2843,7 @@ function App() {
   async function addTradeIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/api/trade-ins`, {
+      const res = await apiFetch(`${API_BASE}/api/trade-ins`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(tradeForm),
@@ -2775,7 +2863,7 @@ function App() {
   async function addVehicleSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/api/vehicle-sales`, {
+      const res = await apiFetch(`${API_BASE}/api/vehicle-sales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(saleForm),
@@ -2794,7 +2882,7 @@ function App() {
 
   async function updateSaleStage(id: number, stage: VehicleSale["stage"]) {
     try {
-      const res = await fetch(`${API_BASE}/api/vehicle-sales/${id}/stage`, {
+      const res = await apiFetch(`${API_BASE}/api/vehicle-sales/${id}/stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage }),
@@ -2820,7 +2908,7 @@ function App() {
     event.preventDefault();
     if (!activityForm.note) return;
     try {
-      const res = await fetch(`${API_BASE}/api/activities`, {
+      const res = await apiFetch(`${API_BASE}/api/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(activityForm),
@@ -2846,7 +2934,7 @@ function App() {
       note: quickActivityNote,
     };
     try {
-      const res = await fetch(`${API_BASE}/api/activities`, {
+      const res = await apiFetch(`${API_BASE}/api/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -2868,7 +2956,7 @@ function App() {
     event.preventDefault();
     if (!selectedCustomer || !noteModalText.trim()) return;
     try {
-      const res = await fetch(`${API_BASE}/api/activities`, {
+      const res = await apiFetch(`${API_BASE}/api/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2895,7 +2983,7 @@ function App() {
     event.preventDefault();
     if (!selectedCustomer || !taskForm.title) return;
     try {
-      const res = await fetch(`${API_BASE}/api/tasks`, {
+      const res = await apiFetch(`${API_BASE}/api/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2933,7 +3021,7 @@ function App() {
       priority: appointmentForm.priority,
       status: "Open",
     };
-    const res = await fetch(
+    const res = await apiFetch(
       editingAppointmentId
         ? `${API_BASE}/api/tasks/${editingAppointmentId}`
         : `${API_BASE}/api/tasks`,
@@ -2950,7 +3038,7 @@ function App() {
         : [task, ...tasks],
     );
     if (appointmentForm.notes) {
-      const noteRes = await fetch(`${API_BASE}/api/activities`, {
+      const noteRes = await apiFetch(`${API_BASE}/api/activities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2988,7 +3076,7 @@ function App() {
 
   async function updateTaskStatus(task: CrmTask, status: CrmTask["status"]) {
     try {
-      const res = await fetch(`${API_BASE}/api/tasks/${task.id}`, {
+      const res = await apiFetch(`${API_BASE}/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3018,7 +3106,7 @@ function App() {
 
   async function completeTask(task: CrmTask) {
     try {
-      const res = await fetch(`${API_BASE}/api/tasks/${task.id}/complete`, {
+      const res = await apiFetch(`${API_BASE}/api/tasks/${task.id}/complete`, {
         method: "PATCH",
       });
       if (!res.ok) {
@@ -3037,7 +3125,7 @@ function App() {
     event.preventDefault();
     if (!selectedCustomer || !messageForm.body) return;
     try {
-      const res = await fetch(`${API_BASE}/api/messages`, {
+      const res = await apiFetch(`${API_BASE}/api/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3067,7 +3155,7 @@ function App() {
     setVinError("");
     setVinResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/vin/${vin}`);
+      const res = await apiFetch(`${API_BASE}/api/vin/${vin}`);
       if (!res.ok) {
         setVinError("VIN not found or invalid.");
         return;
@@ -3085,7 +3173,7 @@ function App() {
     setTradeVinLoading(true);
     setTradeBookValue(null);
     try {
-      const res = await fetch(`${API_BASE}/api/vin/${vinStr}`);
+      const res = await apiFetch(`${API_BASE}/api/vin/${vinStr}`);
       if (res.ok) {
         const data = await res.json();
         setTradeForm((f) => ({
@@ -3101,7 +3189,7 @@ function App() {
           model: data.model,
           mileage: String(miles),
         });
-        const bvRes = await fetch(`${API_BASE}/api/book-value?${bvParams}`);
+        const bvRes = await apiFetch(`${API_BASE}/api/book-value?${bvParams}`);
         if (bvRes.ok) {
           const bv = await bvRes.json();
           setTradeBookValue({
@@ -5290,6 +5378,34 @@ function App() {
                 <h3>Edit your profile</h3>
               </div>
             </div>
+            {currentDealership && (
+              <div
+                style={{
+                  background: "var(--dealer-primary, #1a1a2e)",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontSize: 18 }}>🏢</span>
+                <div>
+                  <strong>{currentDealership.name}</strong>
+                  {currentDealership.brand && (
+                    <span style={{ opacity: 0.75, marginLeft: 6 }}>
+                      — {currentDealership.brand}
+                    </span>
+                  )}
+                  <div style={{ opacity: 0.65, fontSize: 11, marginTop: 1 }}>
+                    {currentUser?.role} · Rooftop #{currentDealership.id}
+                  </div>
+                </div>
+              </div>
+            )}
             <label>
               Full Name
               <input
@@ -5387,10 +5503,21 @@ function App() {
       <main className={`app-shell theme-${themeMode}`}>
         <aside className="sidebar">
           <div className="sidebar-brand">
-            <div className="brand-mark">AS</div>
+            {currentDealership?.logoUrl ? (
+              <img
+                src={currentDealership.logoUrl}
+                alt={currentDealership.name}
+                className="brand-logo"
+                style={{ height: 32, width: "auto", objectFit: "contain" }}
+              />
+            ) : (
+              <div className="brand-mark">AS</div>
+            )}
             <div className="brand-name">
-              <strong>AutoSuite</strong>
-              <span>CRM</span>
+              <strong>{currentDealership?.name ?? "AutoSuite"}</strong>
+              <span>
+                {currentDealership?.brand ? currentDealership.brand : "CRM"}
+              </span>
             </div>
           </div>
           <nav>
@@ -8781,7 +8908,7 @@ function App() {
 
               async function updateRoStatus(id: number, status: RoStatus) {
                 try {
-                  const res = await fetch(
+                  const res = await apiFetch(
                     `${API_BASE}/api/repair-orders/${id}/status`,
                     {
                       method: "PATCH",
@@ -8848,7 +8975,7 @@ function App() {
                   createdAt: new Date().toISOString(),
                 };
                 try {
-                  const res = await fetch(`${API_BASE}/api/repair-orders`, {
+                  const res = await apiFetch(`${API_BASE}/api/repair-orders`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(newRo),
