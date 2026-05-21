@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
 import {
   LayoutDashboard,
   Inbox,
@@ -17,6 +18,28 @@ import {
   CheckCircle,
   AlertTriangle,
   Settings,
+  Landmark,
+  DollarSign,
+  ShieldCheck,
+  BadgeDollarSign,
+  ClipboardList,
+  MessageSquare,
+  Mail,
+  Send,
+  ChevronDown,
+  Zap,
+  RefreshCw,
+  PauseCircle,
+  UserMinus,
+  Warehouse,
+  BarChart2,
+  Package,
+  Download,
+  Plus,
+  Edit2,
+  Trash2,
+  Eye,
+  Target,
 } from "lucide-react";
 import {
   findDuplicateCustomers,
@@ -184,6 +207,90 @@ type TradeIn = {
   notes?: string;
 };
 
+type FiProductCategory =
+  | "GAP"
+  | "Extended Warranty"
+  | "Tire & Wheel"
+  | "Prepaid Maintenance"
+  | "Paint Protection"
+  | "Key Replacement"
+  | "Credit Life"
+  | "Credit Disability";
+
+type FundingStatus =
+  | "Pending Structure"
+  | "Submitted to Lender"
+  | "Approved"
+  | "Stipulations Required"
+  | "Funded"
+  | "Unwound"
+  | "Declined";
+
+type DealStip = {
+  id: number;
+  label: string;
+  received: boolean;
+  receivedAt?: string;
+  note?: string;
+};
+
+type FiProductSold = {
+  productId: number;
+  category: FiProductCategory;
+  name: string;
+  retailPrice: number;
+  dealerCost: number;
+  termMonths?: number;
+};
+
+type FiProduct = {
+  id: number;
+  dealershipId?: number;
+  category: FiProductCategory;
+  name: string;
+  providerName: string;
+  termMonths?: number;
+  mileageLimit?: number;
+  dealerCost: number;
+  retailPrice: number;
+  retailCap: number;
+  minProfit: number;
+  active: boolean;
+};
+
+type LenderTier = "Prime" | "Near-Prime" | "Subprime" | "Deep Subprime";
+
+type Lender = {
+  id: number;
+  dealershipId?: number;
+  name: string;
+  tier: LenderTier;
+  minCreditScore?: number;
+  maxLtv?: number;
+  maxTermMonths?: number;
+  contactName?: string;
+  contactPhone?: string;
+  active: boolean;
+};
+
+type LenderDecisionStatus = "Pending" | "Approved" | "Countered" | "Declined";
+
+type LenderSubmission = {
+  id: number;
+  vehicleSaleId: number;
+  lenderId: number;
+  lenderName: string;
+  submittedAt: string;
+  status: LenderDecisionStatus;
+  approvedRate?: number;
+  approvedTerm?: number;
+  approvedAmount?: number;
+  maxLtv?: number;
+  counterConditions?: string;
+  declineReason?: string;
+  decidedAt?: string;
+};
+
 type VehicleSale = {
   id: number;
   customerId: number;
@@ -193,6 +300,30 @@ type VehicleSale = {
   model: string;
   salePrice: number;
   stage: "Working" | "Finance" | "Delivered" | "Lost";
+  lender?: string;
+  lenderContactName?: string;
+  lenderPhone?: string;
+  apr?: number;
+  termMonths?: number;
+  downPayment?: number;
+  tradeAllowance?: number;
+  tradePayoff?: number;
+  dealerReserve?: number;
+  backEndGross?: number;
+  fundingStatus?: FundingStatus;
+  fundingDate?: string;
+  fiProducts?: FiProductSold[];
+  stips?: DealStip[];
+  lenderSubmissions?: LenderSubmission[];
+  acceptedSubmissionId?: number;
+  ofacCleared?: boolean;
+  redFlagsCleared?: boolean;
+  truthInLendingPrinted?: boolean;
+  eContractSent?: boolean;
+  eContractSigned?: boolean;
+  financeManagerName?: string;
+  notes?: string;
+  createdAt?: string;
 };
 
 type VinDecodedVehicle = {
@@ -233,6 +364,8 @@ type CrmTask = {
   completedAt?: string;
 };
 
+type MessageStatus = "queued" | "sent" | "delivered" | "failed" | "received";
+
 type Message = {
   id: number;
   customerId: number;
@@ -241,6 +374,107 @@ type Message = {
   subject?: string;
   body: string;
   template?: string;
+  status: MessageStatus;
+  providerSid?: string;
+  fromNumber?: string;
+  toNumber?: string;
+  fromEmail?: string;
+  toEmail?: string;
+  errorMessage?: string;
+  sequenceId?: number;
+  sequenceStepIndex?: number;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type EmailTemplate = {
+  id: number;
+  name: string;
+  subject: string;
+  body: string;
+  channel: "Text" | "Email";
+  createdAt: string;
+};
+
+type SequenceStep = {
+  index: number;
+  delayDays: number;
+  channel: "Text" | "Email";
+  subject?: string;
+  body: string;
+};
+
+type EmailSequence = {
+  id: number;
+  name: string;
+  triggerEvent: "lead_created" | "appointment_set" | "deal_lost" | "manual";
+  steps: SequenceStep[];
+  active: boolean;
+  createdAt: string;
+};
+
+type EnrollmentStatus = "active" | "completed" | "paused" | "unsubscribed";
+
+type SequenceEnrollment = {
+  id: number;
+  customerId: number;
+  sequenceId: number;
+  enrolledAt: string;
+  currentStepIndex: number;
+  status: EnrollmentStatus;
+  completedAt?: string;
+};
+
+type InventoryStatus =
+  | "Available"
+  | "In Transit"
+  | "Sold"
+  | "Hold"
+  | "Archived";
+
+type InventoryVehicle = {
+  id: number;
+  dealershipId: number;
+  stockNumber: string;
+  vin: string;
+  year: string;
+  make: string;
+  model: string;
+  trim: string;
+  bodyClass: string;
+  extColor: string;
+  intColor: string;
+  mileage: number;
+  msrp: number;
+  internetPrice: number;
+  invoicePrice: number;
+  status: InventoryStatus;
+  condition: "New" | "Used" | "CPO";
+  daysOnLot: number;
+  addedAt: string;
+  notes: string;
+  imageUrl?: string;
+};
+
+type SalesGoal = {
+  id: number;
+  dealershipId: number;
+  salespersonName: string;
+  month: string;
+  unitGoal: number;
+  grossGoal: number;
+};
+
+type AuditLogEntry = {
+  id: number;
+  dealershipId: number;
+  userId: number;
+  userName: string;
+  action: string;
+  entity: string;
+  entityId: number;
+  before?: string;
+  after?: string;
   createdAt: string;
 };
 
@@ -253,7 +487,15 @@ type BootstrapData = {
   activities: Activity[];
   tasks?: CrmTask[];
   messages?: Message[];
+  emailTemplates?: EmailTemplate[];
+  emailSequences?: EmailSequence[];
+  sequenceEnrollments?: SequenceEnrollment[];
   repairOrders?: RepairOrder[];
+  fiProducts?: FiProduct[];
+  lenders?: Lender[];
+  inventory?: InventoryVehicle[];
+  salesGoals?: SalesGoal[];
+  auditLog?: AuditLogEntry[];
 };
 
 type CrmRole =
@@ -314,13 +556,16 @@ type AppPage =
   | "leads"
   | "customers"
   | "appointments"
-  | "finance"
   | "pipeline"
   | "trades"
   | "vin"
   | "activities"
   | "desk"
-  | "service";
+  | "service"
+  | "fi-manager"
+  | "comms"
+  | "inventory"
+  | "reports";
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
@@ -1168,9 +1413,70 @@ function App() {
   >([]);
   const [tradeIns, setTradeIns] = useState(initialTradeIns);
   const [vehicleSales, setVehicleSales] = useState(initialVehicleSales);
+  const [fiProducts, setFiProducts] = useState<FiProduct[]>([]);
+  const [lenders, setLenders] = useState<Lender[]>([]);
+  const [selectedLenderIds, setSelectedLenderIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [fiPriceOverrides, setFiPriceOverrides] = useState<
+    Record<number, string>
+  >({});
+  const [activeDeal, setActiveDeal] = useState<VehicleSale | null>(null);
+  const activeDealRef = useRef<VehicleSale | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [tasks, setTasks] = useState<CrmTask[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [emailSequences, setEmailSequences] = useState<EmailSequence[]>([]);
+  const [sequenceEnrollments, setSequenceEnrollments] = useState<
+    SequenceEnrollment[]
+  >([]);
+  const [commsCustomerId, setCommsCustomerId] = useState<number | null>(null);
+  const [commsTab, setCommsTab] = useState<"inbox" | "sequences" | "templates">(
+    "inbox",
+  );
+  const [commsChannel, setCommsChannel] = useState<"Text" | "Email">("Text");
+  const [commsBody, setCommsBody] = useState("");
+  const [commsSubject, setCommsSubject] = useState("");
+  const [commsTemplateId, setCommsTemplateId] = useState<number | null>(null);
+  const [commsSending, setCommsSending] = useState(false);
+  const [threadSearchQuery, setThreadSearchQuery] = useState("");
+  const [bulkSmsOpen, setBulkSmsOpen] = useState(false);
+  const [bulkSmsBody, setBulkSmsBody] = useState("");
+  const [bulkSmsFilter, setBulkSmsFilter] = useState<
+    "All" | "Working" | "Appt Set" | "Lost"
+  >("All");
+  const [bulkSmsSending, setBulkSmsSending] = useState(false);
+  const [inventory, setInventory] = useState<InventoryVehicle[]>([]);
+  const [salesGoals, setSalesGoals] = useState<SalesGoal[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [invFilter, setInvFilter] = useState<InventoryStatus | "All">("All");
+  const [invCondition, setInvCondition] = useState<
+    "All" | "New" | "Used" | "CPO"
+  >("All");
+  const [invSearch, setInvSearch] = useState("");
+  const [invModalOpen, setInvModalOpen] = useState(false);
+  const [invEditTarget, setInvEditTarget] = useState<InventoryVehicle | null>(
+    null,
+  );
+  const [invForm, setInvForm] = useState({
+    stockNumber: "",
+    vin: "",
+    year: "",
+    make: "",
+    model: "",
+    trim: "",
+    bodyClass: "",
+    extColor: "",
+    intColor: "",
+    mileage: "",
+    msrp: "",
+    internetPrice: "",
+    invoicePrice: "",
+    status: "Available" as InventoryStatus,
+    condition: "Used" as "New" | "Used" | "CPO",
+    notes: "",
+  });
   const [repairOrders, setRepairOrders] =
     useState<RepairOrder[]>(initialRepairOrders);
   const [roForm, setRoForm] = useState({
@@ -1403,6 +1709,16 @@ function App() {
     lender: "",
     buyerZip: "",
   });
+  const [deskMode, setDeskMode] = useState<"retail" | "lease" | "compare">(
+    "retail",
+  );
+  const [leaseDesk, setLeaseDesk] = useState({
+    residualPct: "52",
+    moneyFactor: "0.00125",
+    termMonths: "36",
+    acquisition: "795",
+    disposition: "395",
+  });
   const [targetPayment, setTargetPayment] = useState("");
   const [paymentGridDowns, setPaymentGridDowns] = useState([
     "0",
@@ -1490,6 +1806,42 @@ function App() {
       msrp,
     };
   }, [desk]);
+
+  const leaseNumbers = useMemo(() => {
+    const msrp = parseFloat(desk.msrp) || 0;
+    const cap = parseFloat(desk.sellingPrice) || msrp;
+    const down = parseFloat(desk.downPayment) || 0;
+    const acv = parseFloat(desk.tradeACV) || 0;
+    const payoff = parseFloat(desk.tradePayoff) || 0;
+    const equity = acv - payoff;
+    const rebate = parseFloat(desk.rebate) || 0;
+    const residualPct = parseFloat(leaseDesk.residualPct) / 100;
+    const mf = parseFloat(leaseDesk.moneyFactor) || 0;
+    const term = parseInt(leaseDesk.termMonths) || 36;
+    const acquisition = parseFloat(leaseDesk.acquisition) || 0;
+    const residual = msrp * residualPct;
+    // Adjusted cap cost
+    const adjCap = cap + acquisition - down - equity - rebate;
+    const depreciation = (adjCap - residual) / term;
+    const rentCharge = (adjCap + residual) * mf;
+    const basePmt = depreciation + rentCharge;
+    const taxRate = (parseFloat(desk.taxRate) || 0) / 100;
+    const monthly = basePmt * (1 + taxRate);
+    const totalCost = monthly * term + down;
+    // Retail comparison total cost
+    const retailTotal = deskNumbers.monthly * parseInt(desk.termMonths || "72");
+    return {
+      residual,
+      adjCap,
+      depreciation,
+      rentCharge,
+      basePmt,
+      monthly,
+      totalCost,
+      retailTotal,
+      term,
+    };
+  }, [desk, leaseDesk, deskNumbers]);
 
   const paymentGrid = useMemo(() => {
     const downs = paymentGridDowns.map((down) => parseFloat(down) || 0);
@@ -1687,6 +2039,86 @@ function App() {
       .sort((a, b) => b.equityScore - a.equityScore)
       .slice(0, 5);
   }, [customers, repairOrders]);
+
+  // ── Equity Mining ────────────────────────────────────────────────────────
+  // Surface sold customers whose vehicle is estimated to have positive equity.
+  // Heuristic: rough ACV = salePrice * (0.85 ^ yearsOwned) capped at $4k floor,
+  // minus estimated remaining balance (simple amortization proxy).
+  const equityMiningTargets = useMemo(() => {
+    const now = Date.now();
+    return vehicleSales
+      .filter((s) => s.stage === "Delivered" || s.fundingStatus === "Funded")
+      .map((sale) => {
+        const customer = customers.find((c) => c.id === sale.customerId);
+        if (!customer) return null;
+
+        const soldDate = sale.createdAt
+          ? new Date(sale.createdAt).getTime()
+          : now - 1000 * 60 * 60 * 24 * 365 * 2;
+        const yearsOwned = Math.max(
+          0,
+          (now - soldDate) / (1000 * 60 * 60 * 24 * 365),
+        );
+
+        // Estimated current ACV using straight-line depreciation (~15%/yr)
+        const estimatedACV = Math.max(
+          4000,
+          sale.salePrice * Math.pow(0.85, yearsOwned),
+        );
+
+        // Estimate remaining balance via simple amortization proxy
+        const term = sale.termMonths ?? 60;
+        const apr = (sale.apr ?? 6.9) / 100 / 12;
+        const totalFinanced =
+          sale.salePrice -
+          (sale.downPayment ?? 0) +
+          (sale.tradePayoff ?? 0) -
+          (sale.tradeAllowance ?? 0);
+        const monthsPaid = Math.min(term, yearsOwned * 12);
+        let remainingBalance = 0;
+        if (totalFinanced > 0 && apr > 0) {
+          const payment =
+            (totalFinanced * apr) / (1 - Math.pow(1 + apr, -term));
+          remainingBalance = Math.max(
+            0,
+            totalFinanced * Math.pow(1 + apr, monthsPaid) -
+              payment * ((Math.pow(1 + apr, monthsPaid) - 1) / apr),
+          );
+        } else if (totalFinanced > 0) {
+          remainingBalance = Math.max(
+            0,
+            totalFinanced - (totalFinanced / term) * monthsPaid,
+          );
+        }
+
+        const equity = Math.round(estimatedACV - remainingBalance);
+        if (equity < 1500) return null; // only surface meaningful equity
+        if (yearsOwned < 1.5) return null; // need at least 18 months
+
+        return {
+          customer,
+          sale,
+          yearsOwned: Math.round(yearsOwned * 10) / 10,
+          estimatedACV: Math.round(estimatedACV),
+          remainingBalance: Math.round(remainingBalance),
+          equity,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          customer: Customer;
+          sale: VehicleSale;
+          yearsOwned: number;
+          estimatedACV: number;
+          remainingBalance: number;
+          equity: number;
+        } => Boolean(item),
+      )
+      .sort((a, b) => b.equity - a.equity)
+      .slice(0, 8);
+  }, [vehicleSales, customers]);
 
   // Stalled: in-progress leads with no activity in 3+ days
   const stalledLeads = useMemo(() => {
@@ -2025,9 +2457,13 @@ function App() {
 
   useEffect(() => {
     function syncRoute() {
+      if (window.location.hash === "#/finance") {
+        window.location.hash = "#/fi-manager";
+        return;
+      }
       const route = parseHashRoute(window.location.hash);
       setSelectedCustomerId(route.selectedCustomerId);
-      setCurrentPage(route.page);
+      setCurrentPage(route.page as AppPage);
     }
     syncRoute();
     window.addEventListener("hashchange", syncRoute);
@@ -2060,6 +2496,15 @@ function App() {
         setTasks(d.tasks || []);
         setMessages(d.messages || []);
         if (d.repairOrders) setRepairOrders(d.repairOrders);
+        if (d.fiProducts) setFiProducts(d.fiProducts);
+        if (d.lenders) setLenders(d.lenders);
+        if (d.emailTemplates) setEmailTemplates(d.emailTemplates);
+        if (d.emailSequences) setEmailSequences(d.emailSequences);
+        if (d.sequenceEnrollments)
+          setSequenceEnrollments(d.sequenceEnrollments);
+        if (d.inventory) setInventory(d.inventory);
+        if (d.salesGoals) setSalesGoals(d.salesGoals);
+        if (d.auditLog) setAuditLog(d.auditLog);
       })
       .catch(() => setAppMessage("Could not load data from backend."));
   }, [isLoggedIn]);
@@ -2373,6 +2818,219 @@ function App() {
     window.location.hash = "#/desk";
     setProfileTab("deals");
   }
+  function generateBuyersOrder() {
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+    const customerName = desk.customerId
+      ? getCustomerName(Number(desk.customerId))
+      : "Customer";
+    const vehicleName =
+      [desk.year, desk.make, desk.model, desk.trim].filter(Boolean).join(" ") ||
+      "Vehicle";
+    const dealerName = currentDealership?.name ?? "AutoSuite Dealership";
+    const today = new Date().toLocaleDateString();
+
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 48;
+
+    // Header bar
+    doc.setFillColor(99, 102, 241);
+    doc.rect(0, 0, pageW, 36, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(255, 255, 255);
+    doc.text(dealerName, 40, 24);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Buyer's Order · ${today}`, pageW - 40, 24, { align: "right" });
+
+    y = 58;
+    doc.setTextColor(15, 23, 42);
+
+    // Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("BUYER'S ORDER", 40, y);
+    y += 28;
+
+    // Customer + Vehicle
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Buyer: ${customerName}`, 40, y);
+    doc.text(`Vehicle: ${vehicleName}`, 40, y + 16);
+    if (desk.stockNumber) doc.text(`Stock #: ${desk.stockNumber}`, 40, y + 32);
+    y += 56;
+
+    // Divider
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(1);
+    doc.line(40, y, pageW - 40, y);
+    y += 16;
+
+    // Line items helper
+    const col1 = 40;
+    const col2 = pageW - 40;
+    const lineH = 20;
+
+    const drawLine = (label: string, value: string, bold = false) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(bold ? 15 : 71, bold ? 23 : 85, bold ? 42 : 105);
+      doc.text(label, col1, y);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.text(value, col2, y, { align: "right" });
+      y += lineH;
+    };
+
+    const fmt = (n: number) =>
+      `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(99, 102, 241);
+    doc.text("VEHICLE PRICING", col1, y);
+    y += lineH;
+
+    drawLine("MSRP", fmt(deskNumbers.msrp));
+    drawLine("Selling Price", fmt(deskNumbers.selling));
+    if (deskNumbers.discount !== 0)
+      drawLine(
+        `Discount ${deskNumbers.discount > 0 ? "(below MSRP)" : "(over MSRP)"}`,
+        `${deskNumbers.discount > 0 ? "-" : "+"}${fmt(deskNumbers.discount)}`,
+      );
+
+    if (
+      desk.tradeYear ||
+      desk.tradeMake ||
+      parseFloat(desk.tradeACV || "0") > 0
+    ) {
+      y += 8;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(99, 102, 241);
+      doc.text("TRADE-IN", col1, y);
+      y += lineH;
+      const tradeName =
+        [desk.tradeYear, desk.tradeMake, desk.tradeModel]
+          .filter(Boolean)
+          .join(" ") || "Trade Vehicle";
+      drawLine(tradeName + " ACV", fmt(parseFloat(desk.tradeACV || "0")));
+      if (parseFloat(desk.tradePayoff || "0") > 0)
+        drawLine(
+          "Trade Payoff",
+          `-${fmt(parseFloat(desk.tradePayoff || "0"))}`,
+        );
+      drawLine(
+        "Trade Equity",
+        `${deskNumbers.equity >= 0 ? "+" : "-"}${fmt(deskNumbers.equity)}`,
+      );
+    }
+
+    if (deskNumbers.fiItems.length > 0) {
+      y += 8;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(99, 102, 241);
+      doc.text("F&I PRODUCTS", col1, y);
+      y += lineH;
+      deskNumbers.fiItems.forEach((item) =>
+        drawLine(item.name, fmt(item.price)),
+      );
+    }
+
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(99, 102, 241);
+    doc.text("FEES & TAXES", col1, y);
+    y += lineH;
+
+    if (parseFloat(desk.docFee || "0") > 0)
+      drawLine("Documentary Fee", fmt(parseFloat(desk.docFee || "0")));
+    if (parseFloat(desk.titleFee || "0") > 0)
+      drawLine("Title Fee", fmt(parseFloat(desk.titleFee || "0")));
+    if (parseFloat(desk.regFee || "0") > 0)
+      drawLine("Registration Fee", fmt(parseFloat(desk.regFee || "0")));
+    drawLine(`Sales Tax (${desk.taxRate}%)`, fmt(deskNumbers.salesTax));
+
+    if (parseFloat(desk.downPayment || "0") > 0) {
+      y += 8;
+      drawLine("Down Payment", `-${fmt(parseFloat(desk.downPayment || "0"))}`);
+    }
+    if (parseFloat(desk.rebate || "0") > 0) {
+      drawLine("Rebate", `-${fmt(parseFloat(desk.rebate || "0"))}`);
+    }
+
+    // Divider
+    y += 4;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(40, y, pageW - 40, y);
+    y += 16;
+
+    // Amount Financed
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Amount Financed", col1, y);
+    doc.setTextColor(99, 102, 241);
+    doc.text(fmt(Math.max(0, deskNumbers.financed)), col2, y, {
+      align: "right",
+    });
+    y += lineH + 4;
+
+    // Payment summary box
+    doc.setFillColor(245, 243, 255);
+    doc.roundedRect(40, y, pageW - 80, 54, 8, 8, "F");
+    doc.setTextColor(99, 102, 241);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `${desk.termMonths} months · ${desk.apr}% APR${desk.lender ? ` · ${desk.lender}` : ""}`,
+      pageW / 2,
+      y + 18,
+      { align: "center" },
+    );
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(
+      `Est. Monthly Payment: $${deskNumbers.monthly > 0 ? deskNumbers.monthly.toFixed(2) : "—"}`,
+      pageW / 2,
+      y + 42,
+      { align: "center" },
+    );
+    y += 70;
+
+    // Signature lines
+    y += 16;
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.5);
+    const sigY = y + 40;
+    doc.line(40, sigY, 260, sigY);
+    doc.line(pageW - 260, sigY, pageW - 40, sigY);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text("Buyer Signature / Date", 40, sigY + 14);
+    doc.text("Finance Manager / Date", pageW - 260, sigY + 14);
+
+    // Disclaimer
+    y = sigY + 36;
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      "This document is an estimate only. Final terms, taxes, fees, and payments are subject to lender approval and state regulations.",
+      40,
+      y,
+      { maxWidth: pageW - 80 },
+    );
+
+    doc.save(
+      `buyers-order-${customerName.replace(/\s/g, "-")}-${today.replace(/\//g, "-")}.pdf`,
+    );
+  }
+
   function statusClass(s: string) {
     return (
       (
@@ -2661,6 +3319,7 @@ function App() {
         resetCustomerForm();
         setShowAddForm(false);
         setAppMessage("Customer added.");
+        autoEnrollOnStatusChange(created.id, "lead_created");
       }
     } catch {
       setAppMessage("Could not connect to backend to save customer.");
@@ -2675,6 +3334,7 @@ function App() {
     setSoldCelebration(`${customer.firstName} ${customer.lastName}`);
     setTimeout(() => setSoldCelebration(null), 2600);
     setAppMessage(`${customer.firstName} ${customer.lastName} marked sold!`);
+    autoEnrollOnStatusChange(customer.id, "appointment_set");
 
     try {
       await apiFetch(`${API_BASE}/api/customers/${customer.id}`, {
@@ -2732,6 +3392,37 @@ function App() {
       setAppMessage("Customer removed.");
     } catch {
       setAppMessage("Could not connect to backend to remove customer.");
+    }
+  }
+
+  async function autoEnrollOnStatusChange(
+    customerId: number,
+    trigger: EmailSequence["triggerEvent"],
+  ) {
+    const matching = emailSequences.filter(
+      (s) => s.active && s.triggerEvent === trigger,
+    );
+    for (const seq of matching) {
+      const alreadyActive = sequenceEnrollments.some(
+        (e) =>
+          e.customerId === customerId &&
+          e.sequenceId === seq.id &&
+          e.status === "active",
+      );
+      if (alreadyActive) continue;
+      try {
+        const res = await apiFetch(`${API_BASE}/api/sequence-enrollments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customerId, sequenceId: seq.id }),
+        });
+        if (res.ok) {
+          const enroll = await res.json();
+          setSequenceEnrollments((prev) => [enroll, ...prev]);
+        }
+      } catch {
+        /* silent — auto-enroll is best-effort */
+      }
     }
   }
 
@@ -2899,6 +3590,10 @@ function App() {
       setVehicleSales(
         vehicleSales.map((s) => (s.id === id ? { ...s, stage } : s)),
       );
+    }
+    if (stage === "Lost") {
+      const sale = vehicleSales.find((s) => s.id === id);
+      if (sale) autoEnrollOnStatusChange(sale.customerId, "deal_lost");
     }
   }
 
@@ -5277,18 +5972,33 @@ function App() {
       icon: <Clock size={16} />,
       badge: showroomAppointments.length || undefined,
     },
-    {
-      page: "finance",
-      label: "Finance",
-      icon: <CreditCard size={16} />,
-      badge: pendingFinance || undefined,
-    },
     { page: "pipeline", label: "Pipeline", icon: <TrendingUp size={16} /> },
+    {
+      page: "fi-manager",
+      label: "F&I Manager",
+      icon: <Landmark size={16} />,
+      badge:
+        vehicleSales.filter(
+          (s) =>
+            s.stage === "Finance" && (s.stips ?? []).some((st) => !st.received),
+        ).length || undefined,
+    },
     { page: "trades", label: "Trade-Ins", icon: <ArrowLeftRight size={16} /> },
     { page: "vin", label: "VIN Lookup", icon: <Search size={16} /> },
     { page: "activities", label: "Activities", icon: <Activity size={16} /> },
     { page: "desk", label: "Desk Tool", icon: <Calculator size={16} /> },
     { page: "service", label: "Service", icon: <Wrench size={16} /> },
+    {
+      page: "comms",
+      label: "Comms",
+      icon: <MessageSquare size={16} />,
+      badge:
+        messages.filter(
+          (m) => m.direction === "Inbound" && m.status === "received",
+        ).length || undefined,
+    },
+    { page: "inventory", label: "Inventory", icon: <Warehouse size={16} /> },
+    { page: "reports", label: "Reports", icon: <BarChart2 size={16} /> },
   ];
 
   return (
@@ -5920,7 +6630,8 @@ function App() {
               {(activeLeads.length > 0 ||
                 stalledLeads.length > 0 ||
                 soldReengagementTargets.length > 0 ||
-                serviceEquityTargets.length > 0) && (
+                serviceEquityTargets.length > 0 ||
+                equityMiningTargets.length > 0) && (
                 <div className="dash-grid" style={{ marginTop: 18 }}>
                   {activeLeads.length > 0 && (
                     <article className="panel">
@@ -6047,7 +6758,7 @@ function App() {
                       <p className="eyebrow service-equity-eye">
                         Service Equity
                       </p>
-                      <h2>Equity Mining</h2>
+                      <h2>Service Equity Signals</h2>
                       <p className="panel-note">
                         Service customers with likely positive trade equity
                       </p>
@@ -6081,6 +6792,85 @@ function App() {
                               >
                                 Work Equity
                               </button>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </article>
+                  )}
+
+                  {equityMiningTargets.length > 0 && (
+                    <article className="panel equity-mining-panel">
+                      <p className="eyebrow equity-mine-eye">
+                        🔑 Equity Mining
+                      </p>
+                      <h2>Upgrade Opportunities</h2>
+                      <p className="panel-note">
+                        Sold customers estimated to have positive equity — ready
+                        for a trade-up call.
+                      </p>
+                      <div className="lead-list">
+                        {equityMiningTargets.map(
+                          ({
+                            customer,
+                            sale,
+                            yearsOwned,
+                            estimatedACV,
+                            remainingBalance,
+                            equity,
+                          }) => (
+                            <div
+                              className="lead-card equity-mine-card"
+                              key={sale.id}
+                            >
+                              <div>
+                                <strong
+                                  className="profile-link-name"
+                                  onClick={() => openProfile(customer)}
+                                >
+                                  {customer.firstName} {customer.lastName}
+                                </strong>
+                                <span>
+                                  {sale.year} {sale.make} {sale.model} ·{" "}
+                                  {yearsOwned}yr owned
+                                </span>
+                                <small className="equity-mine-numbers">
+                                  ACV ~${estimatedACV.toLocaleString()} · Owed
+                                  ~$
+                                  {remainingBalance.toLocaleString()} ·{" "}
+                                  <span className="equity-positive">
+                                    +${equity.toLocaleString()} equity
+                                  </span>
+                                </small>
+                              </div>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="open-btn"
+                                  onClick={() => openProfile(customer)}
+                                >
+                                  Profile
+                                </button>
+                                <button
+                                  type="button"
+                                  className="open-btn"
+                                  style={{
+                                    background: "#6366f1",
+                                    color: "#fff",
+                                  }}
+                                  onClick={() => {
+                                    setCommsCustomerId(customer.id);
+                                    setCommsTab("inbox");
+                                    setCommsChannel("Text");
+                                    setCommsBody(
+                                      `Hi ${customer.firstName}, it's ${currentUser?.name ?? "your dealer"}! Based on current market conditions, your ${sale.year} ${sale.make} ${sale.model} may have significant equity. Would you be open to exploring an upgrade? No pressure — just wanted to reach out!`,
+                                    );
+                                    navigate("comms");
+                                  }}
+                                >
+                                  📱 Text
+                                </button>
+                              </div>
                             </div>
                           ),
                         )}
@@ -6987,8 +7777,8 @@ function App() {
             </>
           )}
 
-          {/* ── FINANCE ──────────────────────────────────────────── */}
-          {currentPage === "finance" && (
+          {/* ── FINANCE (removed — content merged into F&I Manager) */}
+          {false && (
             <>
               <header className="page-header">
                 <div>
@@ -7329,6 +8119,190 @@ function App() {
                   </div>
                 ))}
               </div>
+
+              {/* ── Lender Response Status Board ── */}
+              <article className="panel" style={{ marginTop: 24 }}>
+                <p className="eyebrow">Finance</p>
+                <h2>Lender Response Board</h2>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                    marginBottom: 16,
+                  }}
+                >
+                  Track every deal's lender submission status in one view.
+                </p>
+                {(() => {
+                  const activeDeals = vehicleSales.filter(
+                    (s) => s.stage !== "Lost" && s.stage !== "Delivered",
+                  );
+                  if (activeDeals.length === 0)
+                    return <p className="empty-state">No active deals.</p>;
+                  return (
+                    <div className="lender-board">
+                      {activeDeals.map((deal) => {
+                        const cust = customers.find(
+                          (c) => c.id === deal.customerId,
+                        );
+                        const subs = deal.lenderSubmissions ?? [];
+                        const statusColor: Record<string, string> = {
+                          Approved: "#22c55e",
+                          Countered: "#f59e0b",
+                          Declined: "#ef4444",
+                          Pending: "#6366f1",
+                        };
+                        return (
+                          <div key={deal.id} className="lender-board-row">
+                            <div className="lender-board-vehicle">
+                              <strong>
+                                {deal.year} {deal.make} {deal.model}
+                              </strong>
+                              <small>
+                                {cust
+                                  ? `${cust.firstName} ${cust.lastName}`
+                                  : "—"}{" "}
+                                · #{deal.stockNumber}
+                              </small>
+                            </div>
+                            {subs.length === 0 ? (
+                              <span className="lender-no-subs">
+                                No submissions yet
+                              </span>
+                            ) : (
+                              <div className="lender-subs-list">
+                                {subs.map((sub, i) => (
+                                  <div key={i} className="lender-sub-chip">
+                                    <span className="lender-sub-name">
+                                      {sub.lenderName}
+                                    </span>
+                                    <span
+                                      className="lender-sub-status"
+                                      style={{
+                                        color:
+                                          statusColor[sub.status] ??
+                                          "var(--text-muted)",
+                                      }}
+                                    >
+                                      {sub.status}
+                                    </span>
+                                    {sub.approvedAmount && (
+                                      <span className="lender-sub-amount">
+                                        ${sub.approvedAmount.toLocaleString()}
+                                      </span>
+                                    )}
+                                    {sub.apr && (
+                                      <span className="lender-sub-apr">
+                                        {sub.apr}% / {sub.termMonths}mo
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {deal.acceptedSubmissionId && (
+                              <span className="lender-accepted-badge">
+                                ✓ Lender Accepted
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </article>
+
+              {/* ── Deal Jacket / Document Checklist ── */}
+              <article className="panel" style={{ marginTop: 24 }}>
+                <p className="eyebrow">Compliance</p>
+                <h2>Deal Jacket Checklist</h2>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                    marginBottom: 16,
+                  }}
+                >
+                  Standard document checklist for every deal. Track what's
+                  collected per vehicle sale.
+                </p>
+                {(() => {
+                  const activeDeals = vehicleSales.filter(
+                    (s) => s.stage !== "Lost",
+                  );
+                  if (activeDeals.length === 0)
+                    return <p className="empty-state">No active deals.</p>;
+                  const stdDocs = [
+                    "Credit Application",
+                    "Driver's License (front & back)",
+                    "Proof of Insurance",
+                    "Pay Stubs (2 most recent)",
+                    "Buyer's Order",
+                    "Retail Installment Contract",
+                    "OFAC / Red Flags Cleared",
+                    "Truth in Lending Disclosure",
+                    "Trade Title (if applicable)",
+                  ];
+                  return (
+                    <div className="deal-jacket-list">
+                      {activeDeals.map((deal) => {
+                        const cust = customers.find(
+                          (c) => c.id === deal.customerId,
+                        );
+                        const checked: Record<string, boolean> = {
+                          "Credit Application": true,
+                          "Driver's License (front & back)": true,
+                          "Buyer's Order": !!deal.stage,
+                          "OFAC / Red Flags Cleared": !!(
+                            deal.ofacCleared && deal.redFlagsCleared
+                          ),
+                          "Truth in Lending Disclosure":
+                            !!deal.truthInLendingPrinted,
+                          "Retail Installment Contract": !!deal.eContractSigned,
+                        };
+                        const doneCount = stdDocs.filter(
+                          (d) => checked[d],
+                        ).length;
+                        return (
+                          <div key={deal.id} className="deal-jacket-card">
+                            <div className="deal-jacket-header">
+                              <div>
+                                <strong>
+                                  {deal.year} {deal.make} {deal.model}
+                                </strong>
+                                <small>
+                                  {" "}
+                                  ·{" "}
+                                  {cust
+                                    ? `${cust.firstName} ${cust.lastName}`
+                                    : "—"}{" "}
+                                  · {deal.stage}
+                                </small>
+                              </div>
+                              <span className="deal-jacket-progress">
+                                {doneCount}/{stdDocs.length} docs
+                              </span>
+                            </div>
+                            <div className="deal-jacket-docs">
+                              {stdDocs.map((doc) => (
+                                <div
+                                  key={doc}
+                                  className={`deal-jacket-doc${checked[doc] ? " done" : ""}`}
+                                >
+                                  <span>{checked[doc] ? "✓" : "○"}</span>
+                                  <span>{doc}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </article>
+
               {/* Desk / Payment Calculator */}
               <article className="panel" style={{ marginTop: 24 }}>
                 <p className="eyebrow">Deal Desk</p>
@@ -7977,6 +8951,18 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    onClick={generateBuyersOrder}
+                    disabled={!deskNumbers.selling && !desk.make && !desk.year}
+                    title={
+                      !deskNumbers.selling && !desk.make && !desk.year
+                        ? "Enter vehicle info first"
+                        : "Download PDF buyer's order"
+                    }
+                  >
+                    📄 Buyer's Order PDF
+                  </button>
+                  <button
+                    type="button"
                     className="ghost-button"
                     onClick={() =>
                       setDesk({
@@ -8020,6 +9006,24 @@ function App() {
                   </button>
                 </div>
               </header>
+
+              {/* Mode Tabs */}
+              <div className="desk-mode-tabs">
+                {(["retail", "lease", "compare"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`desk-mode-tab${deskMode === m ? " active" : ""}`}
+                    onClick={() => setDeskMode(m)}
+                  >
+                    {m === "retail"
+                      ? "Retail Finance"
+                      : m === "lease"
+                        ? "Lease"
+                        : "Lease vs. Buy"}
+                  </button>
+                ))}
+              </div>
 
               <div className="desk-layout">
                 {/* ── LEFT: Deal Builder ── */}
@@ -8436,21 +9440,120 @@ function App() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Lease Inputs — only shown in lease/compare mode */}
+                  {(deskMode === "lease" || deskMode === "compare") && (
+                    <div className="desk-section">
+                      <p className="desk-section-title">Lease Parameters</p>
+                      <div className="desk-row">
+                        <div className="desk-field">
+                          <label>Residual %</label>
+                          <input
+                            placeholder="52"
+                            value={leaseDesk.residualPct}
+                            onChange={(e) =>
+                              setLeaseDesk({
+                                ...leaseDesk,
+                                residualPct: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="desk-field">
+                          <label>Money Factor</label>
+                          <input
+                            placeholder="0.00125"
+                            value={leaseDesk.moneyFactor}
+                            onChange={(e) =>
+                              setLeaseDesk({
+                                ...leaseDesk,
+                                moneyFactor: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="desk-field">
+                          <label>Lease Term (mo)</label>
+                          <select
+                            value={leaseDesk.termMonths}
+                            onChange={(e) =>
+                              setLeaseDesk({
+                                ...leaseDesk,
+                                termMonths: e.target.value,
+                              })
+                            }
+                          >
+                            <option>24</option>
+                            <option>27</option>
+                            <option>36</option>
+                            <option>39</option>
+                            <option>42</option>
+                            <option>48</option>
+                          </select>
+                        </div>
+                        <div className="desk-field">
+                          <label>Acquisition Fee ($)</label>
+                          <input
+                            value={leaseDesk.acquisition}
+                            onChange={(e) =>
+                              setLeaseDesk({
+                                ...leaseDesk,
+                                acquisition: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="desk-field">
+                          <label>Disposition Fee ($)</label>
+                          <input
+                            value={leaseDesk.disposition}
+                            onChange={(e) =>
+                              setLeaseDesk({
+                                ...leaseDesk,
+                                disposition: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="desk-field desk-computed">
+                          <label>Residual Value</label>
+                          <span>
+                            $
+                            {leaseNumbers.residual > 0
+                              ? leaseNumbers.residual.toLocaleString(
+                                  undefined,
+                                  { maximumFractionDigits: 0 },
+                                )
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── RIGHT: Deal Summary ── */}
                 <div className="desk-summary">
                   {/* Monthly Payment — big hero number */}
                   <div className="payment-hero">
-                    <p className="payment-hero-label">Est. Monthly Payment</p>
+                    <p className="payment-hero-label">
+                      {deskMode === "lease"
+                        ? "Est. Lease Payment"
+                        : "Est. Monthly Payment"}
+                    </p>
                     <strong className="payment-hero-amount">
-                      {deskNumbers.monthly > 0
-                        ? `$${deskNumbers.monthly.toFixed(2)}`
-                        : "$—"}
+                      {deskMode === "lease"
+                        ? leaseNumbers.monthly > 0
+                          ? `$${leaseNumbers.monthly.toFixed(2)}`
+                          : "$—"
+                        : deskNumbers.monthly > 0
+                          ? `$${deskNumbers.monthly.toFixed(2)}`
+                          : "$—"}
                     </strong>
                     <p className="payment-hero-sub">
-                      {desk.termMonths} mo · {desk.apr}% APR
-                      {desk.lender ? ` · ${desk.lender}` : ""}
+                      {deskMode === "lease"
+                        ? `${leaseNumbers.term} mo lease · MF ${leaseDesk.moneyFactor} · ${leaseDesk.residualPct}% residual`
+                        : `${desk.termMonths} mo · ${desk.apr}% APR${desk.lender ? ` · ${desk.lender}` : ""}`}
                     </p>
                     {deskNumbers.equity > 0 && (
                       <div className="cash-back-pill">
@@ -8464,6 +9567,155 @@ function App() {
                       </div>
                     )}
                   </div>
+
+                  {/* Lease vs. Buy comparison table */}
+                  {deskMode === "compare" && (
+                    <div className="deal-breakdown">
+                      <p className="desk-section-title">
+                        Lease vs. Buy Comparison
+                      </p>
+                      <table className="lease-summary-table">
+                        <thead>
+                          <tr>
+                            <th>Metric</th>
+                            <th>Lease ({leaseNumbers.term} mo)</th>
+                            <th>Finance ({desk.termMonths} mo)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="highlight">
+                            <td>Monthly Payment</td>
+                            <td>
+                              $
+                              {leaseNumbers.monthly > 0
+                                ? leaseNumbers.monthly.toFixed(2)
+                                : "—"}
+                            </td>
+                            <td>
+                              $
+                              {deskNumbers.monthly > 0
+                                ? deskNumbers.monthly.toFixed(2)
+                                : "—"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Due at Signing</td>
+                            <td>
+                              $
+                              {(
+                                parseFloat(desk.downPayment) || 0
+                              ).toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                            <td>
+                              $
+                              {(
+                                parseFloat(desk.downPayment) || 0
+                              ).toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Total Cost</td>
+                            <td>
+                              $
+                              {leaseNumbers.totalCost > 0
+                                ? leaseNumbers.totalCost.toLocaleString(
+                                    undefined,
+                                    { maximumFractionDigits: 0 },
+                                  )
+                                : "—"}
+                            </td>
+                            <td>
+                              $
+                              {leaseNumbers.retailTotal > 0
+                                ? leaseNumbers.retailTotal.toLocaleString(
+                                    undefined,
+                                    { maximumFractionDigits: 0 },
+                                  )
+                                : "—"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Residual / Equity</td>
+                            <td>
+                              $
+                              {leaseNumbers.residual > 0
+                                ? leaseNumbers.residual.toLocaleString(
+                                    undefined,
+                                    { maximumFractionDigits: 0 },
+                                  )
+                                : "—"}{" "}
+                              (buyout)
+                            </td>
+                            <td>Own outright</td>
+                          </tr>
+                          <tr>
+                            <td>Mileage Limit</td>
+                            <td>12k–15k/yr</td>
+                            <td>Unlimited</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Lease breakdown (lease mode only) */}
+                  {deskMode === "lease" && leaseNumbers.monthly > 0 && (
+                    <div className="deal-breakdown">
+                      <p className="desk-section-title">Lease Breakdown</p>
+                      <table className="lease-summary-table">
+                        <tbody>
+                          <tr>
+                            <td>Adjusted Cap Cost</td>
+                            <td>
+                              $
+                              {leaseNumbers.adjCap.toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Residual Value</td>
+                            <td>
+                              $
+                              {leaseNumbers.residual.toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Depreciation / mo</td>
+                            <td>${leaseNumbers.depreciation.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td>Rent Charge / mo</td>
+                            <td>${leaseNumbers.rentCharge.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td>Base Payment</td>
+                            <td>${leaseNumbers.basePmt.toFixed(2)}</td>
+                          </tr>
+                          <tr className="highlight">
+                            <td>Monthly w/ Tax</td>
+                            <td>${leaseNumbers.monthly.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td>Total Lease Cost</td>
+                            <td>
+                              $
+                              {leaseNumbers.totalCost.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 0 },
+                              )}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   {/* Deal Breakdown */}
                   <div className="deal-breakdown">
@@ -8778,6 +10030,90 @@ function App() {
                   )}
                 </div>
               </div>
+
+              {/* ── Gross / Reserve Calculator ── */}
+              <article className="panel" style={{ marginTop: 24 }}>
+                <p className="eyebrow">F&I Management</p>
+                <h2>Gross &amp; Reserve Calculator</h2>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                    marginBottom: 16,
+                  }}
+                >
+                  Calculate front-end gross, back-end gross, dealer reserve, and
+                  total profit on any deal.
+                </p>
+                {(() => {
+                  const selling = parseFloat(desk.sellingPrice) || 0;
+                  const invoice = parseFloat(desk.msrp) || 0;
+                  const holdback = invoice * 0.03;
+                  const floorplan = invoice * 0.005;
+                  const frontGross = selling - invoice + holdback - floorplan;
+                  const backGross = deskNumbers.fiTotal ?? 0;
+                  const financed = Math.max(0, deskNumbers.financed);
+                  const aprDec = (parseFloat(desk.apr) || 0) / 100;
+                  const term = parseInt(desk.termMonths) || 72;
+                  const buyRate = Math.max(0, aprDec - 0.02);
+                  const reserveRate = aprDec - buyRate;
+                  const reserveEst =
+                    financed > 0 && term > 0
+                      ? (financed * reserveRate * term) / 12 / 2
+                      : 0;
+                  const totalGross = frontGross + backGross + reserveEst;
+                  return (
+                    <div className="gross-calc-grid">
+                      {[
+                        [
+                          "Invoice / Pack Base",
+                          `$${invoice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                        ],
+                        [
+                          "Holdback (3%)",
+                          `+$${holdback.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                        ],
+                        [
+                          "Floorplan Cost (~0.5%)",
+                          `-$${floorplan.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                        ],
+                        [
+                          "Front-End Gross",
+                          `$${frontGross.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          frontGross >= 0 ? "gross-pos" : "gross-neg",
+                        ],
+                        [
+                          "Back-End / F&I Gross",
+                          `$${backGross.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          "gross-pos",
+                        ],
+                        [
+                          "Est. Dealer Reserve",
+                          `$${reserveEst.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          "gross-pos",
+                        ],
+                        [
+                          "Total Gross Profit",
+                          `$${totalGross.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          totalGross >= 0 ? "gross-total-pos" : "gross-neg",
+                        ],
+                      ].map(([label, val, cls]) => (
+                        <div
+                          key={String(label)}
+                          className={`gross-calc-row${cls ? ` ${cls}` : ""}`}
+                        >
+                          <span>{label}</span>
+                          <strong>{val}</strong>
+                        </div>
+                      ))}
+                      <p className="gross-calc-note">
+                        Reserve estimated at buy rate +2% spread, 50%
+                        participation. Holdback/floorplan are approximations.
+                      </p>
+                    </div>
+                  );
+                })()}
+              </article>
             </>
           )}
 
@@ -8871,6 +10207,1416 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* ── F&I MANAGER ──────────────────────────────────────── */}
+          {currentPage === "fi-manager" &&
+            (() => {
+              const fiDeals = vehicleSales.filter((s) => s.stage !== "Working");
+              const totalReserve = fiDeals.reduce(
+                (sum, s) => sum + (s.dealerReserve ?? 0),
+                0,
+              );
+              const totalFiRevenue = fiDeals.reduce(
+                (sum, s) =>
+                  sum +
+                  (s.fiProducts ?? []).reduce((ps, p) => ps + p.retailPrice, 0),
+                0,
+              );
+              const totalFiGross = fiDeals.reduce(
+                (sum, s) =>
+                  sum +
+                  (s.fiProducts ?? []).reduce(
+                    (ps, p) => ps + (p.retailPrice - p.dealerCost),
+                    0,
+                  ),
+                0,
+              );
+              const pendingStipDeals = fiDeals.filter((s) =>
+                (s.stips ?? []).some((st) => !st.received),
+              );
+
+              const fundingColors: Record<string, string> = {
+                "Pending Structure": "#f59e0b",
+                "Submitted to Lender": "#3b82f6",
+                Approved: "#10b981",
+                "Stipulations Required": "#ef4444",
+                Funded: "#6366f1",
+                Unwound: "#6b7280",
+                Declined: "#dc2626",
+              };
+
+              async function saveDeal(deal: VehicleSale) {
+                try {
+                  const res = await apiFetch(
+                    `${API_BASE}/api/vehicle-sales/${deal.id}/deal`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(deal),
+                    },
+                  );
+                  if (res.ok) {
+                    const saved = await res.json();
+                    // Only sync vehicleSales list — don't overwrite activeDeal
+                    // (UI already updated optimistically via setActiveDeal before this call)
+                    setVehicleSales((prev) =>
+                      prev.map((s) => (s.id === saved.id ? saved : s)),
+                    );
+                  }
+                } catch {
+                  setAppMessage("Could not save deal.");
+                }
+              }
+
+              async function toggleStip(deal: VehicleSale, stipId: number) {
+                const stips = (deal.stips ?? []).map((st) =>
+                  st.id === stipId
+                    ? {
+                        ...st,
+                        received: !st.received,
+                        receivedAt: !st.received
+                          ? new Date().toISOString()
+                          : undefined,
+                      }
+                    : st,
+                );
+                try {
+                  const res = await apiFetch(
+                    `${API_BASE}/api/vehicle-sales/${deal.id}/stips`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ stips }),
+                    },
+                  );
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setVehicleSales((prev) =>
+                      prev.map((s) => (s.id === updated.id ? updated : s)),
+                    );
+                    if (activeDeal?.id === deal.id) setActiveDeal(updated);
+                  }
+                } catch {
+                  setAppMessage("Could not update stip.");
+                }
+              }
+
+              async function submitToLenders(
+                deal: VehicleSale,
+                lenderIds: number[],
+              ) {
+                try {
+                  const res = await apiFetch(
+                    `${API_BASE}/api/vehicle-sales/${deal.id}/submit-lenders`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ lenderIds }),
+                    },
+                  );
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setVehicleSales((prev) =>
+                      prev.map((s) => (s.id === updated.id ? updated : s)),
+                    );
+                    setActiveDeal(updated);
+                    setSelectedLenderIds(new Set());
+                    setAppMessage(
+                      "Submitted to lenders. Awaiting decisions...",
+                    );
+                    // Poll for responses every 2s up to 15s
+                    let polls = 0;
+                    const interval = setInterval(async () => {
+                      polls++;
+                      try {
+                        const r2 = await apiFetch(
+                          `${API_BASE}/api/vehicle-sales/${deal.id}/deal`,
+                        );
+                        if (r2.ok) {
+                          const fresh = await r2.json();
+                          setVehicleSales((prev) =>
+                            prev.map((s) => (s.id === fresh.id ? fresh : s)),
+                          );
+                          setActiveDeal(fresh);
+                          const allDecided = (
+                            fresh.lenderSubmissions ?? []
+                          ).every(
+                            (s: LenderSubmission) => s.status !== "Pending",
+                          );
+                          if (allDecided || polls >= 7) clearInterval(interval);
+                        }
+                      } catch {
+                        clearInterval(interval);
+                      }
+                    }, 2000);
+                  }
+                } catch {
+                  setAppMessage("Could not submit to lenders.");
+                }
+              }
+
+              async function acceptSubmission(
+                deal: VehicleSale,
+                submissionId: number,
+              ) {
+                try {
+                  const res = await apiFetch(
+                    `${API_BASE}/api/vehicle-sales/${deal.id}/accept-submission`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ submissionId }),
+                    },
+                  );
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setVehicleSales((prev) =>
+                      prev.map((s) => (s.id === updated.id ? updated : s)),
+                    );
+                    setActiveDeal(updated);
+                    setAppMessage(
+                      `Accepted: ${updated.lender} at ${updated.apr}% APR`,
+                    );
+                  }
+                } catch {
+                  setAppMessage("Could not accept submission.");
+                }
+              }
+
+              const deal = activeDeal ?? fiDeals[0] ?? null;
+              // Keep ref in sync so onBlur closures always see latest deal
+              activeDealRef.current = deal;
+              const dealCustomer = deal
+                ? customers.find((c) => c.id === deal.customerId)
+                : null;
+              const amountFinanced = deal
+                ? Math.max(
+                    0,
+                    deal.salePrice -
+                      (deal.downPayment ?? 0) -
+                      (deal.tradeAllowance ?? 0) +
+                      (deal.tradePayoff ?? 0) +
+                      (deal.fiProducts ?? []).reduce(
+                        (s, p) => s + p.retailPrice,
+                        0,
+                      ),
+                  )
+                : 0;
+              const monthlyPayment =
+                deal?.apr && deal?.termMonths && amountFinanced > 0
+                  ? (() => {
+                      const r = deal.apr / 100 / 12;
+                      return Math.round(
+                        (amountFinanced * r) /
+                          (1 - Math.pow(1 + r, -deal.termMonths)),
+                      );
+                    })()
+                  : null;
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <h1>F&amp;I Manager</h1>
+                      <p className="page-subtitle">
+                        Deal structuring, funding pipeline, and product
+                        management
+                      </p>
+                    </div>
+                  </header>
+
+                  {/* ── KPI Stats ── */}
+                  <div className="fi-kpi-grid">
+                    {[
+                      {
+                        label: "Deals in Queue",
+                        value: fiDeals.length,
+                        icon: <ClipboardList size={18} />,
+                        bg: "#6366f118",
+                        color: "#6366f1",
+                      },
+                      {
+                        label: "Total Reserve",
+                        value: `$${totalReserve.toLocaleString()}`,
+                        icon: <DollarSign size={18} />,
+                        bg: "#10b98118",
+                        color: "#10b981",
+                      },
+                      {
+                        label: "F&I Revenue",
+                        value: `$${totalFiRevenue.toLocaleString()}`,
+                        icon: <BadgeDollarSign size={18} />,
+                        bg: "#3b82f618",
+                        color: "#3b82f6",
+                      },
+                      {
+                        label: "F&I Gross",
+                        value: `$${totalFiGross.toLocaleString()}`,
+                        icon: <TrendingUp size={18} />,
+                        bg: "#f59e0b18",
+                        color: "#d97706",
+                      },
+                      {
+                        label: "Stips Pending",
+                        value: pendingStipDeals.length,
+                        icon: <AlertTriangle size={18} />,
+                        bg:
+                          pendingStipDeals.length > 0
+                            ? "#ef444418"
+                            : "#10b98118",
+                        color:
+                          pendingStipDeals.length > 0 ? "#ef4444" : "#10b981",
+                      },
+                    ].map((stat) => (
+                      <div key={stat.label} className="fi-kpi-card">
+                        <div
+                          className="fi-kpi-icon"
+                          style={{ background: stat.bg, color: stat.color }}
+                        >
+                          {stat.icon}
+                        </div>
+                        <div>
+                          <div className="fi-kpi-label">{stat.label}</div>
+                          <div className="fi-kpi-value">{stat.value}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ── Commission Calculator ── */}
+                  {(() => {
+                    const commRate = 0.25; // 25% of back-end gross — typical F&I commission
+                    const flatPerDeal = 150; // flat per-deal bonus
+                    const backEndGrossTotal = fiDeals.reduce((sum, s) => {
+                      const fiGross = (s.fiProducts ?? []).reduce(
+                        (ps, p) => ps + (p.retailPrice - p.dealerCost),
+                        0,
+                      );
+                      const reserve = s.dealerReserve ?? 0;
+                      return sum + fiGross + reserve;
+                    }, 0);
+                    const commissionEarned =
+                      backEndGrossTotal * commRate +
+                      fiDeals.filter((s) => (s.fiProducts ?? []).length > 0)
+                        .length *
+                        flatPerDeal;
+                    const deliveredDeals = fiDeals.filter(
+                      (s) => s.stage === "Delivered",
+                    );
+                    const pvr =
+                      deliveredDeals.length > 0
+                        ? Math.round(backEndGrossTotal / deliveredDeals.length)
+                        : 0;
+                    return (
+                      <div className="fi-commission-bar">
+                        <div className="fi-commission-item">
+                          <span className="fi-commission-label">
+                            Back-End Gross
+                          </span>
+                          <span className="fi-commission-value">
+                            ${backEndGrossTotal.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="fi-commission-divider" />
+                        <div className="fi-commission-item">
+                          <span className="fi-commission-label">
+                            Est. Commission
+                          </span>
+                          <span className="fi-commission-value green">
+                            $
+                            {commissionEarned.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                          </span>
+                        </div>
+                        <div className="fi-commission-divider" />
+                        <div className="fi-commission-item">
+                          <span className="fi-commission-label">
+                            PVR (Per Vehicle Retail)
+                          </span>
+                          <span className="fi-commission-value">
+                            ${pvr.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="fi-commission-divider" />
+                        <div className="fi-commission-item">
+                          <span className="fi-commission-label">Rate Used</span>
+                          <span className="fi-commission-value muted">
+                            {(commRate * 100).toFixed(0)}% + ${flatPerDeal}/deal
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="fi-layout">
+                    {/* ── Deal Queue ── */}
+                    <div className="fi-queue">
+                      <div className="fi-queue-header">
+                        Deal Queue ({fiDeals.length})
+                      </div>
+                      <div className="fi-queue-list">
+                        {fiDeals.length === 0 && (
+                          <div className="fi-queue-empty">
+                            No deals in queue
+                          </div>
+                        )}
+                        {fiDeals.map((s) => {
+                          const cust = customers.find(
+                            (c) => c.id === s.customerId,
+                          );
+                          const pendingStips = (s.stips ?? []).filter(
+                            (st) => !st.received,
+                          ).length;
+                          const isActive =
+                            activeDeal?.id === s.id ||
+                            (!activeDeal && s.id === fiDeals[0]?.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                // If this deal is already active, don't clobber unsaved edits
+                                if (activeDeal?.id === s.id) return;
+                                setActiveDeal(s);
+                                setFiPriceOverrides({});
+                              }}
+                              className={`fi-queue-item${isActive ? " active" : ""}`}
+                            >
+                              <div className="fi-queue-item-name">
+                                {cust
+                                  ? `${cust.firstName} ${cust.lastName}`
+                                  : `Deal #${s.id}`}
+                              </div>
+                              <div className="fi-queue-item-vehicle">
+                                {s.year} {s.make} {s.model} · #{s.stockNumber}
+                              </div>
+                              <div className="fi-queue-item-badges">
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: "2px 7px",
+                                    borderRadius: 999,
+                                    background:
+                                      (fundingColors[
+                                        s.fundingStatus ?? "Pending Structure"
+                                      ] ?? "#94a3b8") + "22",
+                                    color:
+                                      fundingColors[
+                                        s.fundingStatus ?? "Pending Structure"
+                                      ] ?? "#94a3b8",
+                                  }}
+                                >
+                                  {s.fundingStatus ?? "Pending Structure"}
+                                </span>
+                                {pendingStips > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: "2px 7px",
+                                      borderRadius: 999,
+                                      background: "#ef444420",
+                                      color: "#ef4444",
+                                    }}
+                                  >
+                                    {pendingStips} stip
+                                    {pendingStips > 1 ? "s" : ""}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* ── Deal Detail ── */}
+                    {deal ? (
+                      <div className="fi-detail-col">
+                        {/* Deal Header */}
+                        <div className="fi-card">
+                          <div className="fi-deal-header">
+                            <div>
+                              <div className="fi-deal-eyebrow">Deal</div>
+                              <div className="fi-deal-name">
+                                {dealCustomer
+                                  ? `${dealCustomer.firstName} ${dealCustomer.lastName}`
+                                  : `Deal #${deal.id}`}
+                              </div>
+                              <div className="fi-deal-sub">
+                                {deal.year} {deal.make} {deal.model} · Stock #
+                                {deal.stockNumber}
+                              </div>
+                            </div>
+                            <select
+                              className="fi-funding-select"
+                              style={{
+                                color:
+                                  fundingColors[
+                                    deal.fundingStatus ?? "Pending Structure"
+                                  ],
+                              }}
+                              value={deal.fundingStatus ?? "Pending Structure"}
+                              onChange={(e) => {
+                                const updated = {
+                                  ...deal,
+                                  fundingStatus: e.target
+                                    .value as FundingStatus,
+                                };
+                                setActiveDeal(updated);
+                                saveDeal(updated);
+                              }}
+                            >
+                              {(
+                                [
+                                  "Pending Structure",
+                                  "Submitted to Lender",
+                                  "Approved",
+                                  "Stipulations Required",
+                                  "Funded",
+                                  "Unwound",
+                                  "Declined",
+                                ] as FundingStatus[]
+                              ).map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Deal Structure Grid */}
+                          <div className="fi-structure-grid">
+                            {[
+                              {
+                                label: "Sale Price",
+                                field: "salePrice" as const,
+                                prefix: "$",
+                              },
+                              {
+                                label: "Down Payment",
+                                field: "downPayment" as const,
+                                prefix: "$",
+                              },
+                              {
+                                label: "Trade Allowance",
+                                field: "tradeAllowance" as const,
+                                prefix: "$",
+                              },
+                              {
+                                label: "Trade Payoff",
+                                field: "tradePayoff" as const,
+                                prefix: "$",
+                              },
+                              {
+                                label: "APR (%)",
+                                field: "apr" as const,
+                                prefix: "",
+                              },
+                              {
+                                label: "Term (months)",
+                                field: "termMonths" as const,
+                                prefix: "",
+                              },
+                              {
+                                label: "Dealer Reserve",
+                                field: "dealerReserve" as const,
+                                prefix: "$",
+                              },
+                            ].map(({ label, field, prefix }) => (
+                              <label
+                                key={field}
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                  fontSize: 12,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontWeight: 700,
+                                    color: "var(--text-muted,#64748b)",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.06em",
+                                    fontSize: 10,
+                                  }}
+                                >
+                                  {label}
+                                </span>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    border: "1px solid var(--border,#e2e8f0)",
+                                    borderRadius: 8,
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {prefix && (
+                                    <span
+                                      style={{
+                                        padding: "6px 8px",
+                                        background: "var(--bg,#f8fafc)",
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color: "var(--text-muted,#64748b)",
+                                      }}
+                                    >
+                                      {prefix}
+                                    </span>
+                                  )}
+                                  <input
+                                    type="number"
+                                    value={(deal[field] as number) ?? ""}
+                                    onChange={(e) =>
+                                      setActiveDeal({
+                                        ...deal,
+                                        [field]:
+                                          e.target.value === ""
+                                            ? undefined
+                                            : Number(e.target.value),
+                                      })
+                                    }
+                                    onBlur={() => {
+                                      if (activeDealRef.current)
+                                        saveDeal(activeDealRef.current);
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      border: "none",
+                                      padding: "6px 10px",
+                                      fontSize: 13,
+                                      background: "transparent",
+                                      outline: "none",
+                                      width: "100%",
+                                    }}
+                                  />
+                                </div>
+                              </label>
+                            ))}
+                            <label
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 4,
+                                fontSize: 12,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: "var(--text-muted,#64748b)",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.06em",
+                                  fontSize: 10,
+                                }}
+                              >
+                                Lender
+                              </span>
+                              <div className="fi-input-wrap">
+                                <input
+                                  className="fi-input"
+                                  value={deal.lender ?? ""}
+                                  onChange={(e) =>
+                                    setActiveDeal({
+                                      ...deal,
+                                      lender: e.target.value,
+                                    })
+                                  }
+                                  onBlur={() => {
+                                    if (activeDealRef.current)
+                                      saveDeal(activeDealRef.current);
+                                  }}
+                                  placeholder="e.g. Ford Motor Credit"
+                                />
+                              </div>
+                            </label>
+                          </div>
+
+                          {monthlyPayment && (
+                            <div className="fi-payment-bar">
+                              <div>
+                                <div className="fi-payment-stat-label">
+                                  Est. Payment
+                                </div>
+                                <div className="fi-payment-stat-value">
+                                  ${monthlyPayment.toLocaleString()}/mo
+                                </div>
+                              </div>
+                              <div>
+                                <div className="fi-payment-stat-label">
+                                  Amount Financed
+                                </div>
+                                <div className="fi-payment-stat-value">
+                                  ${amountFinanced.toLocaleString()}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="fi-payment-stat-label">
+                                  F&amp;I Revenue
+                                </div>
+                                <div className="fi-payment-stat-value green">
+                                  $
+                                  {(deal.fiProducts ?? [])
+                                    .reduce((s, p) => s + p.retailPrice, 0)
+                                    .toLocaleString()}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="fi-payment-stat-label">
+                                  F&amp;I Gross
+                                </div>
+                                <div className="fi-payment-stat-value amber">
+                                  $
+                                  {(deal.fiProducts ?? [])
+                                    .reduce(
+                                      (s, p) =>
+                                        s + (p.retailPrice - p.dealerCost),
+                                      0,
+                                    )
+                                    .toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* F&I Product Menu */}
+                        <div className="fi-card">
+                          <div className="fi-card-title">
+                            <BadgeDollarSign size={16} /> F&amp;I Product Menu
+                          </div>
+                          <div className="fi-product-grid">
+                            {fiProducts.map((product) => {
+                              const isSold = (deal.fiProducts ?? []).some(
+                                (p) => p.productId === product.id,
+                              );
+                              // Per-month payment impact
+                              const dealAprM = (deal.apr ?? 7.9) / 100 / 12;
+                              const dealTerm = deal.termMonths ?? 72;
+                              const moImpact =
+                                dealAprM > 0
+                                  ? (product.retailPrice * dealAprM) /
+                                    (1 - Math.pow(1 + dealAprM, -dealTerm))
+                                  : product.retailPrice / dealTerm;
+                              // Profit floor check
+                              const profitFloor =
+                                product.dealerCost + (product.minProfit ?? 0);
+                              const belowFloor =
+                                isSold && product.retailPrice < profitFloor;
+                              const atCap =
+                                product.retailPrice >=
+                                (product.retailCap ?? Infinity);
+                              // Resolve the current sold price (may have been overridden)
+                              const soldEntry = (deal.fiProducts ?? []).find(
+                                (p) => p.productId === product.id,
+                              );
+                              const currentSoldPrice =
+                                soldEntry?.retailPrice ?? product.retailPrice;
+                              const inputKey = product.id;
+                              const inputVal =
+                                fiPriceOverrides[inputKey] !== undefined
+                                  ? fiPriceOverrides[inputKey]
+                                  : String(currentSoldPrice);
+                              const soldGross =
+                                currentSoldPrice - product.dealerCost;
+                              const soldBelowFloor =
+                                soldGross < (product.minProfit ?? 0);
+                              const soldMoImpact =
+                                dealAprM > 0
+                                  ? (currentSoldPrice * dealAprM) /
+                                    (1 - Math.pow(1 + dealAprM, -dealTerm))
+                                  : currentSoldPrice / dealTerm;
+
+                              return (
+                                <div
+                                  key={product.id}
+                                  className={`fi-product-btn${isSold ? " selected" : ""}`}
+                                >
+                                  {/* Top row: info + toggle */}
+                                  <div className="fi-product-top-row">
+                                    <div
+                                      className="fi-product-info"
+                                      onClick={() => {
+                                        const current = deal.fiProducts ?? [];
+                                        const next = isSold
+                                          ? current.filter(
+                                              (p) => p.productId !== product.id,
+                                            )
+                                          : [
+                                              ...current,
+                                              {
+                                                productId: product.id,
+                                                category: product.category,
+                                                name: product.name,
+                                                retailPrice:
+                                                  product.retailPrice,
+                                                dealerCost: product.dealerCost,
+                                                termMonths: product.termMonths,
+                                              },
+                                            ];
+                                        const updated = {
+                                          ...deal,
+                                          fiProducts: next,
+                                        };
+                                        setActiveDeal(updated);
+                                        saveDeal(updated);
+                                        // Clear any override when removing
+                                        if (isSold) {
+                                          setFiPriceOverrides((prev) => {
+                                            const n = { ...prev };
+                                            delete n[inputKey];
+                                            return n;
+                                          });
+                                        }
+                                      }}
+                                      style={{ flex: 1, cursor: "pointer" }}
+                                    >
+                                      <div className="fi-product-category">
+                                        {product.category}
+                                      </div>
+                                      <div className="fi-product-name">
+                                        {product.name}
+                                      </div>
+                                      <div className="fi-product-provider">
+                                        {product.providerName}
+                                        {product.termMonths
+                                          ? ` · ${product.termMonths}mo`
+                                          : ""}
+                                      </div>
+                                    </div>
+                                    {isSold && (
+                                      <CheckCircle
+                                        size={16}
+                                        color="#3b82f6"
+                                        style={{ flexShrink: 0 }}
+                                      />
+                                    )}
+                                  </div>
+
+                                  {/* Pricing row */}
+                                  <div className="fi-product-pricing">
+                                    {isSold ? (
+                                      /* ── Editable price when sold ── */
+                                      <div className="fi-price-edit-wrap">
+                                        <span className="fi-price-edit-prefix">
+                                          $
+                                        </span>
+                                        <input
+                                          type="number"
+                                          className={`fi-price-edit-input${soldBelowFloor ? " below-floor" : ""}`}
+                                          value={inputVal}
+                                          min={profitFloor}
+                                          max={product.retailCap}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={(e) => {
+                                            setFiPriceOverrides((prev) => ({
+                                              ...prev,
+                                              [inputKey]: e.target.value,
+                                            }));
+                                          }}
+                                          onBlur={(e) => {
+                                            e.stopPropagation();
+                                            const raw =
+                                              parseFloat(e.target.value) || 0;
+                                            // Clamp to floor and cap
+                                            const clamped = Math.min(
+                                              Math.max(raw, profitFloor),
+                                              product.retailCap ?? raw,
+                                            );
+                                            setFiPriceOverrides((prev) => ({
+                                              ...prev,
+                                              [inputKey]: String(clamped),
+                                            }));
+                                            const updatedProducts = (
+                                              deal.fiProducts ?? []
+                                            ).map((p) =>
+                                              p.productId === product.id
+                                                ? { ...p, retailPrice: clamped }
+                                                : p,
+                                            );
+                                            const updated = {
+                                              ...deal,
+                                              fiProducts: updatedProducts,
+                                            };
+                                            setActiveDeal(updated);
+                                            saveDeal(updated);
+                                          }}
+                                        />
+                                        <span className="fi-price-edit-range">
+                                          floor ${profitFloor.toLocaleString()}{" "}
+                                          · cap $
+                                          {(
+                                            product.retailCap ?? 0
+                                          ).toLocaleString()}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="fi-product-price">
+                                        ${product.retailPrice.toLocaleString()}
+                                      </span>
+                                    )}
+                                    <span
+                                      className="fi-product-gross"
+                                      style={{
+                                        color: (
+                                          isSold ? soldBelowFloor : belowFloor
+                                        )
+                                          ? "#ef4444"
+                                          : undefined,
+                                      }}
+                                    >
+                                      +$
+                                      {(isSold
+                                        ? soldGross
+                                        : product.retailPrice -
+                                          product.dealerCost
+                                      ).toLocaleString()}{" "}
+                                      gross
+                                      {(isSold
+                                        ? soldBelowFloor
+                                        : belowFloor) && (
+                                        <span className="fi-floor-warn">
+                                          {" "}
+                                          ⚠ below floor
+                                        </span>
+                                      )}
+                                    </span>
+                                    {atCap && !isSold && (
+                                      <span
+                                        style={{
+                                          fontSize: 10,
+                                          color: "#f59e0b",
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        At cap
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="fi-product-mo-impact">
+                                    +$
+                                    {(isSold ? soldMoImpact : moImpact).toFixed(
+                                      2,
+                                    )}
+                                    /mo
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {fiProducts.length === 0 && (
+                              <div
+                                className="fi-empty"
+                                style={{ gridColumn: "1/-1" }}
+                              >
+                                No products configured for this rooftop.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Stipulation Tracker */}
+                        <div className="fi-card">
+                          <div className="fi-card-title">
+                            <ClipboardList size={16} /> Stipulation Tracker
+                          </div>
+                          {(deal.stips ?? []).length === 0 && (
+                            <div className="fi-empty">
+                              No stips on this deal.
+                            </div>
+                          )}
+                          <div className="fi-stip-list">
+                            {(deal.stips ?? []).map((stip) => (
+                              <div
+                                key={stip.id}
+                                className={`fi-stip-row${stip.received ? " received" : ""}`}
+                              >
+                                <button
+                                  type="button"
+                                  className={`fi-stip-checkbox${stip.received ? " received" : ""}`}
+                                  onClick={() => toggleStip(deal, stip.id)}
+                                >
+                                  {stip.received && (
+                                    <CheckCircle size={14} color="#fff" />
+                                  )}
+                                </button>
+                                <div style={{ flex: 1 }}>
+                                  <div
+                                    className={`fi-stip-label${stip.received ? " received" : ""}`}
+                                  >
+                                    {stip.label}
+                                  </div>
+                                  {stip.receivedAt && (
+                                    <div className="fi-stip-date">
+                                      Received{" "}
+                                      {new Date(
+                                        stip.receivedAt,
+                                      ).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
+                                <span
+                                  className={`fi-stip-badge${stip.received ? " received" : ""}`}
+                                >
+                                  {stip.received ? "Received" : "Missing"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Compliance */}
+                        <div className="fi-card">
+                          <div className="fi-card-title">
+                            <ShieldCheck size={16} /> Compliance &amp;
+                            e-Contracting
+                          </div>
+                          <div className="fi-compliance-grid">
+                            {(
+                              [
+                                "ofacCleared",
+                                "redFlagsCleared",
+                                "truthInLendingPrinted",
+                                "eContractSent",
+                                "eContractSigned",
+                              ] as const
+                            ).map((field) => {
+                              const labels: Record<string, string> = {
+                                ofacCleared: "OFAC Cleared",
+                                redFlagsCleared: "Red Flags Cleared",
+                                truthInLendingPrinted:
+                                  "Truth in Lending Printed",
+                                eContractSent: "e-Contract Sent",
+                                eContractSigned: "e-Contract Signed",
+                              };
+                              const checked = Boolean(deal[field]);
+                              return (
+                                <button
+                                  key={field}
+                                  type="button"
+                                  className={`fi-compliance-btn${checked ? " checked" : ""}`}
+                                  onClick={() => {
+                                    const updated = {
+                                      ...deal,
+                                      [field]: !checked,
+                                    };
+                                    setActiveDeal(updated);
+                                    saveDeal(updated);
+                                  }}
+                                >
+                                  <div
+                                    className={`fi-compliance-check${checked ? " checked" : ""}`}
+                                  >
+                                    {checked && (
+                                      <CheckCircle size={14} color="#fff" />
+                                    )}
+                                  </div>
+                                  <span className="fi-compliance-label">
+                                    {labels[field]}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className="finance-portal-panel"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minHeight: 300,
+                        }}
+                      >
+                        <p className="empty-state">
+                          Select a deal from the queue to view details.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Lender Submission Panel ── */}
+                  <div className="fi-card">
+                    <div className="fi-card-title">
+                      <CreditCard size={16} /> Submit to Lenders
+                      {deal && (deal.lenderSubmissions ?? []).length > 0 && (
+                        <span
+                          className="badge"
+                          style={{ background: "#3b82f620", color: "#3b82f6" }}
+                        >
+                          {(deal.lenderSubmissions ?? []).length} submitted
+                        </span>
+                      )}
+                    </div>
+
+                    {!deal ? (
+                      <div className="fi-empty">
+                        Select a deal to submit to lenders.
+                      </div>
+                    ) : (
+                      <>
+                        {/* Live callback dashboard — show if submissions exist */}
+                        {(deal.lenderSubmissions ?? []).length > 0 && (
+                          <div className="fi-sub-list">
+                            {(deal.lenderSubmissions ?? []).map((sub) => {
+                              const statusColors: Record<
+                                LenderDecisionStatus,
+                                string
+                              > = {
+                                Pending: "#f59e0b",
+                                Approved: "#10b981",
+                                Countered: "#6366f1",
+                                Declined: "#ef4444",
+                              };
+                              const color = statusColors[sub.status];
+                              return (
+                                <div key={sub.id} className="fi-sub-row">
+                                  <div className="fi-sub-lender-name">
+                                    {sub.lenderName}
+                                  </div>
+                                  <div className="fi-sub-details">
+                                    {sub.status === "Approved" && (
+                                      <span className="fi-sub-approved">
+                                        ✓ {sub.approvedRate}% APR ·{" "}
+                                        {sub.approvedTerm}mo
+                                        {sub.maxLtv
+                                          ? ` · LTV ≤${sub.maxLtv}%`
+                                          : ""}
+                                      </span>
+                                    )}
+                                    {sub.status === "Countered" && (
+                                      <span className="fi-sub-countered">
+                                        {sub.counterConditions}
+                                      </span>
+                                    )}
+                                    {sub.status === "Declined" && (
+                                      <span className="fi-sub-declined">
+                                        {sub.declineReason}
+                                      </span>
+                                    )}
+                                    {sub.status === "Pending" && (
+                                      <span className="fi-sub-pending">
+                                        Awaiting decision…
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="fi-sub-right">
+                                    <span
+                                      className="fi-sub-badge"
+                                      style={{
+                                        background: `${color}20`,
+                                        color,
+                                      }}
+                                    >
+                                      {sub.status}
+                                    </span>
+                                    {sub.status === "Approved" &&
+                                      sub.id !== deal.acceptedSubmissionId && (
+                                        <button
+                                          type="button"
+                                          className="fi-accept-btn"
+                                          onClick={() =>
+                                            acceptSubmission(deal, sub.id)
+                                          }
+                                        >
+                                          Accept &amp; Import
+                                        </button>
+                                      )}
+                                    {sub.id === deal.acceptedSubmissionId && (
+                                      <span className="fi-accepted-pill">
+                                        ✓ Accepted
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Shotgun lender checklist */}
+                        <div className="fi-sub-section-title">
+                          Select lenders to submit:
+                        </div>
+                        <div className="fi-lender-checklist">
+                          {lenders.map((lender) => {
+                            const alreadySubmitted = (
+                              deal.lenderSubmissions ?? []
+                            ).some((s) => s.lenderId === lender.id);
+                            const tierColors: Record<LenderTier, string> = {
+                              Prime: "#10b981",
+                              "Near-Prime": "#3b82f6",
+                              Subprime: "#f59e0b",
+                              "Deep Subprime": "#ef4444",
+                            };
+                            const checked = selectedLenderIds.has(lender.id);
+                            return (
+                              <label
+                                key={lender.id}
+                                className={`fi-lender-check-row${alreadySubmitted ? " submitted" : ""}${checked ? " selected" : ""}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={alreadySubmitted}
+                                  checked={checked}
+                                  onChange={() => {
+                                    setSelectedLenderIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(lender.id))
+                                        next.delete(lender.id);
+                                      else next.add(lender.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="fi-lender-check-name">
+                                  {lender.name}
+                                </span>
+                                <span
+                                  className="fi-lender-tier-badge"
+                                  style={{
+                                    color: tierColors[lender.tier],
+                                    background: `${tierColors[lender.tier]}18`,
+                                  }}
+                                >
+                                  {lender.tier}
+                                </span>
+                                {lender.minCreditScore && (
+                                  <span className="fi-lender-score">
+                                    ≥{lender.minCreditScore}
+                                  </span>
+                                )}
+                                {alreadySubmitted && (
+                                  <span className="fi-lender-sent-tag">
+                                    Sent
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          className="fi-shotgun-btn"
+                          disabled={selectedLenderIds.size === 0}
+                          onClick={() =>
+                            submitToLenders(deal, Array.from(selectedLenderIds))
+                          }
+                        >
+                          <CreditCard size={15} />
+                          Submit to {selectedLenderIds.size || ""} Lender
+                          {selectedLenderIds.size !== 1 ? "s" : ""}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Credit Packets */}
+                  <div className="fi-card">
+                    <div className="fi-card-title">
+                      <FileText size={16} /> Credit Packets
+                      <span
+                        className="badge"
+                        style={{ background: "#6366f120", color: "#6366f1" }}
+                      >
+                        {creditApplications.length} packets
+                      </span>
+                    </div>
+                    {creditApplications.length === 0 ? (
+                      <div className="fi-empty">
+                        No full credit packets submitted yet.
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {creditApplications.slice(0, 6).map((app) => (
+                          <div key={app.id} className="fi-packet-row">
+                            <div style={{ flex: 1 }}>
+                              <div className="fi-packet-name">
+                                {app.applicantName}
+                              </div>
+                              <div className="fi-packet-sub">
+                                {app.submissionPlatform || "Internal CRM"} ·{" "}
+                                {app.requestedVehicle || "No vehicle"}
+                              </div>
+                              <div className="fi-packet-docs">
+                                <span
+                                  style={{
+                                    color: app.identityDocsReceived
+                                      ? "#10b981"
+                                      : "#ef4444",
+                                  }}
+                                >
+                                  ID {app.identityDocsReceived ? "✓" : "✗"}
+                                </span>
+                                <span
+                                  style={{
+                                    color: app.incomeDocsReceived
+                                      ? "#10b981"
+                                      : "#ef4444",
+                                  }}
+                                >
+                                  Income {app.incomeDocsReceived ? "✓" : "✗"}
+                                </span>
+                                <span
+                                  style={{
+                                    color: app.insuranceDocsReceived
+                                      ? "#10b981"
+                                      : "#ef4444",
+                                  }}
+                                >
+                                  Insurance{" "}
+                                  {app.insuranceDocsReceived ? "✓" : "✗"}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="fi-open-btn"
+                              onClick={() => {
+                                const c = customers.find(
+                                  (item) => item.id === app.customerId,
+                                );
+                                if (c) {
+                                  openProfile(c);
+                                  setProfileTab("credit");
+                                }
+                              }}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── CIT (Contracts in Transit) Tracker ── */}
+                  {(() => {
+                    const citDeals = vehicleSales.filter(
+                      (s) =>
+                        s.fundingStatus === "Submitted to Lender" ||
+                        s.fundingStatus === "Approved" ||
+                        s.fundingStatus === "Stipulations Required",
+                    );
+                    return (
+                      <div className="fi-card">
+                        <div className="fi-card-title">
+                          <TrendingUp size={16} /> Contracts in Transit (CIT)
+                          <span
+                            className="badge"
+                            style={{
+                              background: "#6366f120",
+                              color: "#6366f1",
+                            }}
+                          >
+                            {citDeals.length} pending
+                          </span>
+                        </div>
+                        {citDeals.length === 0 ? (
+                          <div className="fi-empty">
+                            No contracts awaiting funding.
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                            }}
+                          >
+                            {citDeals.map((s) => {
+                              const cust = customers.find(
+                                (c) => c.id === s.customerId,
+                              );
+                              const submittedDate =
+                                s.lenderSubmissions?.find(
+                                  (ls) => ls.status !== "Pending",
+                                )?.decidedAt ?? s.createdAt;
+                              const daysOut = submittedDate
+                                ? Math.floor(
+                                    (Date.now() -
+                                      new Date(submittedDate).getTime()) /
+                                      86400000,
+                                  )
+                                : null;
+                              const amtFinanced =
+                                s.salePrice -
+                                (s.downPayment ?? 0) -
+                                (s.tradeAllowance ?? 0) +
+                                (s.tradePayoff ?? 0);
+                              return (
+                                <div key={s.id} className="fi-cit-row">
+                                  <div className="fi-cit-vehicle">
+                                    <div>
+                                      {cust
+                                        ? `${cust.firstName} ${cust.lastName}`
+                                        : `Deal #${s.id}`}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 400,
+                                        color: "var(--text-muted,#64748b)",
+                                      }}
+                                    >
+                                      {s.year} {s.make} {s.model} ·{" "}
+                                      {s.lender ?? "Lender TBD"}
+                                    </div>
+                                  </div>
+                                  <div className="fi-cit-amount">
+                                    $
+                                    {amtFinanced > 0
+                                      ? amtFinanced.toLocaleString(undefined, {
+                                          maximumFractionDigits: 0,
+                                        })
+                                      : "—"}
+                                  </div>
+                                  <div
+                                    className={`fi-cit-days${daysOut !== null && daysOut > 5 ? " overdue" : ""}`}
+                                  >
+                                    {daysOut !== null ? `${daysOut}d out` : "—"}
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background:
+                                        (fundingColors[
+                                          s.fundingStatus ?? "Pending Structure"
+                                        ] ?? "#94a3b8") + "22",
+                                      color:
+                                        fundingColors[
+                                          s.fundingStatus ?? "Pending Structure"
+                                        ] ?? "#94a3b8",
+                                    }}
+                                  >
+                                    {s.fundingStatus}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              );
+            })()}
 
           {/* ── SERVICE ──────────────────────────────────────────── */}
           {currentPage === "service" &&
@@ -9417,6 +12163,1796 @@ function App() {
                       </table>
                     </article>
                   )}
+                </>
+              );
+            })()}
+
+          {/* ── COMMS ─────────────────────────────────────────────── */}
+          {currentPage === "comms" &&
+            (() => {
+              const threadCustomer = commsCustomerId
+                ? customers.find((c) => c.id === commsCustomerId)
+                : null;
+
+              const thread = messages
+                .filter((m) => m.customerId === commsCustomerId)
+                .sort(
+                  (a, b) =>
+                    new Date(a.createdAt).getTime() -
+                    new Date(b.createdAt).getTime(),
+                );
+
+              const allInbound = messages.filter(
+                (m) => m.direction === "Inbound",
+              );
+
+              // All customers: messaged ones first (most recent), then rest alphabetically
+              const threadCustomersWithMsg = customers
+                .filter((c) => messages.some((m) => m.customerId === c.id))
+                .sort((a, b) => {
+                  const aLast = messages
+                    .filter((m) => m.customerId === a.id)
+                    .sort(
+                      (x, y) =>
+                        new Date(y.createdAt).getTime() -
+                        new Date(x.createdAt).getTime(),
+                    )[0]?.createdAt;
+                  const bLast = messages
+                    .filter((m) => m.customerId === b.id)
+                    .sort(
+                      (x, y) =>
+                        new Date(y.createdAt).getTime() -
+                        new Date(x.createdAt).getTime(),
+                    )[0]?.createdAt;
+                  return (
+                    new Date(bLast ?? 0).getTime() -
+                    new Date(aLast ?? 0).getTime()
+                  );
+                });
+              const threadCustomersNoMsg = customers
+                .filter((c) => !messages.some((m) => m.customerId === c.id))
+                .sort((a, b) =>
+                  `${a.firstName} ${a.lastName}`.localeCompare(
+                    `${b.firstName} ${b.lastName}`,
+                  ),
+                );
+              const threadCustomers = [
+                ...threadCustomersWithMsg,
+                ...threadCustomersNoMsg,
+              ];
+              const filteredThreadCustomers = threadSearchQuery.trim()
+                ? threadCustomers.filter((c) =>
+                    `${c.firstName} ${c.lastName} ${c.phone} ${c.email ?? ""}`
+                      .toLowerCase()
+                      .includes(threadSearchQuery.toLowerCase()),
+                  )
+                : threadCustomers;
+
+              async function sendMessage() {
+                if (!commsCustomerId || !commsBody.trim()) return;
+                setCommsSending(true);
+                try {
+                  const customer = customers.find(
+                    (c) => c.id === commsCustomerId,
+                  );
+                  const res = await apiFetch(`${API_BASE}/api/messages`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      customerId: commsCustomerId,
+                      channel: commsChannel,
+                      body: commsBody.trim(),
+                      subject: commsSubject.trim() || undefined,
+                      toNumber: customer?.phone,
+                      toEmail: customer?.email,
+                    }),
+                  });
+                  if (res.ok) {
+                    const msg = await res.json();
+                    setMessages((prev) => [...prev, msg]);
+                    setCommsBody("");
+                    setCommsSubject("");
+                    setCommsTemplateId(null);
+                    // Simulate delivery after 1.5s
+                    setTimeout(() => {
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === msg.id
+                            ? { ...m, status: "delivered" as MessageStatus }
+                            : m,
+                        ),
+                      );
+                    }, 1500);
+                  }
+                } catch {
+                  setAppMessage("Could not send message.");
+                } finally {
+                  setCommsSending(false);
+                }
+              }
+
+              async function simulateInbound() {
+                if (!commsCustomerId) return;
+                const customer = customers.find(
+                  (c) => c.id === commsCustomerId,
+                );
+                const res = await apiFetch(
+                  `${API_BASE}/api/messages/simulate-inbound`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      customerId: commsCustomerId,
+                      body: "Hey, just checking in — does the offer still stand?",
+                      fromNumber: customer?.phone ?? "+15550000000",
+                    }),
+                  },
+                );
+                if (res.ok) {
+                  const msg = await res.json();
+                  setMessages((prev) => [...prev, msg]);
+                }
+              }
+
+              async function enrollInSequence(sequenceId: number) {
+                if (!commsCustomerId) return;
+                const res = await apiFetch(
+                  `${API_BASE}/api/sequence-enrollments`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      customerId: commsCustomerId,
+                      sequenceId,
+                    }),
+                  },
+                );
+                if (res.ok) {
+                  const enroll = await res.json();
+                  setSequenceEnrollments((prev) => [enroll, ...prev]);
+                  setAppMessage("Customer enrolled in sequence.");
+                } else {
+                  setAppMessage("Already enrolled or error.");
+                }
+              }
+
+              async function pauseEnrollment(enrollmentId: number) {
+                await apiFetch(
+                  `${API_BASE}/api/sequence-enrollments/${enrollmentId}/pause`,
+                  { method: "PATCH" },
+                );
+                setSequenceEnrollments((prev) =>
+                  prev.map((e) =>
+                    e.id === enrollmentId
+                      ? { ...e, status: "paused" as EnrollmentStatus }
+                      : e,
+                  ),
+                );
+              }
+
+              async function unsubscribeEnrollment(enrollmentId: number) {
+                await apiFetch(
+                  `${API_BASE}/api/sequence-enrollments/${enrollmentId}/unsubscribe`,
+                  { method: "PATCH" },
+                );
+                setSequenceEnrollments((prev) =>
+                  prev.map((e) =>
+                    e.id === enrollmentId
+                      ? { ...e, status: "unsubscribed" as EnrollmentStatus }
+                      : e,
+                  ),
+                );
+              }
+
+              function applyTemplate(tmplId: number) {
+                const tmpl = emailTemplates.find((t) => t.id === tmplId);
+                if (!tmpl) return;
+                const customer = customers.find(
+                  (c) => c.id === commsCustomerId,
+                );
+                const sale = vehicleSales.find(
+                  (s) => s.customerId === commsCustomerId,
+                );
+                const replace = (text: string) =>
+                  text
+                    .replace(/\{\{firstName\}\}/g, customer?.firstName ?? "")
+                    .replace(/\{\{vehicleYear\}\}/g, sale?.year ?? "")
+                    .replace(/\{\{vehicleMake\}\}/g, sale?.make ?? "")
+                    .replace(/\{\{vehicleModel\}\}/g, sale?.model ?? "")
+                    .replace(
+                      /\{\{senderName\}\}/g,
+                      currentUser?.name ?? "Your Dealer",
+                    );
+                setCommsChannel(tmpl.channel);
+                setCommsBody(replace(tmpl.body));
+                setCommsSubject(replace(tmpl.subject));
+                setCommsTemplateId(tmplId);
+              }
+
+              const statusDot = (s: MessageStatus) => {
+                const colors: Record<MessageStatus, string> = {
+                  queued: "#94a3b8",
+                  sent: "#60a5fa",
+                  delivered: "#22c55e",
+                  failed: "#ef4444",
+                  received: "#a855f7",
+                };
+                return (
+                  <span
+                    title={s}
+                    style={{
+                      display: "inline-block",
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: colors[s],
+                      marginLeft: 4,
+                      verticalAlign: "middle",
+                    }}
+                  />
+                );
+              };
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <p className="eyebrow">Communication Hub</p>
+                      <h1>Comms</h1>
+                      <p className="page-subtitle">
+                        Two-way SMS · Email · Drip Sequences
+                      </p>
+                    </div>
+                    <div className="header-actions">
+                      {allInbound.length > 0 && (
+                        <span className="badge" style={{ fontSize: 13 }}>
+                          {allInbound.length} unread
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setBulkSmsOpen(true)}
+                      >
+                        <Send size={13} /> Bulk SMS
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* ── Bulk SMS Modal ── */}
+                  {bulkSmsOpen &&
+                    (() => {
+                      const targets = customers.filter(
+                        (c) =>
+                          c.phone &&
+                          (bulkSmsFilter === "All" ||
+                            c.status === bulkSmsFilter),
+                      );
+                      async function sendBulkSms() {
+                        if (!bulkSmsBody.trim() || targets.length === 0) return;
+                        setBulkSmsSending(true);
+                        let sent = 0;
+                        for (const c of targets) {
+                          try {
+                            const res = await apiFetch(
+                              `${API_BASE}/api/messages`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  customerId: c.id,
+                                  direction: "Outbound",
+                                  channel: "Text",
+                                  body: bulkSmsBody,
+                                  status: "sent",
+                                }),
+                              },
+                            );
+                            if (res.ok) {
+                              const msg = await res.json();
+                              setMessages((prev) => [msg, ...prev]);
+                              sent++;
+                            }
+                          } catch {
+                            /* continue */
+                          }
+                        }
+                        setBulkSmsSending(false);
+                        setBulkSmsOpen(false);
+                        setBulkSmsBody("");
+                        setAppMessage(`Bulk SMS sent to ${sent} customers.`);
+                      }
+                      return (
+                        <div
+                          className="modal-backdrop"
+                          onClick={() => setBulkSmsOpen(false)}
+                        >
+                          <div
+                            className="modal-box"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ maxWidth: 480 }}
+                          >
+                            <h3>Bulk SMS Blast</h3>
+                            <div
+                              className="form-group"
+                              style={{ marginTop: 14 }}
+                            >
+                              <label>Filter Recipients</label>
+                              <select
+                                value={bulkSmsFilter}
+                                onChange={(e) =>
+                                  setBulkSmsFilter(
+                                    e.target.value as typeof bulkSmsFilter,
+                                  )
+                                }
+                              >
+                                <option value="All">
+                                  All Customers with Phone
+                                </option>
+                                <option value="Working">Status: Working</option>
+                                <option value="Appt Set">
+                                  Status: Appt Set
+                                </option>
+                                <option value="Lost">Status: Lost</option>
+                              </select>
+                            </div>
+                            <p
+                              style={{
+                                fontSize: 12,
+                                color: "var(--text-muted)",
+                                margin: "6px 0 12px",
+                              }}
+                            >
+                              {targets.length} recipient
+                              {targets.length !== 1 ? "s" : ""} selected
+                            </p>
+                            <div className="form-group">
+                              <label>Message</label>
+                              <textarea
+                                rows={4}
+                                maxLength={160}
+                                placeholder="Type your SMS message (160 char max)..."
+                                value={bulkSmsBody}
+                                onChange={(e) => setBulkSmsBody(e.target.value)}
+                              />
+                              <small
+                                style={{
+                                  color: "var(--text-muted)",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {bulkSmsBody.length}/160
+                              </small>
+                            </div>
+                            <div className="modal-footer">
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                onClick={() => setBulkSmsOpen(false)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  bulkSmsSending ||
+                                  !bulkSmsBody.trim() ||
+                                  targets.length === 0
+                                }
+                                onClick={sendBulkSms}
+                              >
+                                {bulkSmsSending
+                                  ? "Sending…"
+                                  : `Send to ${targets.length} contacts`}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  <div className="comms-shell">
+                    {/* ── Thread List ── */}
+                    <aside className="comms-thread-list">
+                      <div className="comms-thread-search">
+                        <Search size={13} />
+                        <input
+                          placeholder="Search customers…"
+                          value={threadSearchQuery}
+                          onChange={(e) => setThreadSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      {filteredThreadCustomers.length === 0 && (
+                        <div className="comms-empty-threads">
+                          No customers match.
+                        </div>
+                      )}
+                      {filteredThreadCustomers.map((c, idx) => {
+                        const lastMsg = messages
+                          .filter((m) => m.customerId === c.id)
+                          .sort(
+                            (a, b) =>
+                              new Date(b.createdAt).getTime() -
+                              new Date(a.createdAt).getTime(),
+                          )[0];
+                        const hasUnread = messages.some(
+                          (m) =>
+                            m.customerId === c.id &&
+                            m.direction === "Inbound" &&
+                            m.status === "received",
+                        );
+                        const hasMessages = messages.some(
+                          (m) => m.customerId === c.id,
+                        );
+                        const prevC = filteredThreadCustomers[idx - 1];
+                        const prevHasMsg = prevC
+                          ? messages.some((m) => m.customerId === prevC.id)
+                          : true;
+                        const showDivider =
+                          !threadSearchQuery.trim() &&
+                          !hasMessages &&
+                          prevHasMsg;
+                        return (
+                          <div key={c.id}>
+                            {showDivider && (
+                              <div className="comms-thread-divider">
+                                All Customers
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className={`comms-thread-item${commsCustomerId === c.id ? " active" : ""}${hasUnread ? " unread" : ""}`}
+                              onClick={() => {
+                                setCommsCustomerId(c.id);
+                                setCommsTab("inbox");
+                              }}
+                            >
+                              <div className="comms-thread-avatar">
+                                {c.firstName[0]}
+                                {c.lastName[0]}
+                              </div>
+                              <div className="comms-thread-meta">
+                                <div className="comms-thread-name">
+                                  {c.firstName} {c.lastName}
+                                  {hasUnread && (
+                                    <span className="comms-unread-dot" />
+                                  )}
+                                </div>
+                                {hasMessages ? (
+                                  <>
+                                    <div className="comms-thread-preview">
+                                      {lastMsg?.body.slice(0, 48)}…
+                                    </div>
+                                    <div className="comms-thread-time">
+                                      {timeAgo(lastMsg?.createdAt)}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div
+                                    className="comms-thread-preview"
+                                    style={{ fontStyle: "italic" }}
+                                  >
+                                    {c.phone || c.email || "No contact info"}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </aside>
+
+                    {/* ── Right Panel ── */}
+                    <div className="comms-panel">
+                      {!commsCustomerId ? (
+                        <div className="comms-empty">
+                          <MessageSquare size={40} />
+                          <p>Select a customer to view their thread</p>
+                          <p className="muted">
+                            Or start a new conversation by selecting any
+                            customer
+                          </p>
+                          <div
+                            style={{
+                              marginTop: 16,
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {customers.slice(0, 6).map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                className="fi-compliance-btn"
+                                onClick={() => {
+                                  setCommsCustomerId(c.id);
+                                  setCommsTab("inbox");
+                                }}
+                              >
+                                {c.firstName} {c.lastName}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Panel Header */}
+                          <div className="comms-panel-header">
+                            <button
+                              type="button"
+                              className="comms-panel-contact comms-contact-link"
+                              onClick={() =>
+                                threadCustomer && openProfile(threadCustomer)
+                              }
+                              title="Open customer profile"
+                            >
+                              <div className="comms-thread-avatar lg">
+                                {threadCustomer?.firstName[0]}
+                                {threadCustomer?.lastName[0]}
+                              </div>
+                              <div>
+                                <strong>
+                                  {threadCustomer?.firstName}{" "}
+                                  {threadCustomer?.lastName}
+                                </strong>
+                                <small>
+                                  {threadCustomer?.phone} ·{" "}
+                                  {threadCustomer?.email}
+                                </small>
+                              </div>
+                            </button>
+                            <div className="comms-panel-tabs">
+                              {(
+                                [
+                                  [
+                                    "inbox",
+                                    "Inbox",
+                                    <MessageSquare size={13} />,
+                                  ],
+                                  ["sequences", "Sequences", <Zap size={13} />],
+                                  [
+                                    "templates",
+                                    "Templates",
+                                    <Mail size={13} />,
+                                  ],
+                                ] as const
+                              ).map(([tab, label, icon]) => (
+                                <button
+                                  key={tab}
+                                  type="button"
+                                  className={`comms-tab-btn${commsTab === tab ? " active" : ""}`}
+                                  onClick={() => setCommsTab(tab)}
+                                >
+                                  {icon} {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* ── Inbox Tab ── */}
+                          {commsTab === "inbox" && (
+                            <>
+                              <div className="comms-thread-body">
+                                {thread.length === 0 && (
+                                  <div className="comms-no-messages">
+                                    No messages yet. Send the first one below.
+                                  </div>
+                                )}
+                                {thread.map((msg) => (
+                                  <div
+                                    key={msg.id}
+                                    className={`comms-bubble ${msg.direction === "Outbound" ? "outbound" : "inbound"}`}
+                                  >
+                                    <div className="comms-bubble-meta">
+                                      <span className="comms-channel-badge">
+                                        {msg.channel === "Text" ? (
+                                          <MessageSquare size={11} />
+                                        ) : (
+                                          <Mail size={11} />
+                                        )}{" "}
+                                        {msg.channel}
+                                      </span>
+                                      {msg.subject && (
+                                        <strong className="comms-subject">
+                                          {msg.subject}
+                                        </strong>
+                                      )}
+                                    </div>
+                                    <div className="comms-bubble-body">
+                                      {msg.body}
+                                    </div>
+                                    <div className="comms-bubble-time">
+                                      {new Date(
+                                        msg.createdAt,
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}{" "}
+                                      ·{" "}
+                                      {new Date(
+                                        msg.createdAt,
+                                      ).toLocaleDateString()}
+                                      {msg.direction === "Outbound" &&
+                                        statusDot(msg.status)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Compose */}
+                              <div className="comms-compose">
+                                <div className="comms-compose-toolbar">
+                                  <select
+                                    value={commsChannel}
+                                    onChange={(e) =>
+                                      setCommsChannel(
+                                        e.target.value as "Text" | "Email",
+                                      )
+                                    }
+                                    className="comms-channel-select"
+                                  >
+                                    <option value="Text">📱 SMS</option>
+                                    <option value="Email">✉️ Email</option>
+                                  </select>
+                                  <select
+                                    value={commsTemplateId ?? ""}
+                                    onChange={(e) =>
+                                      e.target.value
+                                        ? applyTemplate(Number(e.target.value))
+                                        : undefined
+                                    }
+                                    className="comms-channel-select"
+                                  >
+                                    <option value="">Use template…</option>
+                                    {emailTemplates
+                                      .filter((t) => t.channel === commsChannel)
+                                      .map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.name}
+                                        </option>
+                                      ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    className="comms-sim-btn"
+                                    onClick={simulateInbound}
+                                    title="Simulate inbound reply"
+                                  >
+                                    <RefreshCw size={12} /> Sim Reply
+                                  </button>
+                                </div>
+                                {commsChannel === "Email" && (
+                                  <input
+                                    className="comms-subject-input"
+                                    placeholder="Subject…"
+                                    value={commsSubject}
+                                    onChange={(e) =>
+                                      setCommsSubject(e.target.value)
+                                    }
+                                  />
+                                )}
+                                <div className="comms-compose-row">
+                                  <textarea
+                                    className="comms-compose-input"
+                                    placeholder={
+                                      commsChannel === "Text"
+                                        ? "Type a text message…"
+                                        : "Type an email…"
+                                    }
+                                    value={commsBody}
+                                    rows={3}
+                                    onChange={(e) =>
+                                      setCommsBody(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && e.metaKey)
+                                        sendMessage();
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="comms-send-btn"
+                                    disabled={!commsBody.trim() || commsSending}
+                                    onClick={sendMessage}
+                                  >
+                                    <Send size={16} />
+                                    {commsSending ? "Sending…" : "Send"}
+                                  </button>
+                                </div>
+                                <div className="comms-compose-hint">
+                                  ⌘+Enter to send
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {/* ── Sequences Tab ── */}
+                          {commsTab === "sequences" && (
+                            <div className="comms-seq-panel">
+                              <h3 className="comms-seq-title">
+                                <Zap size={15} /> Drip Sequences
+                              </h3>
+                              <p className="comms-seq-desc">
+                                Enroll {threadCustomer?.firstName} in an
+                                automated follow-up sequence. Steps send on a
+                                schedule until the customer replies or is
+                                removed.
+                              </p>
+
+                              {/* Active enrollments for this customer */}
+                              {sequenceEnrollments.filter(
+                                (e) =>
+                                  e.customerId === commsCustomerId &&
+                                  e.status === "active",
+                              ).length > 0 && (
+                                <div className="comms-enrolled-list">
+                                  <div className="comms-seq-section-label">
+                                    Active Enrollments
+                                  </div>
+                                  {sequenceEnrollments
+                                    .filter(
+                                      (e) =>
+                                        e.customerId === commsCustomerId &&
+                                        e.status === "active",
+                                    )
+                                    .map((e) => {
+                                      const seq = emailSequences.find(
+                                        (s) => s.id === e.sequenceId,
+                                      );
+                                      return (
+                                        <div
+                                          key={e.id}
+                                          className="comms-enrollment-card"
+                                        >
+                                          <div>
+                                            <strong>{seq?.name}</strong>
+                                            <small>
+                                              Step {e.currentStepIndex + 1} of{" "}
+                                              {seq?.steps.length ?? "?"}
+                                            </small>
+                                          </div>
+                                          <div className="comms-enroll-actions">
+                                            <button
+                                              type="button"
+                                              className="comms-enroll-btn pause"
+                                              onClick={() =>
+                                                pauseEnrollment(e.id)
+                                              }
+                                            >
+                                              <PauseCircle size={12} /> Pause
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="comms-enroll-btn unsub"
+                                              onClick={() =>
+                                                unsubscribeEnrollment(e.id)
+                                              }
+                                            >
+                                              <UserMinus size={12} /> Remove
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              )}
+
+                              {/* Available sequences */}
+                              <div className="comms-seq-section-label">
+                                Available Sequences
+                              </div>
+                              {emailSequences
+                                .filter((s) => s.active)
+                                .map((seq) => {
+                                  const alreadyEnrolled =
+                                    sequenceEnrollments.some(
+                                      (e) =>
+                                        e.customerId === commsCustomerId &&
+                                        e.sequenceId === seq.id &&
+                                        e.status === "active",
+                                    );
+                                  return (
+                                    <div
+                                      key={seq.id}
+                                      className="comms-seq-card"
+                                    >
+                                      <div className="comms-seq-card-header">
+                                        <div>
+                                          <strong>{seq.name}</strong>
+                                          <span className="comms-seq-trigger">
+                                            Trigger:{" "}
+                                            {seq.triggerEvent.replace("_", " ")}
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className={`comms-enroll-btn${alreadyEnrolled ? " enrolled" : ""}`}
+                                          disabled={alreadyEnrolled}
+                                          onClick={() =>
+                                            enrollInSequence(seq.id)
+                                          }
+                                        >
+                                          {alreadyEnrolled
+                                            ? "Enrolled"
+                                            : "Enroll"}
+                                        </button>
+                                      </div>
+                                      <div className="comms-seq-steps">
+                                        {seq.steps.map((step) => (
+                                          <div
+                                            key={step.index}
+                                            className="comms-seq-step"
+                                          >
+                                            <span className="comms-step-day">
+                                              Day {step.delayDays}
+                                            </span>
+                                            <span className="comms-step-channel">
+                                              {step.channel === "Text" ? (
+                                                <MessageSquare size={11} />
+                                              ) : (
+                                                <Mail size={11} />
+                                              )}
+                                            </span>
+                                            <span className="comms-step-preview">
+                                              {step.body.slice(0, 60)}…
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+
+                          {/* ── Templates Tab ── */}
+                          {commsTab === "templates" && (
+                            <div className="comms-seq-panel">
+                              <h3 className="comms-seq-title">
+                                <Mail size={15} /> Message Templates
+                              </h3>
+                              <p className="comms-seq-desc">
+                                Click any template to pre-fill the compose box.
+                                Tokens like <code>{"{{firstName}}"}</code> are
+                                replaced automatically.
+                              </p>
+                              {emailTemplates.map((tmpl) => (
+                                <div
+                                  key={tmpl.id}
+                                  className={`comms-tmpl-card${commsTemplateId === tmpl.id ? " selected" : ""}`}
+                                  onClick={() => {
+                                    applyTemplate(tmpl.id);
+                                    setCommsTab("inbox");
+                                  }}
+                                >
+                                  <div className="comms-tmpl-header">
+                                    <strong>{tmpl.name}</strong>
+                                    <span className="comms-channel-badge">
+                                      {tmpl.channel === "Text" ? (
+                                        <MessageSquare size={11} />
+                                      ) : (
+                                        <Mail size={11} />
+                                      )}{" "}
+                                      {tmpl.channel}
+                                    </span>
+                                  </div>
+                                  {tmpl.subject && (
+                                    <div className="comms-tmpl-subject">
+                                      {tmpl.subject}
+                                    </div>
+                                  )}
+                                  <div className="comms-tmpl-body">
+                                    {tmpl.body.slice(0, 120)}
+                                    {tmpl.body.length > 120 ? "…" : ""}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+          {/* ── INVENTORY ──────────────────────────────────────────── */}
+          {currentPage === "inventory" &&
+            (() => {
+              const filteredInv = inventory.filter((v) => {
+                const matchStatus =
+                  invFilter === "All" || v.status === invFilter;
+                const matchCond =
+                  invCondition === "All" || v.condition === invCondition;
+                const q = invSearch.toLowerCase();
+                const matchSearch =
+                  !q ||
+                  `${v.year} ${v.make} ${v.model} ${v.trim} ${v.stockNumber} ${v.vin}`
+                    .toLowerCase()
+                    .includes(q);
+                return matchStatus && matchCond && matchSearch;
+              });
+              const available = inventory.filter(
+                (v) => v.status === "Available",
+              ).length;
+              const sold = inventory.filter((v) => v.status === "Sold").length;
+              const hold = inventory.filter((v) => v.status === "Hold").length;
+              const aging = inventory.filter(
+                (v) =>
+                  v.daysOnLot >= 60 &&
+                  v.status !== "Sold" &&
+                  v.status !== "Archived",
+              ).length;
+
+              function openInvModal(v?: InventoryVehicle) {
+                if (v) {
+                  setInvEditTarget(v);
+                  setInvForm({
+                    stockNumber: v.stockNumber,
+                    vin: v.vin,
+                    year: v.year,
+                    make: v.make,
+                    model: v.model,
+                    trim: v.trim,
+                    bodyClass: v.bodyClass,
+                    extColor: v.extColor,
+                    intColor: v.intColor,
+                    mileage: String(v.mileage),
+                    msrp: String(v.msrp),
+                    internetPrice: String(v.internetPrice),
+                    invoicePrice: String(v.invoicePrice),
+                    status: v.status,
+                    condition: v.condition,
+                    notes: v.notes,
+                  });
+                } else {
+                  setInvEditTarget(null);
+                  setInvForm({
+                    stockNumber: "",
+                    vin: "",
+                    year: "",
+                    make: "",
+                    model: "",
+                    trim: "",
+                    bodyClass: "",
+                    extColor: "",
+                    intColor: "",
+                    mileage: "",
+                    msrp: "",
+                    internetPrice: "",
+                    invoicePrice: "",
+                    status: "Available",
+                    condition: "Used",
+                    notes: "",
+                  });
+                }
+                setInvModalOpen(true);
+              }
+
+              async function saveInvVehicle() {
+                const payload = {
+                  ...invForm,
+                  mileage: Number(invForm.mileage) || 0,
+                  msrp: Number(invForm.msrp) || 0,
+                  internetPrice: Number(invForm.internetPrice) || 0,
+                  invoicePrice: Number(invForm.invoicePrice) || 0,
+                };
+                if (invEditTarget) {
+                  const res = await apiFetch(
+                    `${API_BASE}/api/inventory/${invEditTarget.id}`,
+                    {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload),
+                    },
+                  );
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setInventory((prev) =>
+                      prev.map((v) =>
+                        v.id === invEditTarget.id ? updated : v,
+                      ),
+                    );
+                  }
+                } else {
+                  const res = await apiFetch(`${API_BASE}/api/inventory`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (res.ok) {
+                    const created = await res.json();
+                    setInventory((prev) => [...prev, created]);
+                  }
+                }
+                setInvModalOpen(false);
+              }
+
+              async function deleteInvVehicle(id: number) {
+                await apiFetch(`${API_BASE}/api/inventory/${id}`, {
+                  method: "DELETE",
+                });
+                setInventory((prev) => prev.filter((v) => v.id !== id));
+              }
+
+              function exportInvCSV() {
+                const headers = [
+                  "Stock#",
+                  "VIN",
+                  "Year",
+                  "Make",
+                  "Model",
+                  "Trim",
+                  "Condition",
+                  "Status",
+                  "Mileage",
+                  "MSRP",
+                  "Internet Price",
+                  "Invoice",
+                  "Ext Color",
+                  "Days on Lot",
+                ];
+                const rows = filteredInv.map((v) => [
+                  v.stockNumber,
+                  v.vin,
+                  v.year,
+                  v.make,
+                  v.model,
+                  v.trim,
+                  v.condition,
+                  v.status,
+                  v.mileage,
+                  v.msrp,
+                  v.internetPrice,
+                  v.invoicePrice,
+                  v.extColor,
+                  v.daysOnLot,
+                ]);
+                const csv = [headers, ...rows]
+                  .map((r) => r.join(","))
+                  .join("\n");
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(
+                  new Blob([csv], { type: "text/csv" }),
+                );
+                a.download = "inventory.csv";
+                a.click();
+              }
+
+              const statusColor: Record<InventoryStatus, string> = {
+                Available: "#22c55e",
+                "In Transit": "#f59e0b",
+                Sold: "#6366f1",
+                Hold: "#ef4444",
+                Archived: "#94a3b8",
+              };
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <p className="eyebrow">Vehicle Lot</p>
+                      <h1>Inventory</h1>
+                      <p className="page-subtitle">
+                        {inventory.length} vehicles · {available} available ·{" "}
+                        {aging} aging 60+ days
+                      </p>
+                    </div>
+                    <div className="header-actions">
+                      <button type="button" onClick={exportInvCSV}>
+                        <Download size={14} /> Export CSV
+                      </button>
+                      <button type="button" onClick={() => openInvModal()}>
+                        <Plus size={14} /> Add Vehicle
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* KPI row */}
+                  <div className="inv-kpi-row">
+                    {[
+                      ["Available", available, "#22c55e"],
+                      ["On Hold", hold, "#ef4444"],
+                      ["Sold", sold, "#6366f1"],
+                      ["Aging 60d+", aging, "#f59e0b"],
+                    ].map(([label, val, color]) => (
+                      <div key={String(label)} className="inv-kpi-card">
+                        <span
+                          className="inv-kpi-val"
+                          style={{ color: String(color) }}
+                        >
+                          {String(val)}
+                        </span>
+                        <span className="inv-kpi-label">{String(label)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Filters */}
+                  <div className="inv-filters">
+                    <div className="inv-search-wrap">
+                      <Search size={13} />
+                      <input
+                        placeholder="Search stock#, VIN, year, make…"
+                        value={invSearch}
+                        onChange={(e) => setInvSearch(e.target.value)}
+                      />
+                    </div>
+                    {(
+                      [
+                        "All",
+                        "Available",
+                        "In Transit",
+                        "Hold",
+                        "Sold",
+                        "Archived",
+                      ] as const
+                    ).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`inv-filter-btn${invFilter === s ? " active" : ""}`}
+                        onClick={() => setInvFilter(s)}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                    <select
+                      value={invCondition}
+                      onChange={(e) =>
+                        setInvCondition(e.target.value as typeof invCondition)
+                      }
+                      className="inv-select"
+                    >
+                      <option value="All">All Conditions</option>
+                      <option value="New">New</option>
+                      <option value="Used">Used</option>
+                      <option value="CPO">CPO</option>
+                    </select>
+                  </div>
+
+                  {/* Table */}
+                  <div className="inv-table-wrap">
+                    <table className="inv-table">
+                      <thead>
+                        <tr>
+                          <th>Stock #</th>
+                          <th>Vehicle</th>
+                          <th>Condition</th>
+                          <th>Status</th>
+                          <th>Mileage</th>
+                          <th>MSRP</th>
+                          <th>Internet</th>
+                          <th>Days on Lot</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredInv.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={9}
+                              style={{
+                                textAlign: "center",
+                                padding: "40px",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              No vehicles match.
+                            </td>
+                          </tr>
+                        )}
+                        {filteredInv.map((v) => (
+                          <tr
+                            key={v.id}
+                            className={
+                              v.daysOnLot >= 60 && v.status === "Available"
+                                ? "inv-row-aging"
+                                : ""
+                            }
+                          >
+                            <td>
+                              <span className="inv-stock">{v.stockNumber}</span>
+                            </td>
+                            <td>
+                              <div className="inv-vehicle-cell">
+                                <strong>
+                                  {v.year} {v.make} {v.model}
+                                </strong>
+                                <small>
+                                  {v.trim} · {v.extColor}
+                                </small>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="inv-condition-badge">
+                                {v.condition}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className="inv-status-dot"
+                                style={{ background: statusColor[v.status] }}
+                              />
+                              {v.status}
+                            </td>
+                            <td>{v.mileage.toLocaleString()} mi</td>
+                            <td>${v.msrp.toLocaleString()}</td>
+                            <td>${v.internetPrice.toLocaleString()}</td>
+                            <td>
+                              <span
+                                className={
+                                  v.daysOnLot >= 60 ? "inv-aging-badge" : ""
+                                }
+                              >
+                                {v.daysOnLot}d
+                              </span>
+                            </td>
+                            <td className="inv-actions">
+                              <button
+                                type="button"
+                                title="Edit"
+                                onClick={() => openInvModal(v)}
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Delete"
+                                className="danger-btn"
+                                onClick={() => deleteInvVehicle(v.id)}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Add/Edit Modal */}
+                  {invModalOpen && (
+                    <div
+                      className="modal-backdrop"
+                      onClick={() => setInvModalOpen(false)}
+                    >
+                      <div
+                        className="modal-box wide-modal"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <h3>
+                          {invEditTarget
+                            ? "Edit Vehicle"
+                            : "Add Vehicle to Inventory"}
+                        </h3>
+                        <div className="inv-form-grid">
+                          {(
+                            [
+                              ["stockNumber", "Stock #"],
+                              ["vin", "VIN"],
+                              ["year", "Year"],
+                              ["make", "Make"],
+                              ["model", "Model"],
+                              ["trim", "Trim"],
+                              ["bodyClass", "Body Class"],
+                              ["extColor", "Ext Color"],
+                              ["intColor", "Int Color"],
+                              ["mileage", "Mileage"],
+                              ["msrp", "MSRP"],
+                              ["internetPrice", "Internet Price"],
+                              ["invoicePrice", "Invoice Price"],
+                            ] as [keyof typeof invForm, string][]
+                          ).map(([field, label]) => (
+                            <div key={field} className="form-group">
+                              <label>{label}</label>
+                              <input
+                                value={invForm[field] as string}
+                                onChange={(e) =>
+                                  setInvForm((f) => ({
+                                    ...f,
+                                    [field]: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ))}
+                          <div className="form-group">
+                            <label>Condition</label>
+                            <select
+                              value={invForm.condition}
+                              onChange={(e) =>
+                                setInvForm((f) => ({
+                                  ...f,
+                                  condition: e.target
+                                    .value as typeof f.condition,
+                                }))
+                              }
+                            >
+                              <option value="New">New</option>
+                              <option value="Used">Used</option>
+                              <option value="CPO">CPO</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Status</label>
+                            <select
+                              value={invForm.status}
+                              onChange={(e) =>
+                                setInvForm((f) => ({
+                                  ...f,
+                                  status: e.target.value as InventoryStatus,
+                                }))
+                              }
+                            >
+                              {(
+                                [
+                                  "Available",
+                                  "In Transit",
+                                  "Hold",
+                                  "Sold",
+                                  "Archived",
+                                ] as InventoryStatus[]
+                              ).map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div
+                            className="form-group"
+                            style={{ gridColumn: "1/-1" }}
+                          >
+                            <label>Notes</label>
+                            <textarea
+                              value={invForm.notes}
+                              onChange={(e) =>
+                                setInvForm((f) => ({
+                                  ...f,
+                                  notes: e.target.value,
+                                }))
+                              }
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                        <div className="modal-footer">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => setInvModalOpen(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button type="button" onClick={saveInvVehicle}>
+                            {invEditTarget ? "Save Changes" : "Add Vehicle"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+          {/* ── REPORTS ────────────────────────────────────────────── */}
+          {currentPage === "reports" &&
+            (() => {
+              const thisMonth = new Date().toISOString().slice(0, 7);
+              const deliveredThisMonth = vehicleSales.filter(
+                (s) =>
+                  (s.stage === "Delivered" || s.stage === "Finance") &&
+                  (s.createdAt ?? "").startsWith(thisMonth),
+              );
+              const totalFrontGross = deliveredThisMonth.reduce(
+                (t, s) => t + (s.salePrice - (s.downPayment ?? 0)),
+                0,
+              );
+              const totalBackGross = deliveredThisMonth.reduce(
+                (t, s) => t + (s.backEndGross ?? 0),
+                0,
+              );
+              const totalReserve = deliveredThisMonth.reduce(
+                (t, s) => t + (s.dealerReserve ?? 0),
+                0,
+              );
+              const totalUnits = deliveredThisMonth.length;
+
+              // Per-salesperson breakdown using financeManagerName as proxy
+              const spMap = new Map<
+                string,
+                { units: number; frontGross: number; backGross: number }
+              >();
+              vehicleSales
+                .filter((s) => s.stage === "Delivered" || s.stage === "Finance")
+                .forEach((s) => {
+                  const name = s.financeManagerName || "Unassigned";
+                  const cur = spMap.get(name) ?? {
+                    units: 0,
+                    frontGross: 0,
+                    backGross: 0,
+                  };
+                  spMap.set(name, {
+                    units: cur.units + 1,
+                    frontGross: cur.frontGross + s.salePrice,
+                    backGross: cur.backGross + (s.backEndGross ?? 0),
+                  });
+                });
+              const spRows = Array.from(spMap.entries())
+                .map(([name, data]) => ({ name, ...data }))
+                .sort((a, b) => b.units - a.units);
+
+              // Source breakdown
+              const sourceMap = new Map<string, number>();
+              customers.forEach((c) => {
+                const src =
+                  (c as Customer & { source?: string }).source || "Unknown";
+                sourceMap.set(src, (sourceMap.get(src) ?? 0) + 1);
+              });
+              const sourceRows = Array.from(sourceMap.entries()).sort(
+                (a, b) => b[1] - a[1],
+              );
+
+              // MTD goal tracker
+              const currentGoals = salesGoals.filter(
+                (g) => g.month === thisMonth,
+              );
+
+              function exportDealsCSV() {
+                const headers = [
+                  "Customer",
+                  "Vehicle",
+                  "Sale Price",
+                  "Stage",
+                  "Lender",
+                  "APR",
+                  "Term",
+                  "Back Gross",
+                  "Reserve",
+                  "Created",
+                ];
+                const rows = vehicleSales.map((s) => {
+                  const cust = customers.find((c) => c.id === s.customerId);
+                  return [
+                    cust ? `${cust.firstName} ${cust.lastName}` : s.customerId,
+                    `${s.year} ${s.make} ${s.model}`,
+                    s.salePrice,
+                    s.stage,
+                    s.lender ?? "",
+                    s.apr ?? "",
+                    s.termMonths ?? "",
+                    s.backEndGross ?? 0,
+                    s.dealerReserve ?? 0,
+                    s.createdAt ?? "",
+                  ];
+                });
+                const csv = [headers, ...rows]
+                  .map((r) => r.join(","))
+                  .join("\n");
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(
+                  new Blob([csv], { type: "text/csv" }),
+                );
+                a.download = "deals.csv";
+                a.click();
+              }
+
+              function exportCustomersCSV() {
+                const headers = [
+                  "ID",
+                  "First",
+                  "Last",
+                  "Email",
+                  "Phone",
+                  "Source",
+                  "Status",
+                  "Created",
+                ];
+                const rows = customers.map((c) => [
+                  c.id,
+                  c.firstName,
+                  c.lastName,
+                  c.email ?? "",
+                  c.phone,
+                  (c as Customer & { source?: string }).source ?? "",
+                  c.status,
+                  c.createdAt,
+                ]);
+                const csv = [headers, ...rows]
+                  .map((r) => r.join(","))
+                  .join("\n");
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(
+                  new Blob([csv], { type: "text/csv" }),
+                );
+                a.download = "customers.csv";
+                a.click();
+              }
+
+              return (
+                <>
+                  <header className="page-header">
+                    <div>
+                      <p className="eyebrow">Analytics</p>
+                      <h1>Reports</h1>
+                      <p className="page-subtitle">
+                        Month-to-date performance &amp; exports
+                      </p>
+                    </div>
+                    <div className="header-actions">
+                      <button type="button" onClick={exportCustomersCSV}>
+                        <Download size={14} /> Customers CSV
+                      </button>
+                      <button type="button" onClick={exportDealsCSV}>
+                        <Download size={14} /> Deals CSV
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* MTD KPIs */}
+                  <div className="reports-kpi-row">
+                    {[
+                      ["Units MTD", totalUnits, "#6366f1"],
+                      [
+                        "Front Gross",
+                        `$${totalFrontGross.toLocaleString()}`,
+                        "#22c55e",
+                      ],
+                      [
+                        "Back Gross",
+                        `$${totalBackGross.toLocaleString()}`,
+                        "#f59e0b",
+                      ],
+                      [
+                        "Reserve",
+                        `$${totalReserve.toLocaleString()}`,
+                        "#0ea5e9",
+                      ],
+                      [
+                        "Total Gross",
+                        `$${(totalFrontGross + totalBackGross).toLocaleString()}`,
+                        "#a855f7",
+                      ],
+                    ].map(([label, val, color]) => (
+                      <div key={String(label)} className="reports-kpi-card">
+                        <span
+                          className="reports-kpi-val"
+                          style={{ color: String(color) }}
+                        >
+                          {String(val)}
+                        </span>
+                        <span className="reports-kpi-label">
+                          {String(label)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="reports-grid">
+                    {/* Salesperson Scoreboard */}
+                    <div className="reports-card">
+                      <div className="reports-card-header">
+                        <Target size={15} />
+                        <h3>Salesperson Scoreboard</h3>
+                      </div>
+                      <table className="reports-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Units</th>
+                            <th>Front Gross</th>
+                            <th>Back Gross</th>
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {spRows.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan={5}
+                                style={{
+                                  textAlign: "center",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                No deals yet.
+                              </td>
+                            </tr>
+                          )}
+                          {spRows.map((row, i) => (
+                            <tr key={row.name}>
+                              <td>
+                                <span className="sp-rank">#{i + 1}</span>{" "}
+                                {row.name}
+                              </td>
+                              <td>
+                                <strong>{row.units}</strong>
+                              </td>
+                              <td>${row.frontGross.toLocaleString()}</td>
+                              <td>${row.backGross.toLocaleString()}</td>
+                              <td>
+                                <strong>
+                                  $
+                                  {(
+                                    row.frontGross + row.backGross
+                                  ).toLocaleString()}
+                                </strong>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* MTD Goal Tracker */}
+                    <div className="reports-card">
+                      <div className="reports-card-header">
+                        <BarChart2 size={15} />
+                        <h3>MTD Goal Tracker — {thisMonth}</h3>
+                      </div>
+                      {currentGoals.length === 0 && (
+                        <p className="muted" style={{ padding: "12px" }}>
+                          No goals set for this month.
+                        </p>
+                      )}
+                      {currentGoals.map((goal) => {
+                        const spData = spMap.get(goal.salespersonName);
+                        const unitPct = Math.min(
+                          100,
+                          Math.round(
+                            ((spData?.units ?? 0) / goal.unitGoal) * 100,
+                          ),
+                        );
+                        const grossPct = Math.min(
+                          100,
+                          Math.round(
+                            (((spData?.frontGross ?? 0) +
+                              (spData?.backGross ?? 0)) /
+                              goal.grossGoal) *
+                              100,
+                          ),
+                        );
+                        return (
+                          <div key={goal.id} className="goal-tracker-row">
+                            <div className="goal-tracker-name">
+                              {goal.salespersonName}
+                            </div>
+                            <div className="goal-bar-wrap">
+                              <label>
+                                Units: {spData?.units ?? 0} / {goal.unitGoal}
+                              </label>
+                              <div className="goal-bar">
+                                <div
+                                  className="goal-bar-fill"
+                                  style={{
+                                    width: `${unitPct}%`,
+                                    background:
+                                      unitPct >= 100 ? "#22c55e" : "#6366f1",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div className="goal-bar-wrap">
+                              <label>
+                                Gross: $
+                                {(
+                                  (spData?.frontGross ?? 0) +
+                                  (spData?.backGross ?? 0)
+                                ).toLocaleString()}{" "}
+                                / ${goal.grossGoal.toLocaleString()}
+                              </label>
+                              <div className="goal-bar">
+                                <div
+                                  className="goal-bar-fill"
+                                  style={{
+                                    width: `${grossPct}%`,
+                                    background:
+                                      grossPct >= 100 ? "#22c55e" : "#f59e0b",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ padding: "8px 12px" }}>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          style={{ fontSize: 12 }}
+                          onClick={async () => {
+                            const name = prompt("Salesperson name:");
+                            const units = prompt("Unit goal:");
+                            const gross = prompt("Gross goal ($):");
+                            if (!name || !units) return;
+                            const res = await apiFetch(
+                              `${API_BASE}/api/sales-goals`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  salespersonName: name,
+                                  unitGoal: Number(units),
+                                  grossGoal: Number(gross) || 0,
+                                }),
+                              },
+                            );
+                            if (res.ok) {
+                              const g = await res.json();
+                              setSalesGoals((prev) => [...prev, g]);
+                            }
+                          }}
+                        >
+                          + Add Goal
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Lead Source Breakdown */}
+                    <div className="reports-card">
+                      <div className="reports-card-header">
+                        <Package size={15} />
+                        <h3>Lead Sources</h3>
+                      </div>
+                      <table className="reports-table">
+                        <thead>
+                          <tr>
+                            <th>Source</th>
+                            <th>Leads</th>
+                            <th>%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sourceRows.map(([src, cnt]) => (
+                            <tr key={src}>
+                              <td>{src}</td>
+                              <td>{cnt}</td>
+                              <td>
+                                {customers.length > 0
+                                  ? Math.round((cnt / customers.length) * 100)
+                                  : 0}
+                                %
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Audit Log */}
+                    <div className="reports-card reports-card-full">
+                      <div className="reports-card-header">
+                        <Eye size={15} />
+                        <h3>Audit Log</h3>
+                      </div>
+                      {auditLog.length === 0 && (
+                        <p className="muted" style={{ padding: "12px" }}>
+                          No audit entries yet.
+                        </p>
+                      )}
+                      <div className="audit-log-list">
+                        {auditLog.slice(0, 100).map((entry) => (
+                          <div key={entry.id} className="audit-log-entry">
+                            <span className="audit-log-user">
+                              {entry.userName}
+                            </span>
+                            <span className="audit-log-action">
+                              {entry.action}
+                            </span>
+                            <span className="audit-log-entity">
+                              {entry.entity} #{entry.entityId}
+                            </span>
+                            <span className="audit-log-time">
+                              {timeAgo(entry.createdAt)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </>
               );
             })()}

@@ -3,13 +3,16 @@ export type AppPageName =
   | "leads"
   | "customers"
   | "appointments"
-  | "finance"
+  | "fi-manager"
   | "pipeline"
   | "trades"
   | "vin"
   | "activities"
   | "desk"
-  | "service";
+  | "service"
+  | "comms"
+  | "inventory"
+  | "reports";
 
 export type CustomerIdentity = {
   id: number;
@@ -35,13 +38,16 @@ export const VALID_APP_PAGES: AppPageName[] = [
   "leads",
   "customers",
   "appointments",
-  "finance",
+  "fi-manager",
   "pipeline",
   "trades",
   "vin",
   "activities",
   "desk",
   "service",
+  "comms",
+  "inventory",
+  "reports",
 ];
 
 export function parseHashRoute(hash: string): ParsedRoute {

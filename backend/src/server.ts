@@ -1,15 +1,13 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import helmet from "helmet";
+import { loadAll, saveAll } from "./sqlite.js";
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
-const dataFile = join(process.cwd(), "data", "crm-data.json");
 
 // ─── RBAC Role Hierarchy ─────────────────────────────────────────────────────
 type CrmRole =
@@ -200,6 +198,94 @@ type TradeIn = {
   notes?: string;
 };
 
+type FiProductCategory =
+  | "GAP"
+  | "Extended Warranty"
+  | "Tire & Wheel"
+  | "Prepaid Maintenance"
+  | "Paint Protection"
+  | "Key Replacement"
+  | "Credit Life"
+  | "Credit Disability";
+
+type FiProduct = {
+  id: number;
+  dealershipId: number;
+  category: FiProductCategory;
+  name: string;
+  providerName: string;
+  termMonths?: number;
+  mileageLimit?: number;
+  dealerCost: number; // wholesale / pack cost
+  retailPrice: number; // default selling price
+  retailCap: number; // max legal / MSRP ceiling
+  minProfit: number; // floor: retail cannot go below dealerCost + minProfit
+  active: boolean;
+};
+
+type LenderTier = "Prime" | "Near-Prime" | "Subprime" | "Deep Subprime";
+
+type Lender = {
+  id: number;
+  dealershipId: number;
+  name: string;
+  tier: LenderTier;
+  minCreditScore?: number;
+  maxLtv?: number; // max loan-to-value %
+  maxTermMonths?: number;
+  contactName?: string;
+  contactPhone?: string;
+  active: boolean;
+};
+
+type LenderDecisionStatus = "Pending" | "Approved" | "Countered" | "Declined";
+
+type LenderSubmission = {
+  id: number;
+  vehicleSaleId: number;
+  dealershipId: number;
+  lenderId: number;
+  lenderName: string;
+  submittedAt: string;
+  status: LenderDecisionStatus;
+  // Approval details
+  approvedRate?: number;
+  approvedTerm?: number;
+  approvedAmount?: number;
+  maxLtv?: number;
+  // Counter offer details
+  counterConditions?: string;
+  // Decline reason
+  declineReason?: string;
+  decidedAt?: string;
+};
+
+type DealStip = {
+  id: number;
+  label: string;
+  received: boolean;
+  receivedAt?: string;
+  note?: string;
+};
+
+type FiProductSold = {
+  productId: number;
+  category: FiProductCategory;
+  name: string;
+  retailPrice: number;
+  dealerCost: number;
+  termMonths?: number;
+};
+
+type FundingStatus =
+  | "Pending Structure"
+  | "Submitted to Lender"
+  | "Approved"
+  | "Stipulations Required"
+  | "Funded"
+  | "Unwound"
+  | "Declined";
+
 type VehicleSale = {
   id: number;
   dealershipId: number;
@@ -209,7 +295,38 @@ type VehicleSale = {
   make: string;
   model: string;
   salePrice: number;
-  stage: "Working" | "Finance" | "Delivered";
+  stage: "Working" | "Finance" | "Delivered" | "Lost";
+  // Lender / deal structure
+  lender?: string;
+  lenderContactName?: string;
+  lenderPhone?: string;
+  apr?: number;
+  termMonths?: number;
+  downPayment?: number;
+  tradeAllowance?: number;
+  tradePayoff?: number;
+  dealerReserve?: number;
+  backEndGross?: number;
+  fundingStatus?: FundingStatus;
+  fundingDate?: string;
+  // F&I products sold on this deal
+  fiProducts?: FiProductSold[];
+  // Stipulations checklist
+  stips?: DealStip[];
+  // Lender submissions for this deal
+  lenderSubmissions?: LenderSubmission[];
+  // Accepted lender submission id
+  acceptedSubmissionId?: number;
+  // Compliance
+  ofacCleared?: boolean;
+  redFlagsCleared?: boolean;
+  truthInLendingPrinted?: boolean;
+  eContractSent?: boolean;
+  eContractSigned?: boolean;
+  financeManagerId?: number;
+  financeManagerName?: string;
+  notes?: string;
+  createdAt?: string;
 };
 
 type Activity = {
@@ -235,6 +352,8 @@ type CrmTask = {
   completedAt?: string;
 };
 
+type MessageStatus = "queued" | "sent" | "delivered" | "failed" | "received";
+
 type Message = {
   id: number;
   dealershipId: number;
@@ -244,7 +363,59 @@ type Message = {
   subject?: string;
   body: string;
   template?: string;
+  status: MessageStatus;
+  // Carrier/provider reference IDs (populated by real transport)
+  providerSid?: string; // Twilio MessageSid or SendGrid messageId
+  fromNumber?: string; // for SMS
+  toNumber?: string; // for SMS
+  fromEmail?: string;
+  toEmail?: string;
+  errorMessage?: string;
+  sequenceId?: number; // if sent as part of a drip sequence
+  sequenceStepIndex?: number;
   createdAt: string;
+  updatedAt?: string;
+};
+
+type EmailTemplate = {
+  id: number;
+  dealershipId: number;
+  name: string;
+  subject: string;
+  body: string; // plain text; use {{firstName}}, {{vehicleMake}}, etc.
+  channel: "Text" | "Email";
+  createdAt: string;
+};
+
+type SequenceStep = {
+  index: number; // 0-based order
+  delayDays: number; // days after enrollment (0 = immediately)
+  channel: "Text" | "Email";
+  subject?: string; // email only
+  body: string; // supports {{firstName}} tokens
+};
+
+type EmailSequence = {
+  id: number;
+  dealershipId: number;
+  name: string; // e.g. "New Lead Follow-Up"
+  triggerEvent: "lead_created" | "appointment_set" | "deal_lost" | "manual";
+  steps: SequenceStep[];
+  active: boolean;
+  createdAt: string;
+};
+
+type EnrollmentStatus = "active" | "completed" | "paused" | "unsubscribed";
+
+type SequenceEnrollment = {
+  id: number;
+  dealershipId: number;
+  customerId: number;
+  sequenceId: number;
+  enrolledAt: string;
+  currentStepIndex: number;
+  status: EnrollmentStatus;
+  completedAt?: string;
 };
 
 type User = {
@@ -321,6 +492,59 @@ type VinDecodedVehicle = {
   country: string;
 };
 
+type InventoryStatus =
+  | "Available"
+  | "In Transit"
+  | "Sold"
+  | "Hold"
+  | "Archived";
+
+type InventoryVehicle = {
+  id: number;
+  dealershipId: number;
+  stockNumber: string;
+  vin: string;
+  year: string;
+  make: string;
+  model: string;
+  trim: string;
+  bodyClass: string;
+  extColor: string;
+  intColor: string;
+  mileage: number;
+  msrp: number;
+  internetPrice: number;
+  invoicePrice: number;
+  status: InventoryStatus;
+  condition: "New" | "Used" | "CPO";
+  daysOnLot: number;
+  addedAt: string;
+  notes: string;
+  imageUrl?: string;
+};
+
+type SalesGoal = {
+  id: number;
+  dealershipId: number;
+  salespersonName: string;
+  month: string;
+  unitGoal: number;
+  grossGoal: number;
+};
+
+type AuditLogEntry = {
+  id: number;
+  dealershipId: number;
+  userId: number;
+  userName: string;
+  action: string;
+  entity: string;
+  entityId: number;
+  before?: string;
+  after?: string;
+  createdAt: string;
+};
+
 type Database = {
   dealerGroups: DealerGroup[];
   dealerships: Dealership[];
@@ -330,10 +554,18 @@ type Database = {
   creditApplications: CreditApplication[];
   tradeIns: TradeIn[];
   vehicleSales: VehicleSale[];
+  fiProducts: FiProduct[];
+  lenders: Lender[];
   activities: Activity[];
   tasks: CrmTask[];
   messages: Message[];
+  emailTemplates: EmailTemplate[];
+  emailSequences: EmailSequence[];
+  sequenceEnrollments: SequenceEnrollment[];
   repairOrders: RepairOrder[];
+  inventory: InventoryVehicle[];
+  salesGoals: SalesGoal[];
+  auditLog: AuditLogEntry[];
 };
 
 const DEFAULT_DEALERSHIP_ID = 1;
@@ -566,7 +798,267 @@ const defaultDatabase: Database = {
       make: "Ford",
       model: "F-150",
       salePrice: 38995,
-      stage: "Finance",
+      stage: "Finance" as const,
+      lender: "Ford Motor Credit",
+      apr: 6.9,
+      termMonths: 72,
+      downPayment: 3500,
+      dealerReserve: 850,
+      fundingStatus: "Submitted to Lender" as const,
+      fiProducts: [
+        {
+          productId: 1,
+          category: "GAP" as const,
+          name: "GAP Plus Protection",
+          retailPrice: 795,
+          dealerCost: 295,
+        },
+        {
+          productId: 2,
+          category: "Extended Warranty" as const,
+          name: "Ford Protect Gold",
+          retailPrice: 2495,
+          dealerCost: 1200,
+          termMonths: 60,
+        },
+      ],
+      stips: [
+        {
+          id: 1,
+          label: "Proof of Income (2 pay stubs)",
+          received: true,
+          receivedAt: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          label: "Driver's License Copy",
+          received: true,
+          receivedAt: new Date().toISOString(),
+        },
+        { id: 3, label: "Proof of Insurance", received: false },
+        { id: 4, label: "Proof of Residence", received: false },
+      ],
+      ofacCleared: true,
+      redFlagsCleared: true,
+      truthInLendingPrinted: true,
+      eContractSent: true,
+      eContractSigned: false,
+      financeManagerName: "Avery",
+      createdAt: new Date().toISOString(),
+    },
+  ],
+  fiProducts: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "GAP",
+      name: "GAP Plus Protection",
+      providerName: "Safe-Guard",
+      dealerCost: 295,
+      retailPrice: 795,
+      retailCap: 995,
+      minProfit: 300,
+      active: true,
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Extended Warranty",
+      name: "Ford Protect Gold",
+      providerName: "Ford Motor",
+      termMonths: 60,
+      mileageLimit: 100000,
+      dealerCost: 1200,
+      retailPrice: 2495,
+      retailCap: 3500,
+      minProfit: 500,
+      active: true,
+    },
+    {
+      id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Extended Warranty",
+      name: "Ford Protect Platinum",
+      providerName: "Ford Motor",
+      termMonths: 84,
+      mileageLimit: 150000,
+      dealerCost: 1800,
+      retailPrice: 3495,
+      retailCap: 4200,
+      minProfit: 500,
+      active: true,
+    },
+    {
+      id: 4,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Tire & Wheel",
+      name: "Tire & Wheel Elite",
+      providerName: "Zurich",
+      termMonths: 60,
+      dealerCost: 180,
+      retailPrice: 595,
+      retailCap: 795,
+      minProfit: 200,
+      active: true,
+    },
+    {
+      id: 5,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Prepaid Maintenance",
+      name: "Prepaid Maintenance 3yr",
+      providerName: "JM&A",
+      termMonths: 36,
+      dealerCost: 280,
+      retailPrice: 799,
+      retailCap: 1199,
+      minProfit: 250,
+      active: true,
+    },
+    {
+      id: 6,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Paint Protection",
+      name: "Paint & Fabric Shield",
+      providerName: "Xzilon",
+      dealerCost: 120,
+      retailPrice: 499,
+      retailCap: 699,
+      minProfit: 200,
+      active: true,
+    },
+    {
+      id: 7,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Key Replacement",
+      name: "Key Replacement Plus",
+      providerName: "Fidelity",
+      dealerCost: 45,
+      retailPrice: 249,
+      retailCap: 399,
+      minProfit: 100,
+      active: true,
+    },
+    {
+      id: 8,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Credit Life",
+      name: "Credit Life Protection",
+      providerName: "CUNA Mutual",
+      dealerCost: 150,
+      retailPrice: 599,
+      retailCap: 999,
+      minProfit: 200,
+      active: true,
+    },
+    {
+      id: 9,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      category: "Credit Disability",
+      name: "Credit Disability Shield",
+      providerName: "CUNA Mutual",
+      dealerCost: 175,
+      retailPrice: 699,
+      retailCap: 1099,
+      minProfit: 200,
+      active: true,
+    },
+  ],
+  lenders: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Ford Motor Credit",
+      tier: "Prime",
+      minCreditScore: 680,
+      maxLtv: 125,
+      maxTermMonths: 84,
+      contactName: "Lisa Ford",
+      contactPhone: "(800) 727-7000",
+      active: true,
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Chase Auto Finance",
+      tier: "Prime",
+      minCreditScore: 660,
+      maxLtv: 120,
+      maxTermMonths: 72,
+      contactName: "Tom Chase",
+      contactPhone: "(800) 336-6675",
+      active: true,
+    },
+    {
+      id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Capital One Auto",
+      tier: "Near-Prime",
+      minCreditScore: 600,
+      maxLtv: 130,
+      maxTermMonths: 72,
+      contactName: "Sara Capital",
+      contactPhone: "(800) 946-0332",
+      active: true,
+    },
+    {
+      id: 4,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Ally Financial",
+      tier: "Near-Prime",
+      minCreditScore: 580,
+      maxLtv: 130,
+      maxTermMonths: 84,
+      contactName: "Jake Ally",
+      contactPhone: "(888) 925-2559",
+      active: true,
+    },
+    {
+      id: 5,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "TD Auto Finance",
+      tier: "Near-Prime",
+      minCreditScore: 600,
+      maxLtv: 120,
+      maxTermMonths: 72,
+      contactName: "Ann TD",
+      contactPhone: "(800) 200-1010",
+      active: true,
+    },
+    {
+      id: 6,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Westlake Financial",
+      tier: "Subprime",
+      minCreditScore: 520,
+      maxLtv: 140,
+      maxTermMonths: 72,
+      contactName: "Ray Westlake",
+      contactPhone: "(888) 893-7937",
+      active: true,
+    },
+    {
+      id: 7,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "DriveTime Financial",
+      tier: "Subprime",
+      minCreditScore: 480,
+      maxLtv: 150,
+      maxTermMonths: 60,
+      contactName: "Mia Drive",
+      contactPhone: "(800) 965-8043",
+      active: true,
+    },
+    {
+      id: 8,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "CAC (Credit Acceptance)",
+      tier: "Deep Subprime",
+      minCreditScore: 400,
+      maxLtv: 160,
+      maxTermMonths: 60,
+      contactName: "Ron CAC",
+      contactPhone: "(800) 634-1506",
+      active: true,
     },
   ],
   activities: [
@@ -614,9 +1106,134 @@ const defaultDatabase: Database = {
       direction: "Outbound",
       body: "Hi Jordan, confirming your Camry test drive today. Does 3 PM still work?",
       template: "Appointment Confirmation",
+      status: "delivered" as MessageStatus,
+      toNumber: "+15551230148",
+      createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      customerId: 1,
+      channel: "Text",
+      direction: "Inbound",
+      body: "Yes 3 PM works! See you then.",
+      status: "received" as MessageStatus,
+      fromNumber: "+15551230148",
+      createdAt: new Date(Date.now() - 1000 * 60 * 85).toISOString(),
+    },
+    {
+      id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      customerId: 2,
+      channel: "Email",
+      direction: "Outbound",
+      subject: "Your F-150 Payment Options",
+      body: "Hi Marcus, I wanted to share a few payment scenarios on the F-150 we discussed. Call me anytime!",
+      status: "sent" as MessageStatus,
+      toEmail: "marcus.johnson@email.com",
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+    },
+  ],
+  emailTemplates: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Appointment Confirmation",
+      subject: "Confirming your appointment",
+      body: "Hi {{firstName}}, just confirming your appointment today. See you soon!",
+      channel: "Text" as const,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "New Lead Welcome",
+      subject: "Thanks for your interest!",
+      body: "Hi {{firstName}}, thanks for reaching out about the {{vehicleYear}} {{vehicleMake}} {{vehicleModel}}. I\u2019d love to set up a time for you to come in. When works best?",
+      channel: "Text" as const,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Payment Options Email",
+      subject: "Your payment options on the {{vehicleMake}} {{vehicleModel}}",
+      body: "Hi {{firstName}},\n\nHere are a few payment scenarios based on our conversation:\n\n- ${{downPayment}} down / {{term}} months / {{apr}}% APR\n\nLet me know if you\u2019d like to adjust any of these. I\u2019m here to help!\n\n{{senderName}}",
+      channel: "Email" as const,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 4,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Service Reminder",
+      subject: "Time for your {{vehicleMake}} service!",
+      body: "Hi {{firstName}}, your {{vehicleYear}} {{vehicleMake}} is due for its next service visit. Call us or book online to schedule your appointment.",
+      channel: "Text" as const,
       createdAt: new Date().toISOString(),
     },
   ],
+  emailSequences: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "New Lead Follow-Up",
+      triggerEvent: "lead_created" as const,
+      active: true,
+      createdAt: new Date().toISOString(),
+      steps: [
+        {
+          index: 0,
+          delayDays: 0,
+          channel: "Text" as const,
+          body: "Hi {{firstName}}! Thanks for your interest in the {{vehicleMake}} {{vehicleModel}}. This is {{senderName}} at the dealership. When would you like to come in?",
+        },
+        {
+          index: 1,
+          delayDays: 1,
+          channel: "Email" as const,
+          subject: "Your {{vehicleMake}} {{vehicleModel}} — a few options",
+          body: "Hi {{firstName}},\n\nI wanted to follow up and share some payment options for the {{vehicleYear}} {{vehicleMake}} {{vehicleModel}}. Reply or call anytime.\n\n{{senderName}}",
+        },
+        {
+          index: 2,
+          delayDays: 3,
+          channel: "Text" as const,
+          body: "Hey {{firstName}}, still thinking about the {{vehicleMake}}? Happy to answer any questions!",
+        },
+        {
+          index: 3,
+          delayDays: 7,
+          channel: "Email" as const,
+          subject: "Last chance on the {{vehicleMake}} {{vehicleModel}}",
+          body: "Hi {{firstName}},\n\nJust checking in one last time — the {{vehicleYear}} {{vehicleMake}} is still available. Let me know if I can help.\n\n{{senderName}}",
+        },
+      ],
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      name: "Lost Deal Re-Engagement",
+      triggerEvent: "deal_lost" as const,
+      active: true,
+      createdAt: new Date().toISOString(),
+      steps: [
+        {
+          index: 0,
+          delayDays: 7,
+          channel: "Text" as const,
+          body: "Hi {{firstName}}, it\u2019s {{senderName}}. We have some new inventory that might be a better fit. Interested in taking a look?",
+        },
+        {
+          index: 1,
+          delayDays: 30,
+          channel: "Email" as const,
+          subject: "We miss you, {{firstName}}!",
+          body: "Hi {{firstName}},\n\nIt\u2019s been a month since we last spoke. We have new arrivals and current incentives that might be worth a look.\n\n{{senderName}}",
+        },
+      ],
+    },
+  ],
+  sequenceEnrollments: [],
   repairOrders: [
     {
       id: 1,
@@ -769,13 +1386,103 @@ const defaultDatabase: Database = {
       createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
     },
   ],
+  inventory: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      stockNumber: "S10001",
+      vin: "1FTFW1E50NFA00001",
+      year: "2024",
+      make: "Ford",
+      model: "F-150",
+      trim: "XLT",
+      bodyClass: "Pickup",
+      extColor: "Oxford White",
+      intColor: "Medium Dark Slate",
+      mileage: 12,
+      msrp: 48500,
+      internetPrice: 47200,
+      invoicePrice: 44800,
+      status: "Available",
+      condition: "New",
+      daysOnLot: 18,
+      addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 18).toISOString(),
+      notes: "",
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      stockNumber: "S10002",
+      vin: "4T1B11HK0MU000001",
+      year: "2022",
+      make: "Toyota",
+      model: "Camry",
+      trim: "SE",
+      bodyClass: "Sedan",
+      extColor: "Midnight Black",
+      intColor: "Black",
+      mileage: 34210,
+      msrp: 28000,
+      internetPrice: 24995,
+      invoicePrice: 22100,
+      status: "Available",
+      condition: "Used",
+      daysOnLot: 32,
+      addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 32).toISOString(),
+      notes: "One owner, clean Carfax.",
+    },
+    {
+      id: 3,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      stockNumber: "S10003",
+      vin: "1GCUYDED0NZ000001",
+      year: "2023",
+      make: "Chevrolet",
+      model: "Silverado 1500",
+      trim: "LT",
+      bodyClass: "Pickup",
+      extColor: "Summit White",
+      intColor: "Jet Black",
+      mileage: 8,
+      msrp: 52000,
+      internetPrice: 50500,
+      invoicePrice: 47900,
+      status: "Hold",
+      condition: "New",
+      daysOnLot: 5,
+      addedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+      notes: "Customer deposit on hold.",
+    },
+  ],
+  salesGoals: [
+    {
+      id: 1,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      salespersonName: "Alex Rivera",
+      month: new Date().toISOString().slice(0, 7),
+      unitGoal: 15,
+      grossGoal: 45000,
+    },
+    {
+      id: 2,
+      dealershipId: DEFAULT_DEALERSHIP_ID,
+      salespersonName: "Sam Johnson",
+      month: new Date().toISOString().slice(0, 7),
+      unitGoal: 12,
+      grossGoal: 38000,
+    },
+  ],
+  auditLog: [],
 };
 
 function loadDatabase(): Database {
-  if (!existsSync(dataFile)) {
+  const saved = loadAll() as Partial<Database>;
+
+  // If SQLite had no data (fresh install), return seed defaults
+  if (!Object.keys(saved).length) {
     return defaultDatabase;
   }
-  const saved = JSON.parse(readFileSync(dataFile, "utf8"));
+
   const mergeSeedRecords = <T extends { id: number }>(
     savedRecords: T[] | undefined,
     seedRecords: T[],
@@ -800,17 +1507,35 @@ function loadDatabase(): Database {
     ),
     customers: mergeSeedRecords(saved.customers, defaultDatabase.customers),
     tradeIns: mergeSeedRecords(saved.tradeIns, defaultDatabase.tradeIns),
+    vehicleSales: mergeSeedRecords(
+      saved.vehicleSales,
+      defaultDatabase.vehicleSales,
+    ),
+    fiProducts: mergeSeedRecords(saved.fiProducts, defaultDatabase.fiProducts),
+    lenders: mergeSeedRecords(saved.lenders, defaultDatabase.lenders),
     tasks: saved.tasks ?? defaultDatabase.tasks,
     messages: saved.messages ?? defaultDatabase.messages,
+    emailTemplates: mergeSeedRecords(
+      saved.emailTemplates,
+      defaultDatabase.emailTemplates,
+    ),
+    emailSequences: mergeSeedRecords(
+      saved.emailSequences,
+      defaultDatabase.emailSequences,
+    ),
+    sequenceEnrollments:
+      saved.sequenceEnrollments ?? defaultDatabase.sequenceEnrollments,
     repairOrders: saved.repairOrders ?? defaultDatabase.repairOrders,
+    inventory: mergeSeedRecords(saved.inventory, defaultDatabase.inventory),
+    salesGoals: saved.salesGoals ?? defaultDatabase.salesGoals,
+    auditLog: saved.auditLog ?? defaultDatabase.auditLog,
   };
 }
 
 let db = loadDatabase();
 
 function saveDatabase() {
-  mkdirSync(dirname(dataFile), { recursive: true });
-  writeFileSync(dataFile, JSON.stringify(db, null, 2));
+  saveAll(db as unknown as Record<string, unknown>);
 }
 
 function addActivity(
@@ -1583,7 +2308,137 @@ app.get("/api/bootstrap", (req, res) => {
     messages: db.messages.filter((r) => ids.includes(r.dealershipId)),
     repairOrders: db.repairOrders.filter((r) => ids.includes(r.dealershipId)),
     users: db.users.filter((u) => ids.includes(u.dealershipId)),
+    fiProducts: db.fiProducts.filter((p) => ids.includes(p.dealershipId)),
+    lenders: db.lenders.filter((l) => ids.includes(l.dealershipId)),
+    emailTemplates: db.emailTemplates.filter((t) =>
+      ids.includes(t.dealershipId),
+    ),
+    emailSequences: db.emailSequences.filter((s) =>
+      ids.includes(s.dealershipId),
+    ),
+    sequenceEnrollments: db.sequenceEnrollments.filter((e) =>
+      ids.includes(e.dealershipId),
+    ),
+    inventory: db.inventory.filter((v) => ids.includes(v.dealershipId)),
+    salesGoals: db.salesGoals.filter((g) => ids.includes(g.dealershipId)),
+    auditLog: db.auditLog
+      .filter((a) => ids.includes(a.dealershipId))
+      .slice(-200),
   });
+});
+
+// ── Inventory CRUD ────────────────────────────────────────────────────────
+app.get("/api/inventory", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const list =
+    ids === null
+      ? db.inventory
+      : db.inventory.filter((v) => ids.includes(v.dealershipId));
+  res.json(list);
+});
+
+app.post("/api/inventory", (req, res) => {
+  const did = req.tenant?.dealershipId ?? DEFAULT_DEALERSHIP_ID;
+  const now = new Date().toISOString();
+  const vehicle: InventoryVehicle = {
+    id: Date.now(),
+    dealershipId: did,
+    stockNumber: req.body.stockNumber || `S${Date.now().toString().slice(-5)}`,
+    vin: req.body.vin || "",
+    year: req.body.year || "",
+    make: req.body.make || "",
+    model: req.body.model || "",
+    trim: req.body.trim || "",
+    bodyClass: req.body.bodyClass || "",
+    extColor: req.body.extColor || "",
+    intColor: req.body.intColor || "",
+    mileage: Number(req.body.mileage) || 0,
+    msrp: Number(req.body.msrp) || 0,
+    internetPrice: Number(req.body.internetPrice) || 0,
+    invoicePrice: Number(req.body.invoicePrice) || 0,
+    status: req.body.status || "Available",
+    condition: req.body.condition || "Used",
+    daysOnLot: 0,
+    addedAt: now,
+    notes: req.body.notes || "",
+    imageUrl: req.body.imageUrl,
+  };
+  db.inventory.push(vehicle);
+  saveDatabase();
+  res.status(201).json(vehicle);
+});
+
+app.patch("/api/inventory/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const idx = db.inventory.findIndex((v) => v.id === id);
+  if (idx === -1) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  db.inventory[idx] = { ...db.inventory[idx], ...req.body, id };
+  saveDatabase();
+  res.json(db.inventory[idx]);
+});
+
+app.delete("/api/inventory/:id", (req, res) => {
+  const id = Number(req.params.id);
+  db.inventory = db.inventory.filter((v) => v.id !== id);
+  saveDatabase();
+  res.json({ ok: true });
+});
+
+// ── Sales Goals CRUD ──────────────────────────────────────────────────────
+app.get("/api/sales-goals", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const list =
+    ids === null
+      ? db.salesGoals
+      : db.salesGoals.filter((g) => ids.includes(g.dealershipId));
+  res.json(list);
+});
+
+app.post("/api/sales-goals", (req, res) => {
+  const did = req.tenant?.dealershipId ?? DEFAULT_DEALERSHIP_ID;
+  const goal: SalesGoal = {
+    id: Date.now(),
+    dealershipId: did,
+    salespersonName: req.body.salespersonName || "",
+    month: req.body.month || new Date().toISOString().slice(0, 7),
+    unitGoal: Number(req.body.unitGoal) || 0,
+    grossGoal: Number(req.body.grossGoal) || 0,
+  };
+  db.salesGoals.push(goal);
+  saveDatabase();
+  res.status(201).json(goal);
+});
+
+app.patch("/api/sales-goals/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const idx = db.salesGoals.findIndex((g) => g.id === id);
+  if (idx === -1) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  db.salesGoals[idx] = { ...db.salesGoals[idx], ...req.body, id };
+  saveDatabase();
+  res.json(db.salesGoals[idx]);
+});
+
+app.delete("/api/sales-goals/:id", (req, res) => {
+  const id = Number(req.params.id);
+  db.salesGoals = db.salesGoals.filter((g) => g.id !== id);
+  saveDatabase();
+  res.json({ ok: true });
+});
+
+// ── Audit Log ─────────────────────────────────────────────────────────────
+app.get("/api/audit-log", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const list =
+    ids === null
+      ? db.auditLog
+      : db.auditLog.filter((a) => ids.includes(a.dealershipId));
+  res.json(list.slice(-500).reverse());
 });
 
 app.get("/api/summary", (req, res) => {
@@ -2167,6 +3022,12 @@ app.post("/api/messages", (req, res) => {
     subject: req.body.subject || "",
     body: String(req.body.body || ""),
     template: req.body.template || "",
+    status: "queued" as MessageStatus,
+    toNumber: req.body.toNumber,
+    toEmail: req.body.toEmail,
+    fromEmail: req.body.fromEmail,
+    sequenceId: req.body.sequenceId,
+    sequenceStepIndex: req.body.sequenceStepIndex,
     createdAt: new Date().toISOString(),
   };
   db.messages = [message, ...db.messages];
@@ -2178,6 +3039,585 @@ app.post("/api/messages", (req, res) => {
   );
   saveDatabase();
   res.status(201).json(message);
+});
+
+// ─── Communication Hub ────────────────────────────────────────────────────────
+
+// GET thread for a customer
+app.get("/api/messages", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+  let results =
+    ids === null
+      ? db.messages
+      : db.messages.filter((m) => ids.includes(m.dealershipId));
+  if (customerId) results = results.filter((m) => m.customerId === customerId);
+  res.json(
+    results.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    ),
+  );
+});
+
+// PATCH message status (used by real webhook callbacks from Twilio/SendGrid)
+app.patch("/api/messages/:id/status", (req, res) => {
+  const id = Number(req.params.id);
+  db.messages = db.messages.map((m) =>
+    m.id === id
+      ? {
+          ...m,
+          status: req.body.status as MessageStatus,
+          providerSid: req.body.providerSid,
+          updatedAt: new Date().toISOString(),
+        }
+      : m,
+  );
+  const msg = db.messages.find((m) => m.id === id);
+  saveDatabase();
+  res.json(msg ?? { error: "not found" });
+});
+
+// Simulate inbound SMS (in production this is a Twilio webhook POST /webhooks/sms)
+app.post("/api/messages/simulate-inbound", (req, res) => {
+  const { customerId, body, fromNumber } = req.body;
+  const msg: Message = {
+    id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
+    customerId: Number(customerId),
+    channel: "Text",
+    direction: "Inbound",
+    body: String(body || ""),
+    status: "received",
+    fromNumber: String(fromNumber || ""),
+    createdAt: new Date().toISOString(),
+  };
+  db.messages = [...db.messages, msg];
+  saveDatabase();
+  res.status(201).json(msg);
+});
+
+// ── Email / SMS Templates ─────────────────────────────────────────────────────
+app.get("/api/email-templates", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.emailTemplates
+      : db.emailTemplates.filter((t) => ids.includes(t.dealershipId)),
+  );
+});
+
+app.post("/api/email-templates", (req, res) => {
+  const tmpl: EmailTemplate = {
+    id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
+    name: String(req.body.name || ""),
+    subject: String(req.body.subject || ""),
+    body: String(req.body.body || ""),
+    channel: req.body.channel || "Text",
+    createdAt: new Date().toISOString(),
+  };
+  db.emailTemplates = [tmpl, ...db.emailTemplates];
+  saveDatabase();
+  res.status(201).json(tmpl);
+});
+
+app.patch("/api/email-templates/:id", (req, res) => {
+  const id = Number(req.params.id);
+  db.emailTemplates = db.emailTemplates.map((t) =>
+    t.id === id ? { ...t, ...req.body, id } : t,
+  );
+  res.json(db.emailTemplates.find((t) => t.id === id));
+});
+
+app.delete("/api/email-templates/:id", (req, res) => {
+  db.emailTemplates = db.emailTemplates.filter(
+    (t) => t.id !== Number(req.params.id),
+  );
+  saveDatabase();
+  res.json({ ok: true });
+});
+
+// ── Sequences ─────────────────────────────────────────────────────────────────
+app.get("/api/email-sequences", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  res.json(
+    ids === null
+      ? db.emailSequences
+      : db.emailSequences.filter((s) => ids.includes(s.dealershipId)),
+  );
+});
+
+app.post("/api/email-sequences", (req, res) => {
+  const seq: EmailSequence = {
+    id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
+    name: String(req.body.name || ""),
+    triggerEvent: req.body.triggerEvent || "manual",
+    steps: req.body.steps ?? [],
+    active: req.body.active ?? true,
+    createdAt: new Date().toISOString(),
+  };
+  db.emailSequences = [seq, ...db.emailSequences];
+  saveDatabase();
+  res.status(201).json(seq);
+});
+
+app.patch("/api/email-sequences/:id", (req, res) => {
+  const id = Number(req.params.id);
+  db.emailSequences = db.emailSequences.map((s) =>
+    s.id === id ? { ...s, ...req.body, id } : s,
+  );
+  saveDatabase();
+  res.json(db.emailSequences.find((s) => s.id === id));
+});
+
+// ── Sequence Enrollments ──────────────────────────────────────────────────────
+app.get("/api/sequence-enrollments", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+  let results =
+    ids === null
+      ? db.sequenceEnrollments
+      : db.sequenceEnrollments.filter((e) => ids.includes(e.dealershipId));
+  if (customerId) results = results.filter((e) => e.customerId === customerId);
+  res.json(results);
+});
+
+app.post("/api/sequence-enrollments", (req, res) => {
+  const { customerId, sequenceId } = req.body;
+  // Prevent duplicate active enrollment in same sequence
+  const existing = db.sequenceEnrollments.find(
+    (e) =>
+      e.customerId === Number(customerId) &&
+      e.sequenceId === Number(sequenceId) &&
+      e.status === "active",
+  );
+  if (existing) {
+    res.status(409).json({ message: "Already enrolled" });
+    return;
+  }
+  const enrollment: SequenceEnrollment = {
+    id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
+    customerId: Number(customerId),
+    sequenceId: Number(sequenceId),
+    enrolledAt: new Date().toISOString(),
+    currentStepIndex: 0,
+    status: "active",
+  };
+  db.sequenceEnrollments = [enrollment, ...db.sequenceEnrollments];
+  saveDatabase();
+  res.status(201).json(enrollment);
+});
+
+app.patch("/api/sequence-enrollments/:id/pause", (req, res) => {
+  db.sequenceEnrollments = db.sequenceEnrollments.map((e) =>
+    e.id === Number(req.params.id)
+      ? { ...e, status: "paused" as EnrollmentStatus }
+      : e,
+  );
+  saveDatabase();
+  res.json({ ok: true });
+});
+
+app.patch("/api/sequence-enrollments/:id/unsubscribe", (req, res) => {
+  db.sequenceEnrollments = db.sequenceEnrollments.map((e) =>
+    e.id === Number(req.params.id)
+      ? { ...e, status: "unsubscribed" as EnrollmentStatus }
+      : e,
+  );
+  saveDatabase();
+  res.json({ ok: true });
+});
+
+// ─── F&I Routes ───────────────────────────────────────────────────────────────
+
+// Update deal structure (lender, rate, term, reserve, F&I products, compliance)
+app.patch("/api/vehicle-sales/:id/deal", (req, res) => {
+  const saleId = Number(req.params.id);
+  const sale = db.vehicleSales.find((s) => s.id === saleId);
+  if (!sale) {
+    res.status(404).json({ message: "Deal not found" });
+    return;
+  }
+  if (!inScope(req.tenant, sale.dealershipId)) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+
+  const updated: VehicleSale = {
+    ...sale,
+    lender: req.body.lender ?? sale.lender,
+    lenderContactName: req.body.lenderContactName ?? sale.lenderContactName,
+    lenderPhone: req.body.lenderPhone ?? sale.lenderPhone,
+    apr: req.body.apr !== undefined ? Number(req.body.apr) : sale.apr,
+    termMonths:
+      req.body.termMonths !== undefined
+        ? Number(req.body.termMonths)
+        : sale.termMonths,
+    downPayment:
+      req.body.downPayment !== undefined
+        ? Number(req.body.downPayment)
+        : sale.downPayment,
+    tradeAllowance:
+      req.body.tradeAllowance !== undefined
+        ? Number(req.body.tradeAllowance)
+        : sale.tradeAllowance,
+    tradePayoff:
+      req.body.tradePayoff !== undefined
+        ? Number(req.body.tradePayoff)
+        : sale.tradePayoff,
+    dealerReserve:
+      req.body.dealerReserve !== undefined
+        ? Number(req.body.dealerReserve)
+        : sale.dealerReserve,
+    backEndGross:
+      req.body.backEndGross !== undefined
+        ? Number(req.body.backEndGross)
+        : sale.backEndGross,
+    fundingStatus: req.body.fundingStatus ?? sale.fundingStatus,
+    fundingDate: req.body.fundingDate ?? sale.fundingDate,
+    fiProducts: req.body.fiProducts ?? sale.fiProducts,
+    ofacCleared:
+      req.body.ofacCleared !== undefined
+        ? Boolean(req.body.ofacCleared)
+        : sale.ofacCleared,
+    redFlagsCleared:
+      req.body.redFlagsCleared !== undefined
+        ? Boolean(req.body.redFlagsCleared)
+        : sale.redFlagsCleared,
+    truthInLendingPrinted:
+      req.body.truthInLendingPrinted !== undefined
+        ? Boolean(req.body.truthInLendingPrinted)
+        : sale.truthInLendingPrinted,
+    eContractSent:
+      req.body.eContractSent !== undefined
+        ? Boolean(req.body.eContractSent)
+        : sale.eContractSent,
+    eContractSigned:
+      req.body.eContractSigned !== undefined
+        ? Boolean(req.body.eContractSigned)
+        : sale.eContractSigned,
+    financeManagerId: req.body.financeManagerId ?? sale.financeManagerId,
+    financeManagerName: req.body.financeManagerName ?? sale.financeManagerName,
+    notes: req.body.notes ?? sale.notes,
+  };
+
+  db.vehicleSales = db.vehicleSales.map((s) => (s.id === saleId ? updated : s));
+
+  // Auto-advance to Funded stage
+  if (updated.fundingStatus === "Funded" && updated.stage !== "Delivered") {
+    db.vehicleSales = db.vehicleSales.map((s) =>
+      s.id === saleId
+        ? {
+            ...s,
+            stage: "Delivered",
+            fundingDate: s.fundingDate ?? new Date().toISOString(),
+          }
+        : s,
+    );
+  }
+
+  addActivity(
+    sale.dealershipId,
+    sale.customerId,
+    "Note",
+    `Deal updated — Lender: ${updated.lender ?? "TBD"}, Status: ${updated.fundingStatus ?? "Pending"}`,
+  );
+  saveDatabase();
+  res.json(db.vehicleSales.find((s) => s.id === saleId));
+});
+
+// Update stipulations on a deal
+app.patch("/api/vehicle-sales/:id/stips", (req, res) => {
+  const saleId = Number(req.params.id);
+  const sale = db.vehicleSales.find((s) => s.id === saleId);
+  if (!sale) {
+    res.status(404).json({ message: "Deal not found" });
+    return;
+  }
+  if (!inScope(req.tenant, sale.dealershipId)) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+
+  const stips: DealStip[] = req.body.stips ?? sale.stips ?? [];
+  db.vehicleSales = db.vehicleSales.map((s) =>
+    s.id === saleId ? { ...s, stips } : s,
+  );
+  saveDatabase();
+  res.json(db.vehicleSales.find((s) => s.id === saleId));
+});
+
+// Funding dashboard — all active deals in the F&I queue
+app.get("/api/funding-dashboard", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const activeSales = (
+    ids === null
+      ? db.vehicleSales
+      : db.vehicleSales.filter((s) => ids.includes(s.dealershipId))
+  ).filter((s) => s.stage !== "Working");
+
+  const totalReserve = activeSales.reduce(
+    (sum, s) => sum + (s.dealerReserve ?? 0),
+    0,
+  );
+  const totalBackEnd = activeSales.reduce(
+    (sum, s) => sum + (s.backEndGross ?? 0),
+    0,
+  );
+  const totalFiRevenue = activeSales.reduce(
+    (sum, s) =>
+      sum + (s.fiProducts ?? []).reduce((ps, p) => ps + p.retailPrice, 0),
+    0,
+  );
+
+  const byStatus = activeSales.reduce<Record<string, number>>((acc, s) => {
+    const key = s.fundingStatus ?? "Pending Structure";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const pendingStips = activeSales.filter((s) =>
+    (s.stips ?? []).some((st) => !st.received),
+  );
+
+  res.json({
+    totalDeals: activeSales.length,
+    totalReserve,
+    totalBackEnd,
+    totalFiRevenue,
+    byStatus,
+    pendingStipsCount: pendingStips.length,
+    deals: activeSales.map((s) => {
+      const customer = db.customers.find((c) => c.id === s.customerId);
+      return {
+        ...s,
+        customerName: customer
+          ? `${customer.firstName} ${customer.lastName}`
+          : "Unknown",
+        pendingStips: (s.stips ?? []).filter((st) => !st.received).length,
+        fiRevenue: (s.fiProducts ?? []).reduce(
+          (sum, p) => sum + p.retailPrice,
+          0,
+        ),
+        fiGross: (s.fiProducts ?? []).reduce(
+          (sum, p) => sum + (p.retailPrice - p.dealerCost),
+          0,
+        ),
+      };
+    }),
+  });
+});
+
+// F&I Product catalog
+app.get("/api/fi-products", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const results = (
+    ids === null
+      ? db.fiProducts
+      : db.fiProducts.filter((p) => ids.includes(p.dealershipId))
+  ).filter((p) => p.active);
+  res.json(results);
+});
+
+app.post("/api/fi-products", (req, res) => {
+  if (!hasRank(req.tenant.role, "FinanceManager")) {
+    res.status(403).json({ message: "Finance Manager or above required" });
+    return;
+  }
+  const product: FiProduct = {
+    id: Date.now(),
+    dealershipId: req.tenant.dealershipId,
+    category: req.body.category,
+    name: String(req.body.name || "").trim(),
+    providerName: String(req.body.providerName || "").trim(),
+    termMonths: req.body.termMonths ? Number(req.body.termMonths) : undefined,
+    mileageLimit: req.body.mileageLimit
+      ? Number(req.body.mileageLimit)
+      : undefined,
+    dealerCost: Number(req.body.dealerCost || 0),
+    retailPrice: Number(req.body.retailPrice || 0),
+    retailCap: Number(req.body.retailCap || req.body.retailPrice || 0),
+    minProfit: Number(req.body.minProfit || 0),
+    active: true,
+  };
+  db.fiProducts = [product, ...db.fiProducts];
+  saveDatabase();
+  res.status(201).json(product);
+});
+
+app.patch("/api/fi-products/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const existing = db.fiProducts.find((p) => p.id === id);
+  if (!existing) {
+    res.status(404).json({ message: "Product not found" });
+    return;
+  }
+  if (
+    !inScope(req.tenant, existing.dealershipId) ||
+    !hasRank(req.tenant.role, "FinanceManager")
+  ) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  const updated: FiProduct = {
+    ...existing,
+    ...req.body,
+    id: existing.id,
+    dealershipId: existing.dealershipId,
+  };
+  db.fiProducts = db.fiProducts.map((p) => (p.id === id ? updated : p));
+  saveDatabase();
+  res.json(updated);
+});
+
+// ── Lenders ──────────────────────────────────────────────────────────────────
+app.get("/api/lenders", (req, res) => {
+  const ids = visibleDealershipIds(req.tenant);
+  const results = (
+    ids === null
+      ? db.lenders
+      : db.lenders.filter((l) => ids.includes(l.dealershipId))
+  ).filter((l) => l.active);
+  res.json(results);
+});
+
+// ── Submit deal to lenders (shotgun) ─────────────────────────────────────────
+app.post("/api/vehicle-sales/:id/submit-lenders", (req, res) => {
+  const id = Number(req.params.id);
+  const sale = db.vehicleSales.find((s) => s.id === id);
+  if (!sale) {
+    res.status(404).json({ message: "Deal not found" });
+    return;
+  }
+  if (
+    !inScope(req.tenant, sale.dealershipId) ||
+    !hasRank(req.tenant.role, "FinanceManager")
+  ) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  const lenderIds: number[] = Array.isArray(req.body.lenderIds)
+    ? req.body.lenderIds
+    : [];
+  if (!lenderIds.length) {
+    res.status(400).json({ message: "No lenders selected" });
+    return;
+  }
+
+  const existingIds = new Set(
+    (sale.lenderSubmissions ?? []).map((s) => s.lenderId),
+  );
+  const newSubs: LenderSubmission[] = lenderIds
+    .filter((lid) => !existingIds.has(lid))
+    .map((lid) => {
+      const lender = db.lenders.find((l) => l.id === lid);
+      return {
+        id: Date.now() + lid,
+        vehicleSaleId: id,
+        dealershipId: sale.dealershipId,
+        lenderId: lid,
+        lenderName: lender?.name ?? `Lender ${lid}`,
+        submittedAt: new Date().toISOString(),
+        status: "Pending" as LenderDecisionStatus,
+      };
+    });
+
+  const updated: VehicleSale = {
+    ...sale,
+    fundingStatus: "Submitted to Lender",
+    lenderSubmissions: [...(sale.lenderSubmissions ?? []), ...newSubs],
+  };
+  db.vehicleSales = db.vehicleSales.map((s) => (s.id === id ? updated : s));
+  saveDatabase();
+
+  // Simulate async lender responses (in production this would be a webhook)
+  setTimeout(() => {
+    const current = db.vehicleSales.find((s) => s.id === id);
+    if (!current) return;
+    const simulatedSubs = (current.lenderSubmissions ?? []).map((sub) => {
+      if (sub.status !== "Pending") return sub;
+      const lender = db.lenders.find((l) => l.id === sub.lenderId);
+      const rand = Math.random();
+      if (rand < 0.55) {
+        return {
+          ...sub,
+          status: "Approved" as LenderDecisionStatus,
+          approvedRate: parseFloat(
+            (
+              (lender?.tier === "Prime"
+                ? 5
+                : lender?.tier === "Near-Prime"
+                  ? 8
+                  : 12) +
+              Math.random() * 2
+            ).toFixed(2),
+          ),
+          approvedTerm: lender?.maxTermMonths ?? 72,
+          approvedAmount: sale.salePrice * 1.1,
+          maxLtv: lender?.maxLtv,
+          decidedAt: new Date().toISOString(),
+        };
+      } else if (rand < 0.75) {
+        return {
+          ...sub,
+          status: "Countered" as LenderDecisionStatus,
+          counterConditions:
+            "Requires $1,500 additional down payment or shorter term of 60 months.",
+          decidedAt: new Date().toISOString(),
+        };
+      } else {
+        return {
+          ...sub,
+          status: "Declined" as LenderDecisionStatus,
+          declineReason: "Debt-to-income ratio exceeds guideline.",
+          decidedAt: new Date().toISOString(),
+        };
+      }
+    });
+    db.vehicleSales = db.vehicleSales.map((s) =>
+      s.id === id ? { ...s, lenderSubmissions: simulatedSubs } : s,
+    );
+    saveDatabase();
+  }, 3000);
+
+  res.json(updated);
+});
+
+// ── Accept a lender decision & import terms ───────────────────────────────────
+app.post("/api/vehicle-sales/:id/accept-submission", (req, res) => {
+  const id = Number(req.params.id);
+  const sale = db.vehicleSales.find((s) => s.id === id);
+  if (!sale) {
+    res.status(404).json({ message: "Deal not found" });
+    return;
+  }
+  if (
+    !inScope(req.tenant, sale.dealershipId) ||
+    !hasRank(req.tenant.role, "FinanceManager")
+  ) {
+    res.status(403).json({ message: "Access denied" });
+    return;
+  }
+  const submissionId = Number(req.body.submissionId);
+  const sub = (sale.lenderSubmissions ?? []).find((s) => s.id === submissionId);
+  if (!sub || sub.status !== "Approved") {
+    res.status(400).json({ message: "Submission not found or not approved" });
+    return;
+  }
+  const updated: VehicleSale = {
+    ...sale,
+    lender: sub.lenderName,
+    apr: sub.approvedRate,
+    termMonths: sub.approvedTerm,
+    fundingStatus: "Approved",
+    acceptedSubmissionId: submissionId,
+  };
+  db.vehicleSales = db.vehicleSales.map((s) => (s.id === id ? updated : s));
+  saveDatabase();
+  res.json(updated);
 });
 
 app.listen(port, () => {
