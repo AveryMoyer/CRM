@@ -2224,6 +2224,10 @@ app.post("/api/login", (req, res) => {
   });
 });
 
+app.get("/api/users", (req, res) => {
+  res.json(db.users.map((u) => ({ id: u.id, name: u.name, role: u.role })));
+});
+
 app.put("/api/users/:id/profile", (req, res) => {
   const id = Number(req.params.id);
   const existing = db.users.find((user) => user.id === id);

@@ -1459,6 +1459,9 @@ function App() {
   const [commsTemplateId, setCommsTemplateId] = useState<number | null>(null);
   const [commsSending, setCommsSending] = useState(false);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
+  const [teamUsers, setTeamUsers] = useState<
+    { id: number; name: string; role: string }[]
+  >([]);
   const [bulkSmsOpen, setBulkSmsOpen] = useState(false);
   const [bulkSmsBody, setBulkSmsBody] = useState("");
   const [bulkSmsFilter, setBulkSmsFilter] = useState<
@@ -2611,6 +2614,22 @@ function App() {
     setProfileTab("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCustomerId]);
+
+  // Fetch team members for rep assignment dropdowns
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    apiFetch(`${API_BASE}/api/users`)
+      .then((r) => r.json())
+      .then((data) => setTeamUsers(data))
+      .catch(() => {});
+  }, [isLoggedIn]);
+
+  // Live tick every 60s so ups-log elapsed timers update without user interaction
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -7322,7 +7341,10 @@ function App() {
                     </div>
                     <div className="inbox-card-actions">
                       <span className="assign-label">Assign to:</span>
-                      {["Avery", "Mike", "Sarah", "Dan"].map((rep) => (
+                      {(teamUsers.length > 0
+                        ? teamUsers.map((u) => u.name)
+                        : [currentUser?.name ?? "Me"]
+                      ).map((rep) => (
                         <button
                           key={rep}
                           type="button"
@@ -14395,13 +14417,28 @@ function App() {
                     </div>
                     <div className="desk-field">
                       <label>Rep</label>
-                      <input
-                        placeholder="Salesperson"
-                        value={upsForm.rep}
-                        onChange={(e) =>
-                          setUpsForm({ ...upsForm, rep: e.target.value })
-                        }
-                      />
+                      {teamUsers.length > 0 ? (
+                        <select
+                          value={upsForm.rep}
+                          onChange={(e) =>
+                            setUpsForm({ ...upsForm, rep: e.target.value })
+                          }
+                        >
+                          {teamUsers.map((u) => (
+                            <option key={u.id} value={u.name}>
+                              {u.name} — {u.role}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          placeholder="Salesperson"
+                          value={upsForm.rep}
+                          onChange={(e) =>
+                            setUpsForm({ ...upsForm, rep: e.target.value })
+                          }
+                        />
+                      )}
                     </div>
                     <div className="desk-field">
                       <label>Source</label>
