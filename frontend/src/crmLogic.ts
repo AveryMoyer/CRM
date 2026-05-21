@@ -12,7 +12,9 @@ export type AppPageName =
   | "service"
   | "comms"
   | "inventory"
-  | "reports";
+  | "reports"
+  | "equity"
+  | "ups";
 
 export type CustomerIdentity = {
   id: number;
@@ -48,6 +50,8 @@ export const VALID_APP_PAGES: AppPageName[] = [
   "comms",
   "inventory",
   "reports",
+  "equity",
+  "ups",
 ];
 
 export function parseHashRoute(hash: string): ParsedRoute {

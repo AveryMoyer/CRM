@@ -40,6 +40,11 @@ import {
   Trash2,
   Eye,
   Target,
+  TrendingDown,
+  Car,
+  Timer,
+  UserCheck,
+  Flame,
 } from "lucide-react";
 import {
   findDuplicateCustomers,
@@ -551,6 +556,17 @@ type ProfileTab =
   | "messages"
   | "activity"
   | "service";
+type UpsEntry = {
+  id: number;
+  customerName: string;
+  vehicle: string;
+  rep: string;
+  source: "Walk-In" | "Phone" | "Internet" | "Be-Back" | "Service";
+  stage: "Greeting" | "Demo" | "Desk" | "F&I" | "Delivered" | "Lost";
+  arrivedAt: string;
+  notes: string;
+};
+
 type AppPage =
   | "dashboard"
   | "leads"
@@ -565,7 +581,9 @@ type AppPage =
   | "fi-manager"
   | "comms"
   | "inventory"
-  | "reports";
+  | "reports"
+  | "equity"
+  | "ups";
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
@@ -1494,6 +1512,25 @@ function App() {
     notes: "",
   });
   const [showRoForm, setShowRoForm] = useState(false);
+
+  // ── Ups Log state ──────────────────────────────────────────────────────────
+  const [upsLog, setUpsLog] = useState<UpsEntry[]>([]);
+  const [upsForm, setUpsForm] = useState<Omit<UpsEntry, "id" | "arrivedAt">>({
+    customerName: "",
+    vehicle: "",
+    rep: currentUser?.name ?? "",
+    source: "Walk-In",
+    stage: "Greeting",
+    notes: "",
+  });
+  const [showUpsForm, setShowUpsForm] = useState(false);
+  const [upsEditId, setUpsEditId] = useState<number | null>(null);
+
+  // ── Equity Mining state ────────────────────────────────────────────────────
+  const [equityMinAge, setEquityMinAge] = useState(12);
+  const [equityFilter, setEquityFilter] = useState<
+    "all" | "positive" | "lease" | "warranty"
+  >("all");
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
   );
@@ -2159,6 +2196,60 @@ function App() {
     [customers],
   );
 
+  // ── Equity Mining: sold customers with vehicle sale data ─────────────────
+  const equityLeads = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return customers
+      .filter((c) => c.status === "Sold")
+      .map((c) => {
+        const sale = [...vehicleSales]
+          .filter((s) => s.customerId === c.id && s.stage === "Delivered")
+          .sort((a, b) => b.id - a.id)[0];
+        if (!sale) return null;
+        const saleYear = parseInt(sale.year ?? "0") || 0;
+        const ageMonths = saleYear > 0 ? (currentYear - saleYear) * 12 : 0;
+        const bookVal =
+          saleYear > 0
+            ? estimateBookValue(saleYear, sale.make ?? "", sale.model ?? "", 0)
+            : null;
+        const owed =
+          sale.downPayment != null &&
+          sale.apr != null &&
+          sale.termMonths != null
+            ? Math.max(
+                0,
+                sale.salePrice -
+                  (sale.downPayment ?? 0) -
+                  (ageMonths / (sale.termMonths || 72)) *
+                    (sale.salePrice - (sale.downPayment ?? 0)),
+              )
+            : null;
+        const equity = bookVal && owed != null ? bookVal.avg - owed : null;
+        const isLeaseEnd =
+          sale.termMonths != null && ageMonths >= sale.termMonths - 3;
+        const isWarrantyEnd = ageMonths >= 36;
+        return {
+          customer: c,
+          sale,
+          ageMonths,
+          bookVal,
+          owed,
+          equity,
+          isLeaseEnd,
+          isWarrantyEnd,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .filter((r) => {
+        if (equityFilter === "positive") return (r.equity ?? 0) > 0;
+        if (equityFilter === "lease") return r.isLeaseEnd;
+        if (equityFilter === "warranty") return r.isWarrantyEnd;
+        return true;
+      })
+      .filter((r) => r.ageMonths >= equityMinAge)
+      .sort((a, b) => (b.equity ?? -99999) - (a.equity ?? -99999));
+  }, [customers, vehicleSales, equityFilter, equityMinAge]);
+
   const leadsBySource = useMemo(() => {
     const map: Record<string, number> = {};
     customers.forEach((c) => {
@@ -2269,11 +2360,6 @@ function App() {
   }
 
   function doCustomerSearch() {
-    setActiveSearch(customerSearch.trim());
-    setCustPage(0);
-  }
-
-  function CustomerProfile() {
     setActiveSearch(customerSearch.trim());
     setCustPage(0);
   }
@@ -2529,6 +2615,7 @@ function App() {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function navigate(page: AppPage) {
+    setCurrentPage(page);
     window.location.hash = `#/${page}`;
   }
   function openProfile(c: Customer) {
@@ -5999,6 +6086,21 @@ function App() {
     },
     { page: "inventory", label: "Inventory", icon: <Warehouse size={16} /> },
     { page: "reports", label: "Reports", icon: <BarChart2 size={16} /> },
+    {
+      page: "equity",
+      label: "Equity Mining",
+      icon: <TrendingDown size={16} />,
+      badge:
+        equityLeads.filter((r) => (r.equity ?? 0) > 2000).length || undefined,
+    },
+    {
+      page: "ups",
+      label: "Ups Log",
+      icon: <Car size={16} />,
+      badge:
+        upsLog.filter((u) => u.stage !== "Delivered" && u.stage !== "Lost")
+          .length || undefined,
+    },
   ];
 
   return (
@@ -6348,7 +6450,14 @@ function App() {
                   </p>
                 </div>
                 <div className="header-actions">
-                  <button type="button" onClick={() => navigate("leads")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetCustomerForm();
+                      setShowAddForm(true);
+                      navigate("customers");
+                    }}
+                  >
                     + New Lead
                   </button>
                 </div>
@@ -7134,7 +7243,14 @@ function App() {
                   </p>
                 </div>
                 <div className="header-actions">
-                  <button type="button" onClick={() => navigate("customers")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetCustomerForm();
+                      setShowAddForm(true);
+                      navigate("customers");
+                    }}
+                  >
                     + Add Lead Manually
                   </button>
                 </div>
@@ -13956,6 +14072,550 @@ function App() {
                 </>
               );
             })()}
+          {/* ── EQUITY MINING ─────────────────────────────────────── */}
+          {currentPage === "equity" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Data Mining</p>
+                  <h1>Equity Mining</h1>
+                  <p className="page-subtitle">
+                    Sold customers ready to upgrade — positive equity, lease
+                    maturity, or warranty expiration.
+                  </p>
+                </div>
+                <div className="header-actions">
+                  <button type="button" onClick={() => navigate("customers")}>
+                    + Add Customer
+                  </button>
+                </div>
+              </header>
+
+              {/* KPI strip */}
+              <div className="eq-kpi-row">
+                <div className="eq-kpi-card">
+                  <TrendingDown size={18} className="eq-kpi-icon positive" />
+                  <div>
+                    <span className="eq-kpi-val">
+                      {equityLeads.filter((r) => (r.equity ?? 0) > 0).length}
+                    </span>
+                    <span className="eq-kpi-label">Positive Equity</span>
+                  </div>
+                </div>
+                <div className="eq-kpi-card">
+                  <Timer size={18} className="eq-kpi-icon warn" />
+                  <div>
+                    <span className="eq-kpi-val">
+                      {equityLeads.filter((r) => r.isLeaseEnd).length}
+                    </span>
+                    <span className="eq-kpi-label">Lease Maturity</span>
+                  </div>
+                </div>
+                <div className="eq-kpi-card">
+                  <ShieldCheck size={18} className="eq-kpi-icon muted" />
+                  <div>
+                    <span className="eq-kpi-val">
+                      {equityLeads.filter((r) => r.isWarrantyEnd).length}
+                    </span>
+                    <span className="eq-kpi-label">Warranty Expired</span>
+                  </div>
+                </div>
+                <div className="eq-kpi-card">
+                  <Flame size={18} className="eq-kpi-icon hot" />
+                  <div>
+                    <span className="eq-kpi-val">
+                      {equityLeads.filter((r) => (r.equity ?? 0) > 2000).length}
+                    </span>
+                    <span className="eq-kpi-label">High-Value Opps</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="eq-filters panel">
+                <div className="eq-filter-group">
+                  <span className="eq-filter-label">Show:</span>
+                  {(["all", "positive", "lease", "warranty"] as const).map(
+                    (f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        className={`eq-filter-btn${equityFilter === f ? " active" : ""}`}
+                        onClick={() => setEquityFilter(f)}
+                      >
+                        {f === "all"
+                          ? "All Sold"
+                          : f === "positive"
+                            ? "Positive Equity"
+                            : f === "lease"
+                              ? "Lease Maturity"
+                              : "Warranty End"}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <div className="eq-filter-group">
+                  <label className="eq-filter-label">Min age (months):</label>
+                  <input
+                    type="number"
+                    className="eq-age-input"
+                    value={equityMinAge}
+                    min={0}
+                    onChange={(e) => setEquityMinAge(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              {/* Results table */}
+              {equityLeads.length === 0 ? (
+                <p className="empty-state large">
+                  No customers match the current filters. Add sold deals with
+                  vehicle info to see equity opportunities here.
+                </p>
+              ) : (
+                <div className="eq-table-wrap panel">
+                  <table className="eq-table">
+                    <thead>
+                      <tr>
+                        <th>Customer</th>
+                        <th>Vehicle</th>
+                        <th>Age (mo)</th>
+                        <th>Book Value</th>
+                        <th>Est. Owed</th>
+                        <th>Equity</th>
+                        <th>Flags</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {equityLeads.map(
+                        ({
+                          customer,
+                          sale,
+                          ageMonths,
+                          bookVal,
+                          owed,
+                          equity,
+                          isLeaseEnd,
+                          isWarrantyEnd,
+                        }) => (
+                          <tr
+                            key={customer.id}
+                            className={
+                              equity != null && equity > 2000
+                                ? "eq-row-hot"
+                                : ""
+                            }
+                          >
+                            <td>
+                              <div className="eq-cust-cell">
+                                <strong>
+                                  {customer.firstName} {customer.lastName}
+                                </strong>
+                                <small>{customer.phone}</small>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="eq-vehicle-cell">
+                                <span>
+                                  {sale.year} {sale.make} {sale.model}
+                                </span>
+                                <small>Stock #{sale.stockNumber}</small>
+                              </div>
+                            </td>
+                            <td>{ageMonths}</td>
+                            <td>
+                              {bookVal
+                                ? `$${bookVal.avg.toLocaleString()}`
+                                : "—"}
+                            </td>
+                            <td>
+                              {owed != null
+                                ? `$${Math.round(owed).toLocaleString()}`
+                                : "—"}
+                            </td>
+                            <td>
+                              {equity != null ? (
+                                <span
+                                  className={`eq-equity-badge ${equity > 0 ? "positive" : "negative"}`}
+                                >
+                                  {equity > 0 ? "+" : ""}$
+                                  {Math.round(equity).toLocaleString()}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td>
+                              <div className="eq-flags">
+                                {isLeaseEnd && (
+                                  <span className="eq-flag warn">
+                                    Lease End
+                                  </span>
+                                )}
+                                {isWarrantyEnd && (
+                                  <span className="eq-flag muted">
+                                    Warranty
+                                  </span>
+                                )}
+                                {(equity ?? 0) > 2000 && (
+                                  <span className="eq-flag hot">Hot</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button
+                                  type="button"
+                                  className="open-btn"
+                                  onClick={() => openProfile(customer)}
+                                >
+                                  View
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rep-btn"
+                                  onClick={() => {
+                                    setCommsCustomerId(customer.id);
+                                    navigate("comms");
+                                  }}
+                                >
+                                  <MessageSquare size={12} /> Contact
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ),
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── UPS LOG ────────────────────────────────────────────── */}
+          {currentPage === "ups" && (
+            <>
+              <header className="page-header">
+                <div>
+                  <p className="eyebrow">Showroom Floor</p>
+                  <h1>Ups Log</h1>
+                  <p className="page-subtitle">
+                    Every walk-in, phone-up, and be-back tracked in real time.
+                  </p>
+                </div>
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUpsForm({
+                        customerName: "",
+                        vehicle: "",
+                        rep: currentUser?.name ?? "",
+                        source: "Walk-In",
+                        stage: "Greeting",
+                        notes: "",
+                      });
+                      setUpsEditId(null);
+                      setShowUpsForm(true);
+                    }}
+                  >
+                    + Log Up
+                  </button>
+                </div>
+              </header>
+
+              {/* Summary strip */}
+              <div className="ups-kpi-row">
+                {(
+                  [
+                    "Greeting",
+                    "Demo",
+                    "Desk",
+                    "F&I",
+                    "Delivered",
+                    "Lost",
+                  ] as const
+                ).map((stage) => {
+                  const count = upsLog.filter((u) => u.stage === stage).length;
+                  return (
+                    <div
+                      key={stage}
+                      className={`ups-kpi-card ups-stage-${stage.toLowerCase().replace("&", "")}`}
+                    >
+                      <span className="ups-kpi-val">{count}</span>
+                      <span className="ups-kpi-label">{stage}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add / Edit form */}
+              {showUpsForm && (
+                <div
+                  className="panel ups-form-panel"
+                  style={{ marginBottom: 14 }}
+                >
+                  <div className="panel-header">
+                    <p className="eyebrow">
+                      {upsEditId ? "Edit Up" : "Log New Up"}
+                    </p>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => setShowUpsForm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="ups-form-grid">
+                    <div className="desk-field">
+                      <label>Customer Name</label>
+                      <input
+                        placeholder="Full name"
+                        value={upsForm.customerName}
+                        onChange={(e) =>
+                          setUpsForm({
+                            ...upsForm,
+                            customerName: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Vehicle of Interest</label>
+                      <input
+                        placeholder="e.g. 2024 Ford F-150"
+                        value={upsForm.vehicle}
+                        onChange={(e) =>
+                          setUpsForm({ ...upsForm, vehicle: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Rep</label>
+                      <input
+                        placeholder="Salesperson"
+                        value={upsForm.rep}
+                        onChange={(e) =>
+                          setUpsForm({ ...upsForm, rep: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="desk-field">
+                      <label>Source</label>
+                      <select
+                        value={upsForm.source}
+                        onChange={(e) =>
+                          setUpsForm({
+                            ...upsForm,
+                            source: e.target.value as UpsEntry["source"],
+                          })
+                        }
+                      >
+                        <option>Walk-In</option>
+                        <option>Phone</option>
+                        <option>Internet</option>
+                        <option>Be-Back</option>
+                        <option>Service</option>
+                      </select>
+                    </div>
+                    <div className="desk-field">
+                      <label>Stage</label>
+                      <select
+                        value={upsForm.stage}
+                        onChange={(e) =>
+                          setUpsForm({
+                            ...upsForm,
+                            stage: e.target.value as UpsEntry["stage"],
+                          })
+                        }
+                      >
+                        <option>Greeting</option>
+                        <option>Demo</option>
+                        <option>Desk</option>
+                        <option>F&I</option>
+                        <option>Delivered</option>
+                        <option>Lost</option>
+                      </select>
+                    </div>
+                    <div className="desk-field full">
+                      <label>Notes</label>
+                      <input
+                        placeholder="Optional notes"
+                        value={upsForm.notes}
+                        onChange={(e) =>
+                          setUpsForm({ ...upsForm, notes: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!upsForm.customerName.trim()) return;
+                        if (upsEditId !== null) {
+                          setUpsLog((prev) =>
+                            prev.map((u) =>
+                              u.id === upsEditId ? { ...u, ...upsForm } : u,
+                            ),
+                          );
+                        } else {
+                          setUpsLog((prev) => [
+                            ...prev,
+                            {
+                              id: Date.now(),
+                              arrivedAt: new Date().toISOString(),
+                              ...upsForm,
+                            },
+                          ]);
+                        }
+                        setShowUpsForm(false);
+                        setUpsEditId(null);
+                      }}
+                    >
+                      {upsEditId ? "Save Changes" : "Log Up"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => setShowUpsForm(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Active ups board */}
+              {upsLog.length === 0 && !showUpsForm ? (
+                <p className="empty-state large">
+                  No ups logged today. Click <strong>+ Log Up</strong> to add a
+                  walk-in, phone-up, or be-back.
+                </p>
+              ) : (
+                <div className="ups-board">
+                  {(
+                    [
+                      "Greeting",
+                      "Demo",
+                      "Desk",
+                      "F&I",
+                      "Delivered",
+                      "Lost",
+                    ] as const
+                  ).map((stage) => {
+                    const cards = upsLog.filter((u) => u.stage === stage);
+                    return (
+                      <div
+                        key={stage}
+                        className={`ups-col ups-col-${stage.toLowerCase().replace("&", "")}`}
+                      >
+                        <div className="ups-col-header">
+                          <span className="ups-col-title">{stage}</span>
+                          <span className="ups-col-count">{cards.length}</span>
+                        </div>
+                        {cards.map((up) => {
+                          const elapsed = Math.floor(
+                            (Date.now() - new Date(up.arrivedAt).getTime()) /
+                              60000,
+                          );
+                          const isLong = elapsed > 90;
+                          return (
+                            <div
+                              key={up.id}
+                              className={`ups-card${isLong ? " ups-card-long" : ""}`}
+                            >
+                              <div className="ups-card-top">
+                                <strong>{up.customerName}</strong>
+                                <span
+                                  className={`ups-timer${isLong ? " hot" : ""}`}
+                                >
+                                  <Timer size={11} /> {elapsed}m
+                                </span>
+                              </div>
+                              <div className="ups-card-vehicle">
+                                <Car size={11} />{" "}
+                                {up.vehicle || "No vehicle noted"}
+                              </div>
+                              <div className="ups-card-meta">
+                                <span className="ups-source-badge">
+                                  {up.source}
+                                </span>
+                                <UserCheck size={11} /> {up.rep}
+                              </div>
+                              {up.notes && (
+                                <div className="ups-card-notes">{up.notes}</div>
+                              )}
+                              <div className="ups-card-actions">
+                                <select
+                                  value={up.stage}
+                                  onChange={(e) =>
+                                    setUpsLog((prev) =>
+                                      prev.map((u) =>
+                                        u.id === up.id
+                                          ? {
+                                              ...u,
+                                              stage: e.target
+                                                .value as UpsEntry["stage"],
+                                            }
+                                          : u,
+                                      ),
+                                    )
+                                  }
+                                  className="ups-stage-select"
+                                >
+                                  <option>Greeting</option>
+                                  <option>Demo</option>
+                                  <option>Desk</option>
+                                  <option>F&I</option>
+                                  <option>Delivered</option>
+                                  <option>Lost</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  className="ups-edit-btn"
+                                  title="Edit"
+                                  onClick={() => {
+                                    setUpsForm({
+                                      customerName: up.customerName,
+                                      vehicle: up.vehicle,
+                                      rep: up.rep,
+                                      source: up.source,
+                                      stage: up.stage,
+                                      notes: up.notes,
+                                    });
+                                    setUpsEditId(up.id);
+                                    setShowUpsForm(true);
+                                  }}
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ups-del-btn danger-btn"
+                                  title="Remove"
+                                  onClick={() =>
+                                    setUpsLog((prev) =>
+                                      prev.filter((u) => u.id !== up.id),
+                                    )
+                                  }
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </section>
       </main>
     </>
