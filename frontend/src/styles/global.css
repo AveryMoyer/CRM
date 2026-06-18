@@ -8859,3 +8859,138 @@ a.crm-info-value:hover {
     gap: 6px;
   }
 }
+
+/* ── AI Components ───────────────────────────────────────────────────────────── */
+
+.ai-btn,
+.ai-coach-btn,
+.ai-script-btn {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-btn:hover:not(:disabled),
+.ai-coach-btn:hover:not(:disabled),
+.ai-script-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.ai-btn:disabled,
+.ai-coach-btn:disabled,
+.ai-script-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.ai-output,
+.ai-coach-output,
+.ai-script-output {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.theme-dark .ai-output,
+.theme-dark .ai-coach-output,
+.theme-dark .ai-script-output {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.ai-spin {
+  animation: ai-spin 1s linear infinite;
+}
+
+@keyframes ai-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-error {
+  color: #ef4444;
+  font-size: 12px;
+}
+
+.ai-draft-text,
+.ai-coach-advice,
+.ai-script-text {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: #1e293b;
+}
+
+.theme-dark .ai-draft-text,
+.theme-dark .ai-coach-advice,
+.theme-dark .ai-script-text {
+  color: #e2e8f0;
+}
+
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.ai-use-btn {
+  background: #10b981;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-use-btn:hover {
+  background: #059669;
+}
+
+.ai-close-btn {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.theme-dark .ai-close-btn {
+  color: #94a3b8;
+  border-color: #475569;
+}
+
+.theme-dark .ai-close-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}

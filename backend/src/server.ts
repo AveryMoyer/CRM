@@ -2,9 +2,15 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express, { NextFunction, Request, Response } from "express";
 import helmet from "helmet";
+import Groq from "groq-sdk";
 import { loadAll, saveAll } from "./sqlite.js";
 
 dotenv.config();
+
+// Initialize Groq AI client (free tier available)
+const groq = process.env.GROQ_API_KEY
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  : null;
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -3622,6 +3628,139 @@ app.post("/api/vehicle-sales/:id/accept-submission", (req, res) => {
   db.vehicleSales = db.vehicleSales.map((s) => (s.id === id ? updated : s));
   saveDatabase();
   res.json(updated);
+});
+
+// ─── AI Routes (Groq) ────────────────────────────────────────────────────────
+
+// AI Draft Lead Response — generate personalized email/SMS to a lead
+app.post("/api/ai/draft-response", async (req, res) => {
+  if (!groq) {
+    res
+      .status(503)
+      .json({ message: "AI not configured. Set GROQ_API_KEY in .env" });
+    return;
+  }
+  const {
+    leadName,
+    leadSource,
+    vehicleInterest,
+    tone = "professional",
+  } = req.body;
+  if (!leadName) {
+    res.status(400).json({ message: "leadName required" });
+    return;
+  }
+  try {
+    const prompt = `You're a car sales professional at a dealership. Write a ${tone} ${leadSource?.includes("SMS") || leadSource?.includes("Text") ? "SMS text message" : "email"} response to a new lead.
+
+Lead: ${leadName}
+Source: ${leadSource || "Website"}
+${vehicleInterest ? `Interested in: ${vehicleInterest}` : ""}
+
+Keep it under ${leadSource?.includes("SMS") || leadSource?.includes("Text") ? "160 characters" : "150 words"}, friendly but professional, and include:
+1. Greeting using their name
+2. Thank them for their interest
+3. One question to move the conversation forward
+4. Your name (use "Alex" as sales rep)
+
+Response:`;
+
+    const chat = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama3-70b-8192",
+      temperature: 0.7,
+      max_tokens: 300,
+    });
+    const text = chat.choices[0]?.message?.content?.trim();
+    res.json({ draft: text, model: "llama3-70b-8192" });
+  } catch (err) {
+    console.error("AI draft error:", err);
+    res.status(500).json({ message: "AI generation failed" });
+  }
+});
+
+// AI Deal Coach — suggest next action on a deal
+app.post("/api/ai/deal-coach", async (req, res) => {
+  if (!groq) {
+    res
+      .status(503)
+      .json({ message: "AI not configured. Set GROQ_API_KEY in .env" });
+    return;
+  }
+  const { customerName, dealStage, daysInStage, lastContact, objections } =
+    req.body;
+  try {
+    const prompt = `You're an F&I sales coach at a car dealership. Give ONE specific next action for this deal:
+
+Customer: ${customerName || "Unknown"}
+Stage: ${dealStage || "Working"}
+Days in stage: ${daysInStage || 0}
+Last contact: ${lastContact || "Unknown"}
+${objections ? `Objections: ${objections}` : ""}
+
+Provide:
+1. One sentence next action (be specific)
+2. One sentence why this works
+3. One sentence what to say
+
+Format as concise bullet points.`;
+
+    const chat = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama3-8b-8192",
+      temperature: 0.6,
+      max_tokens: 200,
+    });
+    const text = chat.choices[0]?.message?.content?.trim();
+    res.json({ advice: text, model: "llama3-8b-8192" });
+  } catch (err) {
+    console.error("AI coach error:", err);
+    res.status(500).json({ message: "AI generation failed" });
+  }
+});
+
+// AI Equity Script — generate call script for equity mining
+app.post("/api/ai/equity-script", async (req, res) => {
+  if (!groq) {
+    res
+      .status(503)
+      .json({ message: "AI not configured. Set GROQ_API_KEY in .env" });
+    return;
+  }
+  const { customerName, vehicle, equityAmount, scenario } = req.body;
+  if (!customerName || !equityAmount) {
+    res.status(400).json({ message: "customerName and equityAmount required" });
+    return;
+  }
+  try {
+    const prompt = `You're a car sales professional doing equity mining calls. Write a phone call script.
+
+Customer: ${customerName}
+Current vehicle: ${vehicle || "their vehicle"}
+Estimated equity: $${equityAmount}
+${scenario ? `Situation: ${scenario}` : ""}
+
+Write a natural, conversational script that:
+1. Opens with their vehicle and a compliment
+2. Mentions the equity opportunity WITHOUT being pushy
+3. Asks if they're open to exploring options
+4. Includes a response to "I'm not looking right now"
+5. Ends with scheduling a 10-min appraisal
+
+Keep it under 200 words and conversational (not robotic).`;
+
+    const chat = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama3-70b-8192",
+      temperature: 0.7,
+      max_tokens: 400,
+    });
+    const text = chat.choices[0]?.message?.content?.trim();
+    res.json({ script: text, model: "llama3-70b-8192" });
+  } catch (err) {
+    console.error("AI script error:", err);
+    res.status(500).json({ message: "AI generation failed" });
+  }
 });
 
 app.listen(port, () => {

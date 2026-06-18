@@ -634,6 +634,84 @@ function applyDealerBranding(dealership: DealershipBranding | null) {
   }
 }
 
+// ── AI Helpers ───────────────────────────────────────────────────────────────
+
+async function fetchAiDraft(
+  leadName: string,
+  leadSource?: string,
+  vehicleInterest?: string,
+  tone: "professional" | "friendly" | "urgent" = "professional",
+): Promise<{ draft?: string; error?: string }> {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/ai/draft-response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadName, leadSource, vehicleInterest, tone }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "AI error" }));
+      return { error: err.message || "Failed to generate draft" };
+    }
+    const data = await res.json();
+    return { draft: data.draft };
+  } catch (e) {
+    return { error: "Network error" };
+  }
+}
+
+async function fetchAiCoach(
+  customerName: string,
+  dealStage: string,
+  daysInStage: number,
+  lastContact?: string,
+  objections?: string,
+): Promise<{ advice?: string; error?: string }> {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/ai/deal-coach`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName,
+        dealStage,
+        daysInStage,
+        lastContact,
+        objections,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "AI error" }));
+      return { error: err.message || "Failed to get advice" };
+    }
+    const data = await res.json();
+    return { advice: data.advice };
+  } catch (e) {
+    return { error: "Network error" };
+  }
+}
+
+async function fetchAiEquityScript(
+  customerName: string,
+  equityAmount: number,
+  vehicle?: string,
+  scenario?: string,
+): Promise<{ script?: string; error?: string }> {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/ai/equity-script`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerName, equityAmount, vehicle, scenario }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: "AI error" }));
+      return { error: err.message || "Failed to generate script" };
+    }
+    const data = await res.json();
+    return { script: data.script };
+  } catch (e) {
+    return { error: "Network error" };
+  }
+}
+
 // ── Seed data ─────────────────────────────────────────────────────────────────
 
 const initialRepairOrders: RepairOrder[] = [
@@ -1528,6 +1606,26 @@ function App() {
   });
   const [showUpsForm, setShowUpsForm] = useState(false);
   const [upsEditId, setUpsEditId] = useState<number | null>(null);
+
+  // ── AI State ───────────────────────────────────────────────────────────────
+  const [aiDraft, setAiDraft] = useState<{
+    loading: boolean;
+    text: string;
+    error: string;
+    forCustomerId: number | null;
+  }>({ loading: false, text: "", error: "", forCustomerId: null });
+  const [aiCoach, setAiCoach] = useState<{
+    loading: boolean;
+    advice: string;
+    error: string;
+    forSaleId: number | null;
+  }>({ loading: false, advice: "", error: "", forSaleId: null });
+  const [aiScript, setAiScript] = useState<{
+    loading: boolean;
+    script: string;
+    error: string;
+    forCustomerId: number | null;
+  }>({ loading: false, script: "", error: "", forCustomerId: null });
 
   // ── Equity Mining state ────────────────────────────────────────────────────
   const [equityMinAge, setEquityMinAge] = useState(12);
@@ -7363,7 +7461,98 @@ function App() {
                       >
                         Open Deal Jacket →
                       </button>
+                      <button
+                        type="button"
+                        className="ai-btn"
+                        disabled={
+                          aiDraft.loading && aiDraft.forCustomerId === c.id
+                        }
+                        onClick={async () => {
+                          setAiDraft({
+                            loading: true,
+                            text: "",
+                            error: "",
+                            forCustomerId: c.id,
+                          });
+                          const result = await fetchAiDraft(
+                            `${c.firstName} ${c.lastName}`,
+                            c.source,
+                            c.interestedVehicle,
+                            "professional",
+                          );
+                          if (result.error) {
+                            setAiDraft({
+                              loading: false,
+                              text: "",
+                              error: result.error,
+                              forCustomerId: c.id,
+                            });
+                          } else {
+                            setAiDraft({
+                              loading: false,
+                              text: result.draft || "",
+                              error: "",
+                              forCustomerId: c.id,
+                            });
+                          }
+                        }}
+                      >
+                        {aiDraft.loading && aiDraft.forCustomerId === c.id
+                          ? "✨ Drafting..."
+                          : "✨ AI Draft"}
+                      </button>
                     </div>
+                    {aiDraft.forCustomerId === c.id && (
+                      <div className="ai-output">
+                        {aiDraft.loading && (
+                          <div className="ai-loading">
+                            <Zap size={16} className="ai-spin" />
+                            Generating response...
+                          </div>
+                        )}
+                        {aiDraft.error && (
+                          <div className="ai-error">{aiDraft.error}</div>
+                        )}
+                        {aiDraft.text && (
+                          <>
+                            <div className="ai-draft-text">{aiDraft.text}</div>
+                            <div className="ai-actions">
+                              <button
+                                type="button"
+                                className="ai-use-btn"
+                                onClick={() => {
+                                  setCommsCustomerId(c.id);
+                                  setCommsBody(aiDraft.text);
+                                  navigate("comms");
+                                  setAiDraft({
+                                    loading: false,
+                                    text: "",
+                                    error: "",
+                                    forCustomerId: null,
+                                  });
+                                }}
+                              >
+                                Use in Comms →
+                              </button>
+                              <button
+                                type="button"
+                                className="ai-close-btn"
+                                onClick={() =>
+                                  setAiDraft({
+                                    loading: false,
+                                    text: "",
+                                    error: "",
+                                    forCustomerId: null,
+                                  })
+                                }
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -8252,6 +8441,88 @@ function App() {
                           <option>Delivered</option>
                           <option>Lost</option>
                         </select>
+                        <button
+                          type="button"
+                          className="ai-coach-btn"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const customer = customers.find(
+                              (c) => c.id === sale.customerId,
+                            );
+                            const daysInStage = Math.floor(
+                              (Date.now() -
+                                new Date(sale.createdAt).getTime()) /
+                                (1000 * 60 * 60 * 24),
+                            );
+                            const lastAct = activities
+                              .filter((a) => a.customerId === sale.customerId)
+                              .sort(
+                                (a, b) =>
+                                  new Date(b.createdAt).getTime() -
+                                  new Date(a.createdAt).getTime(),
+                              )[0];
+                            setAiCoach({
+                              loading: true,
+                              advice: "",
+                              error: "",
+                              forSaleId: sale.id,
+                            });
+                            const result = await fetchAiCoach(
+                              customer
+                                ? `${customer.firstName} ${customer.lastName}`
+                                : "Customer",
+                              sale.stage,
+                              daysInStage,
+                              lastAct
+                                ? `${lastAct.type} ${timeAgo(lastAct.createdAt)}`
+                                : undefined,
+                            );
+                            if (result.error) {
+                              setAiCoach({
+                                loading: false,
+                                advice: "",
+                                error: result.error,
+                                forSaleId: sale.id,
+                              });
+                            } else {
+                              setAiCoach({
+                                loading: false,
+                                advice: result.advice || "",
+                                error: "",
+                                forSaleId: sale.id,
+                              });
+                            }
+                          }}
+                        >
+                          {aiCoach.loading && aiCoach.forSaleId === sale.id
+                            ? "Thinking..."
+                            : "🎯 Coach"}
+                        </button>
+                        {aiCoach.forSaleId === sale.id && aiCoach.advice && (
+                          <div
+                            className="ai-coach-output"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="ai-coach-advice">
+                              {aiCoach.advice}
+                            </div>
+                            <button
+                              type="button"
+                              className="ai-close-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAiCoach({
+                                  loading: false,
+                                  advice: "",
+                                  error: "",
+                                  forSaleId: null,
+                                });
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -14286,7 +14557,13 @@ function App() {
                               </div>
                             </td>
                             <td>
-                              <div style={{ display: "flex", gap: 6 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 6,
+                                  flexWrap: "wrap",
+                                }}
+                              >
                                 <button
                                   type="button"
                                   className="open-btn"
@@ -14304,7 +14581,106 @@ function App() {
                                 >
                                   <MessageSquare size={12} /> Contact
                                 </button>
+                                {equity != null && equity > 0 && (
+                                  <button
+                                    type="button"
+                                    className="ai-script-btn"
+                                    disabled={
+                                      aiScript.loading &&
+                                      aiScript.forCustomerId === customer.id
+                                    }
+                                    onClick={async () => {
+                                      setAiScript({
+                                        loading: true,
+                                        script: "",
+                                        error: "",
+                                        forCustomerId: customer.id,
+                                      });
+                                      const result = await fetchAiEquityScript(
+                                        `${customer.firstName} ${customer.lastName}`,
+                                        equity,
+                                        `${sale.year} ${sale.make} ${sale.model}`,
+                                        isLeaseEnd
+                                          ? "Lease ending soon"
+                                          : isWarrantyEnd
+                                            ? "Warranty expired"
+                                            : undefined,
+                                      );
+                                      if (result.error) {
+                                        setAiScript({
+                                          loading: false,
+                                          script: "",
+                                          error: result.error,
+                                          forCustomerId: customer.id,
+                                        });
+                                      } else {
+                                        setAiScript({
+                                          loading: false,
+                                          script: result.script || "",
+                                          error: "",
+                                          forCustomerId: customer.id,
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    {aiScript.loading &&
+                                    aiScript.forCustomerId === customer.id
+                                      ? "Writing..."
+                                      : "✨ Script"}
+                                  </button>
+                                )}
                               </div>
+                              {aiScript.forCustomerId === customer.id &&
+                                (aiScript.script || aiScript.loading) && (
+                                  <div className="ai-script-output">
+                                    {aiScript.loading && (
+                                      <div className="ai-loading">
+                                        <Zap size={14} className="ai-spin" />
+                                        Writing call script...
+                                      </div>
+                                    )}
+                                    {aiScript.script && (
+                                      <>
+                                        <div className="ai-script-text">
+                                          {aiScript.script}
+                                        </div>
+                                        <div className="ai-actions">
+                                          <button
+                                            type="button"
+                                            className="ai-use-btn"
+                                            onClick={() => {
+                                              setCommsCustomerId(customer.id);
+                                              setCommsBody(aiScript.script);
+                                              navigate("comms");
+                                              setAiScript({
+                                                loading: false,
+                                                script: "",
+                                                error: "",
+                                                forCustomerId: null,
+                                              });
+                                            }}
+                                          >
+                                            Use in Comms →
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="ai-close-btn"
+                                            onClick={() =>
+                                              setAiScript({
+                                                loading: false,
+                                                script: "",
+                                                error: "",
+                                                forCustomerId: null,
+                                              })
+                                            }
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                             </td>
                           </tr>
                         ),
