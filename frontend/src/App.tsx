@@ -1626,6 +1626,11 @@ function App() {
     error: string;
     forCustomerId: number | null;
   }>({ loading: false, script: "", error: "", forCustomerId: null });
+  const [aiBubbleOpen, setAiBubbleOpen] = useState(false);
+  const [aiCommand, setAiCommand] = useState("");
+  const [aiCommandLoading, setAiCommandLoading] = useState(false);
+  const [aiCommandError, setAiCommandError] = useState("");
+  const [aiCommandResult, setAiCommandResult] = useState<any | null>(null);
 
   // ── Equity Mining state ────────────────────────────────────────────────────
   const [equityMinAge, setEquityMinAge] = useState(12);
@@ -3022,6 +3027,159 @@ function App() {
     window.location.hash = "#/desk";
     setProfileTab("deals");
   }
+  async function runAiCommand(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!aiCommand.trim()) return;
+    setAiCommandLoading(true);
+    setAiCommandError("");
+    setAiCommandResult(null);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/ai/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: aiCommand.trim(),
+          currentPage,
+          customers: customers.map((customer) => ({
+            id: customer.id,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            phone: customer.phone,
+            email: customer.email,
+            status: customer.status,
+            interestedVehicle: customer.interestedVehicle,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        setAiCommandError(await readApiError(res, "Could not run AI command."));
+        return;
+      }
+      setAiCommandResult(await res.json());
+    } catch {
+      setAiCommandError("Could not connect to AI assistant.");
+    } finally {
+      setAiCommandLoading(false);
+    }
+  }
+
+  async function applyAiCommand() {
+    if (!aiCommandResult) return;
+    const action = aiCommandResult;
+    const payload = action.payload || {};
+    const customer = payload.customerId
+      ? customers.find((item) => item.id === Number(payload.customerId))
+      : action.customerName
+        ? customers.find(
+            (item) =>
+              `${item.firstName} ${item.lastName}`.toLowerCase() ===
+              String(action.customerName).toLowerCase(),
+          )
+        : null;
+
+    if (action.type === "navigate" && payload.page) {
+      navigate(payload.page as AppPage);
+      setAiBubbleOpen(false);
+      setAiCommandResult(null);
+      return;
+    }
+    if (action.type === "openCustomer" && customer) {
+      openProfile(customer);
+      setAiBubbleOpen(false);
+      setAiCommandResult(null);
+      return;
+    }
+    if (action.type === "searchCustomer") {
+      setCustomerSearch(payload.query || aiCommand);
+      setActiveSearch(payload.query || aiCommand);
+      navigate("customers");
+      setAiBubbleOpen(false);
+      setAiCommandResult(null);
+      return;
+    }
+    if (
+      (action.type === "draftMessage" || action.type === "summarizeCustomer") &&
+      customer
+    ) {
+      setCommsCustomerId(customer.id);
+      setCommsChannel(payload.channel === "Email" ? "Email" : "Text");
+      setCommsSubject(payload.subject || "Following up");
+      setCommsBody(payload.body || action.message || aiCommand);
+      navigate("comms");
+      setAiBubbleOpen(false);
+      setAiCommandResult(null);
+      return;
+    }
+    if (
+      (action.type === "createTask" || action.type === "createAppointment") &&
+      customer
+    ) {
+      try {
+        const isAppointment = action.type === "createAppointment";
+        const res = await apiFetch(`${API_BASE}/api/tasks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerId: customer.id,
+            title:
+              payload.title ||
+              (isAppointment ? "Sales appointment" : aiCommand),
+            type: isAppointment
+              ? "Appointment"
+              : payload.taskType || "Follow-Up",
+            dueAt: payload.dueAt || new Date().toISOString(),
+            assignedTo: customer.assignedTo || currentUser?.name || "Avery",
+            priority: payload.priority || (isAppointment ? "High" : "Normal"),
+            status: "Open",
+          }),
+        });
+        if (!res.ok) {
+          setAiCommandError(
+            await readApiError(res, "Could not apply AI action."),
+          );
+          return;
+        }
+        const task = await res.json();
+        setTasks([task, ...tasks]);
+        if (payload.notes) {
+          const noteRes = await apiFetch(`${API_BASE}/api/activities`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              customerId: customer.id,
+              type: isAppointment ? "Appointment" : "Note",
+              note: payload.notes,
+            }),
+          });
+          if (noteRes.ok) {
+            const activity = await noteRes.json();
+            setActivities([activity, ...activities]);
+          }
+        }
+        setAppMessage(
+          isAppointment ? "AI appointment created." : "AI task created.",
+        );
+        setAiBubbleOpen(false);
+        setAiCommandResult(null);
+        setAiCommand("");
+        return;
+      } catch {
+        setAiCommandError("Could not connect to backend to apply AI action.");
+        return;
+      }
+    }
+    if (action.type === "nextBestAction") {
+      navigate("dashboard");
+      setAppMessage(action.message || "Review your dashboard first.");
+      setAiBubbleOpen(false);
+      setAiCommandResult(null);
+      return;
+    }
+    setAiCommandError(
+      "I need a matching customer before I can apply this. Try including the full customer name.",
+    );
+  }
+
   function generateBuyersOrder() {
     const doc = new jsPDF({ unit: "pt", format: "letter" });
     const customerName = desk.customerId
@@ -8449,11 +8607,13 @@ function App() {
                             const customer = customers.find(
                               (c) => c.id === sale.customerId,
                             );
-                            const daysInStage = Math.floor(
-                              (Date.now() -
-                                new Date(sale.createdAt).getTime()) /
-                                (1000 * 60 * 60 * 24),
-                            );
+                            const daysInStage = sale.createdAt
+                              ? Math.floor(
+                                  (Date.now() -
+                                    new Date(sale.createdAt).getTime()) /
+                                    (1000 * 60 * 60 * 24),
+                                )
+                              : 0;
                             const lastAct = activities
                               .filter((a) => a.customerId === sale.customerId)
                               .sort(
@@ -8600,9 +8760,10 @@ function App() {
                                         ${sub.approvedAmount.toLocaleString()}
                                       </span>
                                     )}
-                                    {sub.apr && (
+                                    {sub.approvedRate && (
                                       <span className="lender-sub-apr">
-                                        {sub.apr}% / {sub.termMonths}mo
+                                        {sub.approvedRate}% / {sub.approvedTerm}
+                                        mo
                                       </span>
                                     )}
                                   </div>
@@ -15031,6 +15192,124 @@ function App() {
           )}
         </section>
       </main>
+
+      <div className={`ai-bubble-wrap theme-${themeMode}`}>
+        {aiBubbleOpen && (
+          <aside className="ai-bubble-panel">
+            <div className="kevin-avatar" aria-hidden="true">
+              <div className="kevin-head">
+                <span className="kevin-eye left" />
+                <span className="kevin-eye right" />
+                <span className="kevin-smile" />
+              </div>
+              <div className="kevin-body">
+                <span className="kevin-tie" />
+              </div>
+              <span className="kevin-leg left" />
+              <span className="kevin-leg right" />
+              <span className="kevin-spark one" />
+              <span className="kevin-spark two" />
+              <span className="kevin-spark three" />
+            </div>
+            <div className="ai-bubble-header">
+              <div>
+                <p className="eyebrow">Kevin AI</p>
+                <strong>Tell Kevin what to do</strong>
+              </div>
+              <button
+                type="button"
+                className="ai-close-btn"
+                onClick={() => setAiBubbleOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <form className="ai-command-form" onSubmit={runAiCommand}>
+              <textarea
+                value={aiCommand}
+                onChange={(e) => setAiCommand(e.target.value)}
+                placeholder="Ask Kevin: make appointment with Jordan Lee tomorrow at 2, draft a text to Alex about the Camry, find hot leads, create task to call Sarah"
+                rows={4}
+              />
+              <button type="submit" disabled={aiCommandLoading}>
+                {aiCommandLoading ? "Kevin is thinking..." : "Ask Kevin"}
+              </button>
+            </form>
+            {aiCommandError && <div className="ai-error">{aiCommandError}</div>}
+            {aiCommandResult && (
+              <div className="ai-command-result">
+                <strong>{aiCommandResult.title || "Kevin's Suggestion"}</strong>
+                <p>{aiCommandResult.message}</p>
+                {aiCommandResult.customerName && (
+                  <small>Customer: {aiCommandResult.customerName}</small>
+                )}
+                {aiCommandResult.payload?.body && (
+                  <div className="ai-draft-text">
+                    {aiCommandResult.payload.body}
+                  </div>
+                )}
+                <div className="ai-actions">
+                  <button
+                    type="button"
+                    className="ai-use-btn"
+                    onClick={applyAiCommand}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-close-btn"
+                    onClick={() => setAiCommandResult(null)}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="ai-command-examples">
+              <span>Free actions:</span>
+              <button
+                type="button"
+                onClick={() => setAiCommand("find hot leads with no contact")}
+              >
+                Find leads
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAiCommand("create task to follow up with Jordan Lee")
+                }
+              >
+                Create task
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAiCommand(
+                    "draft a text to Jordan Lee about their appointment",
+                  )
+                }
+              >
+                Draft text
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiCommand("make appointment with Jordan Lee")}
+              >
+                Make appt
+              </button>
+            </div>
+          </aside>
+        )}
+        <button
+          type="button"
+          className="ai-bubble-button"
+          onClick={() => setAiBubbleOpen((open) => !open)}
+        >
+          <Zap size={22} />
+          Kevin
+        </button>
+      </div>
     </>
   );
 }

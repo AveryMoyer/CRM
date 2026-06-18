@@ -3763,6 +3763,157 @@ Keep it under 200 words and conversational (not robotic).`;
   }
 });
 
+app.post("/api/ai/command", async (req, res) => {
+  const { command, customers = [], currentPage = "dashboard" } = req.body;
+  if (!command || typeof command !== "string") {
+    res.status(400).json({ message: "command required" });
+    return;
+  }
+
+  const fallbackAction = () => {
+    const text = command.toLowerCase();
+    const matchedCustomer = customers.find((customer: any) => {
+      const name = `${customer.firstName ?? ""} ${customer.lastName ?? ""}`
+        .toLowerCase()
+        .trim();
+      return name && text.includes(name);
+    });
+    const customerName = matchedCustomer
+      ? `${matchedCustomer.firstName} ${matchedCustomer.lastName}`
+      : "";
+    if (text.includes("appointment") || text.includes("appt")) {
+      return {
+        type: "createAppointment",
+        title: "Schedule appointment",
+        message: "I can create an appointment draft for you to confirm.",
+        customerName,
+        payload: {
+          customerId: matchedCustomer?.id,
+          title: "Sales appointment",
+          dueAt: "",
+          notes: command,
+        },
+      };
+    }
+    if (
+      text.includes("task") ||
+      text.includes("remind") ||
+      text.includes("follow")
+    ) {
+      return {
+        type: "createTask",
+        title: "Create follow-up task",
+        message: "I can create this task for you to confirm.",
+        customerName,
+        payload: {
+          customerId: matchedCustomer?.id,
+          title: command,
+          dueAt: "",
+          priority: text.includes("urgent") ? "High" : "Normal",
+          taskType: text.includes("email")
+            ? "Email"
+            : text.includes("text")
+              ? "Text"
+              : text.includes("call")
+                ? "Call"
+                : "Follow-Up",
+        },
+      };
+    }
+    if (
+      text.includes("text") ||
+      text.includes("sms") ||
+      text.includes("email")
+    ) {
+      return {
+        type: "draftMessage",
+        title: text.includes("email") ? "Draft email" : "Draft text",
+        message: "I drafted a message you can review in Comms.",
+        customerName,
+        payload: {
+          customerId: matchedCustomer?.id,
+          channel: text.includes("email") ? "Email" : "Text",
+          subject: text.includes("email") ? "Following up" : "",
+          body: command,
+        },
+      };
+    }
+    if (
+      text.includes("find") ||
+      text.includes("open") ||
+      text.includes("show")
+    ) {
+      return {
+        type: matchedCustomer ? "openCustomer" : "searchCustomer",
+        title: matchedCustomer ? "Open customer" : "Search customers",
+        message: matchedCustomer
+          ? `I found ${customerName}.`
+          : "I can search the customer list for you.",
+        customerName,
+        payload: {
+          customerId: matchedCustomer?.id,
+          query: command.replace(/find|open|show/gi, "").trim(),
+        },
+      };
+    }
+    if (text.includes("lead")) {
+      return {
+        type: "navigate",
+        title: "Go to Lead Inbox",
+        message: "I can take you to the lead inbox.",
+        payload: { page: "leads" },
+      };
+    }
+    return {
+      type: "nextBestAction",
+      title: "Next best action",
+      message:
+        "Review hot leads, overdue tasks, and today’s appointments first.",
+      payload: { page: currentPage },
+    };
+  };
+
+  if (!groq) {
+    res.json(fallbackAction());
+    return;
+  }
+
+  try {
+    const customerList = customers
+      .slice(0, 25)
+      .map(
+        (customer: any) =>
+          `${customer.id}: ${customer.firstName} ${customer.lastName}`,
+      )
+      .join("\n");
+    const chat = await groq.chat.completions.create({
+      model: "llama3-8b-8192",
+      temperature: 0.2,
+      max_tokens: 500,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Return only JSON. Supported type values: draftMessage, createAppointment, createTask, openCustomer, searchCustomer, navigate, summarizeCustomer, nextBestAction. Include title, message, customerName, and payload. payload may include customerId, channel, subject, body, dueAt, title, notes, priority, taskType, page, query. Never include markdown.",
+        },
+        {
+          role: "user",
+          content: `Command: ${command}\nCurrent page: ${currentPage}\nCustomers:\n${customerList}`,
+        },
+      ],
+    });
+    const raw = chat.choices[0]?.message?.content?.trim() ?? "";
+    try {
+      res.json(JSON.parse(raw));
+    } catch {
+      res.json(fallbackAction());
+    }
+  } catch (err) {
+    console.error("AI command error:", err);
+    res.json(fallbackAction());
+  }
+});
+
 app.listen(port, () => {
   console.log(`Auto Retail CRM API running on port ${port}`);
 });
